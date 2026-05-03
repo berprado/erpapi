@@ -3,7 +3,7 @@ from sqlalchemy import text
 from fastapi import FastAPI, Depends, HTTPException, status, Request
 from datetime import datetime
 import hashlib
-
+import json
 from database import get_db, engine
 import models
 import schemas
@@ -121,3 +121,87 @@ def verificar_operacion_activa(db: Session = Depends(get_db)):
         status_code=status.HTTP_400_BAD_REQUEST,
         detail=f"La operación no está en un estado válido para paloteo (Estado: {operacion_actual.estado_operacion})."
     )
+    
+@app.post("/api/inventario/paloteo")
+def procesar_paloteo(payload: schemas.PaloteoRequest, db: Session = Depends(get_db)):
+    usuario_actual = "BERNARDO" 
+    fecha_actual = datetime.now()
+    
+    # 1. Validar Operación (Guardia de Seguridad)
+    operacion = db.query(models.Operacion).filter(models.Operacion.id == payload.id_operacion).first()
+    if not operacion or operacion.estado_operacion != 24:
+        raise HTTPException(status_code=400, detail="Operación inválida o barra no está en INICIO CIERRE.")
+
+    # 2. CREAR CABECERA EN EL POS (bar_inventario_fisico)
+    nueva_cabecera_pos = models.InventarioFisicoPOS(
+        fecha=fecha_actual.date(),
+        observaciones="Carga automática mediante App de Pesaje",
+        procesado_por=usuario_actual,
+        estado_registro=1,
+        id_barra=payload.id_barra,
+        id_operacion=payload.id_operacion,
+        usuario_reg=usuario_actual,
+        fecha_reg=fecha_actual.date(),
+        estado='HAB'
+    )
+    db.add(nueva_cabecera_pos)
+    db.flush() # flush() nos da el ID generado sin cerrar la transacción todavía
+
+    resultados_procesados = []
+    margen_error_balanza = 10.0
+
+    # 3. PROCESAR PRODUCTOS
+    for item in payload.items:
+        config = db.query(models.ProductoPesajeConfig).filter(
+            models.ProductoPesajeConfig.id_producto_almacen == item.id_producto
+        ).first()
+        
+        if not config: continue # O manejar error según prefieras
+
+        # Cálculo de Onzas (Tu lógica ya probada)
+        total_onzas = 0.0
+        if config.pesable == 1:
+            gr_oz = float(config.gramos_por_oz)
+            tara = float(config.tara)
+            for peso_medido in item.pesos_abiertas:
+                if peso_medido >= (tara - margen_error_balanza):
+                    peso_liquido = max(0, peso_medido - tara)
+                    total_onzas += (peso_liquido / gr_oz)
+
+        # 4. GUARDAR DETALLE EN EL POS (bar_detalle_fisico)
+        nuevo_detalle_pos = models.DetalleFisicoPOS(
+            cantidad_unidad=item.botellas_cerradas,
+            cantidad_detalle=total_onzas,
+            id_producto=item.id_producto,
+            id_inventario_fisico=nueva_cabecera_pos.id, # Link a la cabecera creada arriba
+            usuario_reg=usuario_actual,
+            fecha_reg=fecha_actual.date(),
+            estado='HAB'
+        )
+        db.add(nuevo_detalle_pos)
+
+        # 5. GUARDAR AUDITORÍA CRUDA (Tu tabla app_paloteo_registro_crudo)
+        registro_crudo = models.PaloteoRegistroCrudo(
+            id_operacion=payload.id_operacion,
+            id_producto=item.id_producto,
+            botellas_cerradas=item.botellas_cerradas,
+            pesos_abiertas=json.dumps(item.pesos_abiertas),
+            onzas_calculadas=total_onzas,
+            usuario_reg=usuario_actual,
+            fecha_reg=fecha_actual
+        )
+        db.add(registro_crudo)
+        
+        resultados_procesados.append({
+            "id_producto": item.id_producto,
+            "onzas": round(total_onzas, 2)
+        })
+
+    # 6. COMMIT FINAL (Si algo falla arriba, no se guarda nada en ninguna tabla)
+    db.commit()
+
+    return {
+        "status": "success",
+        "id_inventario_pos": nueva_cabecera_pos.id,
+        "mensaje": f"Se registraron {len(resultados_procesados)} productos en el POS exitosamente."
+    }
