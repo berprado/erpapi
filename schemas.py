@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, field_validator
-from typing import List
+from typing import List, Optional
 
 # Esquema para lo que la API va a RECIBIR del cliente
 class UsuarioLogin(BaseModel):
@@ -37,10 +37,6 @@ class PaloteoItem(BaseModel):
 
 class PaloteoRequest(BaseModel):
     id_operacion: int = Field(..., gt=0)
-    items: List[PaloteoItem] = Field(..., min_length=1, description="Debe enviar al menos un producto")
-
-# en que barra se está haciendo el paloteo, para validaciones futuras de seguridad (no es un campo obligatorio para el proceso actual, pero lo dejamos preparado)
-class PaloteoRequest(BaseModel):
-    id_operacion: int = Field(..., gt=0)
     id_barra: int = Field(..., gt=0, description="ID de la barra donde se hace el físico")
+    observaciones: Optional[str] = Field(None, description="Nota opcional del bartender") # NUEVO
     items: List[PaloteoItem] = Field(..., min_length=1)

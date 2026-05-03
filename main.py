@@ -124,28 +124,39 @@ def verificar_operacion_activa(db: Session = Depends(get_db)):
     
 @app.post("/api/inventario/paloteo")
 def procesar_paloteo(payload: schemas.PaloteoRequest, db: Session = Depends(get_db)):
-    usuario_actual = "BERNARDO" 
+    # Simulación del usuario logueado (esto luego vendrá del Token)
+    username_actual = "BERNARDO" 
     fecha_actual = datetime.now()
     
-    # 1. Validar Operación (Guardia de Seguridad)
+    # --- NUEVO: Obtener el nombre formateado (Paterno Materno, Nombres) ---
+    usuario_db = db.query(models.Usuario).filter(models.Usuario.usuario == username_actual).first()
+    if usuario_db:
+        nombre_formateado = f"{usuario_db.paterno} {usuario_db.materno}, {usuario_db.nombres}".upper()
+    else:
+        nombre_formateado = username_actual # Fallback por si acaso
+
+    # --- NUEVO: Lógica de Observaciones ---
+    obs_final = payload.observaciones if payload.observaciones else "REGISTRADO VÍA API"
+
+    # 1. Validar Operación
     operacion = db.query(models.Operacion).filter(models.Operacion.id == payload.id_operacion).first()
     if not operacion or operacion.estado_operacion != 24:
         raise HTTPException(status_code=400, detail="Operación inválida o barra no está en INICIO CIERRE.")
 
-    # 2. CREAR CABECERA EN EL POS (bar_inventario_fisico)
+    # 2. CREAR CABECERA EN EL POS (Con estado 62 y nombre formateado)
     nueva_cabecera_pos = models.InventarioFisicoPOS(
         fecha=fecha_actual.date(),
-        observaciones="Carga automática mediante App de Pesaje",
-        procesado_por=usuario_actual,
-        estado_registro=1,
+        observaciones=obs_final,
+        procesado_por=nombre_formateado,
+        estado_registro=62, # NUEVO ESTADO PENDIENTE
         id_barra=payload.id_barra,
         id_operacion=payload.id_operacion,
-        usuario_reg=usuario_actual,
+        usuario_reg=username_actual,
         fecha_reg=fecha_actual.date(),
         estado='HAB'
     )
     db.add(nueva_cabecera_pos)
-    db.flush() # flush() nos da el ID generado sin cerrar la transacción todavía
+    db.flush()
 
     resultados_procesados = []
     margen_error_balanza = 10.0
@@ -156,9 +167,8 @@ def procesar_paloteo(payload: schemas.PaloteoRequest, db: Session = Depends(get_
             models.ProductoPesajeConfig.id_producto_almacen == item.id_producto
         ).first()
         
-        if not config: continue # O manejar error según prefieras
+        if not config: continue
 
-        # Cálculo de Onzas (Tu lógica ya probada)
         total_onzas = 0.0
         if config.pesable == 1:
             gr_oz = float(config.gramos_por_oz)
@@ -168,40 +178,47 @@ def procesar_paloteo(payload: schemas.PaloteoRequest, db: Session = Depends(get_
                     peso_liquido = max(0, peso_medido - tara)
                     total_onzas += (peso_liquido / gr_oz)
 
-        # 4. GUARDAR DETALLE EN EL POS (bar_detalle_fisico)
+        # --- NUEVO: Redondear a la media onza más cercana para el POS ---
+        # Ej: 11.92 * 2 = 23.84 -> round(23.84) = 24 -> 24 / 2 = 12.00
+        # Ej: 11.21 * 2 = 22.42 -> round(22.42) = 22 -> 22 / 2 = 11.00
+        # Ej: 11.26 * 2 = 22.52 -> round(22.52) = 23 -> 23 / 2 = 11.50
+        onzas_redondeadas_pos = round(total_onzas * 2) / 2
+
+        # 4. GUARDAR DETALLE EN EL POS (Con el valor redondeado)
         nuevo_detalle_pos = models.DetalleFisicoPOS(
             cantidad_unidad=item.botellas_cerradas,
-            cantidad_detalle=total_onzas,
+            cantidad_detalle=onzas_redondeadas_pos,
             id_producto=item.id_producto,
-            id_inventario_fisico=nueva_cabecera_pos.id, # Link a la cabecera creada arriba
-            usuario_reg=usuario_actual,
+            id_inventario_fisico=nueva_cabecera_pos.id, 
+            usuario_reg=username_actual,
             fecha_reg=fecha_actual.date(),
             estado='HAB'
         )
         db.add(nuevo_detalle_pos)
 
-        # 5. GUARDAR AUDITORÍA CRUDA (Tu tabla app_paloteo_registro_crudo)
+        # 5. GUARDAR AUDITORÍA CRUDA (Con el valor exacto)
         registro_crudo = models.PaloteoRegistroCrudo(
             id_operacion=payload.id_operacion,
             id_producto=item.id_producto,
             botellas_cerradas=item.botellas_cerradas,
             pesos_abiertas=json.dumps(item.pesos_abiertas),
-            onzas_calculadas=total_onzas,
-            usuario_reg=usuario_actual,
+            onzas_calculadas=total_onzas, # Exacto: 11.92
+            usuario_reg=username_actual,
             fecha_reg=fecha_actual
         )
         db.add(registro_crudo)
         
         resultados_procesados.append({
             "id_producto": item.id_producto,
-            "onzas": round(total_onzas, 2)
+            "onzas_exactas": round(total_onzas, 2),
+            "onzas_pos": onzas_redondeadas_pos
         })
 
-    # 6. COMMIT FINAL (Si algo falla arriba, no se guarda nada en ninguna tabla)
     db.commit()
 
     return {
         "status": "success",
         "id_inventario_pos": nueva_cabecera_pos.id,
-        "mensaje": f"Se registraron {len(resultados_procesados)} productos en el POS exitosamente."
+        "mensaje": f"Se registraron {len(resultados_procesados)} productos en el POS exitosamente.",
+        "detalles": resultados_procesados
     }
