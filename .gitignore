@@ -27,8 +27,6 @@ __pycache__/
 dump_*.sql
 
 
-
-
 # Archivos de respaldo y copias
 *-Copy.py
 *-Backup.py
@@ -36,3 +34,7 @@ dump_*.sql
 
 # Archivos de log
 *.log
+
+# Querys de MySQL
+querys/
+*.sql
