@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy import Column, Integer, String, DateTime, Date
 from database import Base
 
 class Usuario(Base):
@@ -26,5 +26,13 @@ class Acceso(Base):
     ip = Column(String(255))
 
 
+class Operacion(Base):
+    __tablename__ = "ope_operacion"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    fecha = Column(Date)
+    nombre_operacion = Column(String(255))
+    estado_operacion = Column(Integer) # Aquí guardamos el 22 o el 24
+    estado = Column(String(3)) # Para saber si el registro está 'HAB' (Habilitado)
 
     

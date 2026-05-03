@@ -11,3 +11,9 @@ class Token(BaseModel):
     token_type: str
     usuario_id: int
     nombres: str
+
+# Esquema para la respuesta de la operación
+class OperacionResponse(BaseModel):
+    id_operacion: int
+    nombre: str
+    mensaje: str

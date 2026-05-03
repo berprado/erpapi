@@ -16,6 +16,11 @@ venv/
 env/
 .virtualenv/
 
+# Caché de Python
+__pycache__/
+*.pyc
+*.pyo
+
 
 # Archivos de base de datos MySQL (backups y dumps)
 *.sql.gz
