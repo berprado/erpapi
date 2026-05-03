@@ -1,0 +1,33 @@
+# Archivos de entorno
+.env
+
+# Archivos de certificados y claves privadas
+*.pem
+
+# Archivos comprimidos
+*.gz
+*.zip
+
+# Archivos de texto temporales o de respaldo
+*.txt
+
+# Directorios de entornos virtuales
+venv/
+env/
+.virtualenv/
+
+
+# Archivos de base de datos MySQL (backups y dumps)
+*.sql.gz
+dump_*.sql
+
+
+
+
+# Archivos de respaldo y copias
+*-Copy.py
+*-Backup.py
+*.bak
+
+# Archivos de log
+*.log
