@@ -40,3 +40,16 @@ class PaloteoRequest(BaseModel):
     id_barra: int = Field(..., gt=0, description="ID de la barra donde se hace el físico")
     observaciones: Optional[str] = Field(None, description="Nota opcional del bartender") # NUEVO
     items: List[PaloteoItem] = Field(..., min_length=1)
+    
+class ProductoPendiente(BaseModel):
+    id_producto: int
+    codigo: str
+    nombre: str
+    ind_permite_comandar: int
+    stock_ideal_unidades: float
+    stock_ideal_onzas: float
+    pesable: Optional[int]
+    peso_bruto: Optional[float]
+    tara: Optional[float]
+    gramos_por_oz: Optional[float]
+    onzas_por_botella_llena: float
