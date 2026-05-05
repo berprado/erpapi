@@ -60,6 +60,123 @@ function crearInputPeso(perfilesJson) {
     `;
 }
 
+function resolverPerfilSeleccionado(perfiles, select) {
+    if (!perfiles || perfiles.length === 0) return { perfil: null, index: -1 };
+    if (!select) return { perfil: perfiles[0], index: 0 };
+
+    const valor = select.value;
+    const porId = perfiles.findIndex(pf => pf && pf.id != null && String(pf.id) === String(valor));
+    if (porId >= 0) return { perfil: perfiles[porId], index: porId };
+
+    const porIndice = parseInt(valor, 10);
+    if (!Number.isNaN(porIndice) && porIndice >= 0 && porIndice < perfiles.length) {
+        return { perfil: perfiles[porIndice], index: porIndice };
+    }
+
+    return { perfil: perfiles[0], index: 0 };
+}
+
+function refrescarSelectoresPerfil(card) {
+    if (!card) return;
+
+    const perfiles = JSON.parse(card.dataset.perfiles || '[]');
+    const wrappers = card.querySelectorAll('.item-peso-wrapper');
+
+    wrappers.forEach((wrapper) => {
+        const selectExistente = wrapper.querySelector('.select-perfil');
+        const valorActual = selectExistente ? selectExistente.value : '';
+
+        if (selectExistente) {
+            selectExistente.remove();
+        }
+
+        if (perfiles.length <= 1) {
+            return;
+        }
+
+        const select = document.createElement('select');
+        select.className = 'bg-gray-800 text-[10px] text-neon-green border border-gray-700 rounded-lg px-2 py-2 focus:outline-none select-perfil mr-2 cursor-pointer';
+
+        perfiles.forEach((pf, idx) => {
+            const option = document.createElement('option');
+            option.value = (pf.id != null) ? String(pf.id) : String(idx);
+            option.textContent = pf.nombre_perfil;
+            select.appendChild(option);
+        });
+
+        if (valorActual && Array.from(select.options).some(opt => opt.value === valorActual)) {
+            select.value = valorActual;
+        }
+
+        wrapper.insertBefore(select, wrapper.firstChild);
+    });
+}
+
+async function crearModeloBotella(idProducto) {
+    const card = document.querySelector(`.product-card[data-id="${idProducto}"]`);
+    if (!card) return;
+
+    const nombreProducto = card.dataset.nombre || `ID ${idProducto}`;
+    const perfiles = JSON.parse(card.dataset.perfiles || '[]');
+    const perfilBase = perfiles[0] || null;
+
+    const nombrePerfil = prompt(`Nuevo modelo para ${nombreProducto}\nNombre del perfil (ej: BOTELLA ALTA):`, '');
+    if (nombrePerfil === null) return;
+    if (!nombrePerfil.trim()) return alert('Debes ingresar un nombre de perfil.');
+
+    const pesoBrutoTxt = prompt('Peso bruto (gramos):', perfilBase ? String(perfilBase.peso_bruto) : '');
+    if (pesoBrutoTxt === null) return;
+    const taraTxt = prompt('Tara (gramos):', perfilBase ? String(perfilBase.tara) : '');
+    if (taraTxt === null) return;
+    const gramosPorOzTxt = prompt('Gramos por onza:', perfilBase ? String(perfilBase.gramos_por_oz) : '29.5735');
+    if (gramosPorOzTxt === null) return;
+    const toleranciaTxt = prompt('Tolerancia (oz):', perfilBase ? String(perfilBase.tolerancia_oz) : '0');
+    if (toleranciaTxt === null) return;
+
+    const pesoBruto = parseFloat(pesoBrutoTxt);
+    const tara = parseFloat(taraTxt);
+    const gramosPorOz = parseFloat(gramosPorOzTxt);
+    const toleranciaOz = parseFloat(toleranciaTxt);
+
+    if ([pesoBruto, tara, gramosPorOz, toleranciaOz].some(Number.isNaN)) {
+        return alert('Todos los valores numéricos del modelo deben ser válidos.');
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/pesaje/perfiles`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${currentToken}`
+            },
+            body: JSON.stringify({
+                id_producto: idProducto,
+                nombre_perfil: nombrePerfil.trim(),
+                peso_bruto: pesoBruto,
+                tara: tara,
+                gramos_por_oz: gramosPorOz,
+                tolerancia_oz: toleranciaOz
+            })
+        });
+
+        if (response.status === 401) return btnLogout.click();
+
+        const data = await response.json();
+        if (!response.ok) {
+            return alert(`No se pudo crear el modelo: ${data.detail || 'Error desconocido'}`);
+        }
+
+        const perfilesActuales = JSON.parse(card.dataset.perfiles || '[]');
+        perfilesActuales.push(data);
+        card.dataset.perfiles = JSON.stringify(perfilesActuales);
+        refrescarSelectoresPerfil(card);
+        recalcularTarjeta(card);
+        alert('Modelo de botella agregado correctamente.');
+    } catch (error) {
+        alert('Error de red al crear el modelo de botella.');
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     if (currentToken) {
         mostrarPantallaApp();
