@@ -201,9 +201,14 @@ function renderizarProductos(productos) {
         div.dataset.id = p.id_producto;
         div.dataset.pesable = p.pesable || 0;
         div.dataset.nombre = p.nombre;
+        
+        // NUEVO: Guardar los datos matemáticos en el DOM para usarlos en vivo
+        div.dataset.tara = p.tara || 0;
+        div.dataset.groz = p.gramos_por_oz || 1; // Evitar división por cero
+        div.dataset.paqsist = parseFloat(p.stock_ideal_unidades) || 0;
+        div.dataset.detsist = parseFloat(p.stock_ideal_onzas) || 0;
 
         // Info básica
-        // Fix #24: Valores dinámicos escapados con escapeHtml() para prevenir XSS.
         let html = `
             ${p.categoria_nombre ? `<span class="text-[10px] font-bold tracking-widest uppercase text-gray-500 mb-1 block">${escapeHtml(p.categoria_nombre)}</span>` : ''}
             <h4 class="text-neon-green font-bold text-lg mb-1">${escapeHtml(p.nombre)}</h4>
@@ -211,9 +216,24 @@ function renderizarProductos(productos) {
                 <span>ID: ${p.id_producto}</span>
                 <span>Cód: ${escapeHtml(p.codigo)}</span>
             </div>
-            <div class="text-xs text-gray-400 mb-4 flex gap-4">
+            
+            <!-- Stocks del Sistema (Teóricos) -->
+            <div class="text-xs text-gray-400 mb-2 flex gap-4">
                 <span class="bg-gray-800 px-2 py-1 rounded">PAQ/SIST: ${parseFloat(p.stock_ideal_unidades).toFixed(0)} bot.</span>
                 ${p.pesable === 1 ? `<span class="bg-gray-800 px-2 py-1 rounded border border-gray-700">DET/SIST: ${parseFloat(p.stock_ideal_onzas).toFixed(2)} oz</span>` : ''}
+            </div>
+
+            <!-- Contadores Dinámicos Reales (Físicos) + Diferencias -->
+            <div class="text-[11px] font-bold mb-4 flex flex-col gap-2">
+                <div class="flex items-center gap-2">
+                    <span class="text-white bg-gray-700 px-2 py-1 rounded">PAQ/BARRA: <span id="val-paq-${p.id_producto}">0</span> bot</span>
+                    <span id="dif-paq-${p.id_producto}" class="px-2 py-1 rounded tracking-wider"></span>
+                </div>
+                ${p.pesable === 1 ? `
+                <div class="flex items-center gap-2">
+                    <span class="text-white bg-gray-700 px-2 py-1 rounded">DET/BARRA: <span id="val-det-${p.id_producto}">0.00</span> oz</span>
+                    <span id="dif-det-${p.id_producto}" class="px-2 py-1 rounded tracking-wider"></span>
+                </div>` : ''}
             </div>
             
             <div class="grid grid-cols-2 gap-4">
@@ -242,8 +262,9 @@ function renderizarProductos(productos) {
         div.innerHTML = html;
         listaProductos.appendChild(div);
     });
-}
 
+    inicializarCalculos();
+}
 // Fix #27: Ahora usa crearInputPeso() en lugar de duplicar el HTML del input.
 window.agregarInputPeso = function(idProducto) {
     const container = document.getElementById(`pesos-${idProducto}`);
@@ -344,3 +365,88 @@ btnGuardar.addEventListener('click', async () => {
         btnGuardar.innerHTML = `<span class="material-symbols-outlined">save</span> Confirmar Inventario`;
     }
 });
+
+// ==========================================
+// CÁLCULO EN TIEMPO REAL (ONZAS, UNIDADES Y DIFERENCIAS)
+// ==========================================
+
+// Función auxiliar para pintar las diferencias (Verde/Rosa/Amarillo)
+function formatearDiferencia(diferencia, isOz = false) {
+    const sufijo = isOz ? "oz" : "bot";
+
+    // Tolerancia para decimales (evitar ruido por redondeos)
+    if (Math.abs(diferencia) < 0.01) {
+        return '<span class="text-neon-green border border-neon-green/30 bg-neon-green/10 px-2 py-1 rounded inline-flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">check_circle</span> OK</span>';
+    }
+
+    if (diferencia < 0) {
+        const val = isOz ? diferencia.toFixed(2) : Math.round(diferencia);
+        return `<span class="text-neon-pink border border-neon-pink/30 bg-neon-pink/10 px-2 py-1 rounded">${val} ${sufijo}</span>`;
+    }
+
+    const val = isOz ? diferencia.toFixed(2) : Math.round(diferencia);
+    return `<span class="text-yellow-400 border border-yellow-400/30 bg-yellow-400/10 px-2 py-1 rounded">+${val} ${sufijo}</span>`;
+}
+
+// Recalcula una tarjeta y actualiza PAQ/BARRA, DET/BARRA y sus diferencias contra el sistema
+function recalcularTarjeta(card) {
+    if (!card) return;
+
+    const idProducto = card.dataset.id;
+    const pesable = parseInt(card.dataset.pesable);
+
+    // Variables del sistema
+    const paqSist = parseFloat(card.dataset.paqsist) || 0;
+    const detSist = parseFloat(card.dataset.detsist) || 0;
+
+    // 1. PAQ/BARRA
+    const inputCerradas = card.querySelector('.input-cerradas');
+    const paqBarra = parseInt(inputCerradas.value) || 0;
+    const spanPaq = document.getElementById(`val-paq-${idProducto}`);
+    const difPaqSpan = document.getElementById(`dif-paq-${idProducto}`);
+
+    if (spanPaq) spanPaq.textContent = paqBarra;
+    if (difPaqSpan) difPaqSpan.innerHTML = formatearDiferencia(paqBarra - paqSist, false);
+
+    // 2. DET/BARRA
+    if (pesable === 1) {
+        const tara = parseFloat(card.dataset.tara);
+        const groz = parseFloat(card.dataset.groz);
+        const inputsPeso = card.querySelectorAll('.input-peso');
+        const spanDet = document.getElementById(`val-det-${idProducto}`);
+        const difDetSpan = document.getElementById(`dif-det-${idProducto}`);
+
+        let detBarra = 0;
+        const margenError = 10.0;
+
+        inputsPeso.forEach(inp => {
+            const pesoMedido = parseFloat(inp.value);
+            if (!isNaN(pesoMedido) && pesoMedido >= (tara - margenError)) {
+                const pesoLiquido = Math.max(0, pesoMedido - tara);
+                detBarra += (pesoLiquido / groz);
+            }
+        });
+
+        if (spanDet) spanDet.textContent = detBarra.toFixed(2);
+        if (difDetSpan) difDetSpan.innerHTML = formatearDiferencia(detBarra - detSist, true);
+    }
+}
+
+listaProductos.addEventListener('input', (e) => {
+    if (e.target.classList.contains('input-cerradas') || e.target.classList.contains('input-peso')) {
+        recalcularTarjeta(e.target.closest('.product-card'));
+    }
+});
+
+listaProductos.addEventListener('click', (e) => {
+    if (e.target.closest('button') && e.target.closest('button').querySelector('.material-symbols-outlined')?.textContent === 'close') {
+        const card = e.target.closest('.product-card');
+        setTimeout(() => recalcularTarjeta(card), 50);
+    }
+});
+
+function inicializarCalculos() {
+    document.querySelectorAll('.product-card').forEach(card => {
+        recalcularTarjeta(card);
+    });
+}
