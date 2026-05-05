@@ -11,6 +11,8 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import jwt
 from datetime import datetime, timedelta
 from config import settings
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 app = FastAPI(
     title="API Inventario POS",
@@ -51,7 +53,7 @@ def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode('utf-8')).hexdigest()
 
 # --- ENDPOINTS ---
-@app.get("/")
+@app.get("/api")
 def read_root():
     return {"mensaje": "API del Sistema POS en línea y funcionando"}
 
@@ -293,3 +295,12 @@ def obtener_productos_pendientes(
     # Ejecutamos la consulta y devolvemos los resultados mapeados al esquema JSON
     result = db.execute(query).mappings().all()
     return result
+
+# --- SERVIDOR DE ARCHIVOS ESTÁTICOS (FRONTEND) ---
+# Montamos una carpeta llamada 'static' donde vivirá el HTML, CSS y JS
+app.mount("/assets", StaticFiles(directory="static"), name="assets")
+
+# Ruta principal que devuelve la página web
+@app.get("/")
+def serve_frontend():
+    return FileResponse("static/index.html")
