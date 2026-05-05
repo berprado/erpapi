@@ -171,7 +171,12 @@ function renderizarProductos(productos) {
 
         // Info básica
         let html = `
+            ${p.categoria_nombre ? `<span class="text-[10px] font-bold tracking-widest uppercase text-gray-500 mb-1 block">${p.categoria_nombre}</span>` : ''}
             <h4 class="text-neon-green font-bold text-lg mb-1">${p.nombre}</h4>
+            <div class="text-[10px] text-gray-600 mb-2 flex gap-3">
+                <span>ID: ${p.id_producto}</span>
+                <span>Cód: ${p.codigo}</span>
+            </div>
             <div class="text-xs text-gray-400 mb-4 flex gap-4">
                 <span class="bg-gray-800 px-2 py-1 rounded">Teórico: ${parseFloat(p.stock_ideal_unidades).toFixed(0)} botellas</span>
                 ${p.pesable === 1 ? `<span class="bg-gray-800 px-2 py-1 rounded border border-gray-700">Tara: ${parseFloat(p.tara).toFixed(0)}g</span>` : ''}
