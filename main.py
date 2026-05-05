@@ -286,6 +286,7 @@ def obtener_productos_pendientes(
         SELECT 
             a.id AS id_producto, a.codigo, a.nombre, a.ind_permite_comandar,
             i.cantidad_paq AS stock_ideal_unidades, i.cantidad_detalle AS stock_ideal_onzas,
+            i.categoria_nombre,
             p.pesable, p.peso_bruto, p.tara, p.gramos_por_oz,
             a.cantidad_detalle AS onzas_por_botella_llena
         FROM (

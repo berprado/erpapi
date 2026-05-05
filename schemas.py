@@ -45,6 +45,7 @@ class ProductoPendiente(BaseModel):
     id_producto: int
     codigo: str
     nombre: str
+    categoria_nombre: Optional[str] = None
     ind_permite_comandar: int
     stock_ideal_unidades: float
     stock_ideal_onzas: float
