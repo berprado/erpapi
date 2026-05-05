@@ -1,7 +1,8 @@
 // ==========================================
 // CONFIGURACIÓN Y ESTADO GLOBAL
 // ==========================================
-const API_BASE = "http://localhost:8000/api";
+// Fix #22: URL dinámica para que funcione tanto en localhost como en producción
+const API_BASE = `${window.location.origin}/api`;
 let currentToken = localStorage.getItem('token') || null;
 let currentOperacionId = null;
 const ID_BARRA_ACTUAL = 1; // Podemos hacerlo dinámico después
@@ -18,6 +19,32 @@ const btnGuardar = document.getElementById('btn-guardar');
 // ==========================================
 // INICIALIZACIÓN
 // ==========================================
+
+// Fix #24: Función helper para escapar HTML y prevenir ataques XSS.
+// Se aplica a cualquier valor dinámico (nombres, códigos) antes de inyectarlos con innerHTML.
+function escapeHtml(str) {
+    if (str == null) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+// Fix #27: Función centralizada para crear el HTML de un input de peso.
+// Elimina la duplicación entre renderizarProductos() y agregarInputPeso().
+function crearInputPeso() {
+    return `
+        <div class="relative flex items-center">
+            <input type="number" min="0" step="1" class="w-full bg-dark-bg border border-gray-700 rounded-lg pl-3 pr-8 py-2 text-white input-peso focus:border-neon-pink focus:outline-none focus:ring-1 focus:ring-neon-pink" placeholder="Ej: 950">
+            <button type="button" onclick="this.parentElement.remove()" class="absolute right-2 text-gray-500 hover:text-red-400">
+                <span class="material-symbols-outlined text-sm">close</span>
+            </button>
+        </div>
+    `;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     if (currentToken) {
         mostrarPantallaApp();
@@ -98,6 +125,8 @@ async function iniciarDashboard() {
     const estadoIcon = document.getElementById('estado-icon');
     const estadoTexto = document.getElementById('estado-texto');
     
+    // Fix #28: Resetear clases del icóno antes de cada verificación para evitar acumulación de estilos.
+    estadoIcon.className = 'material-symbols-outlined text-4xl text-gray-500';
     estadoIcon.textContent = "hourglass_empty";
     estadoIcon.classList.add('animate-pulse');
     estadoTexto.textContent = "Verificando estado de la caja...";
@@ -141,6 +170,10 @@ async function cargarProductos() {
         const response = await fetch(`${API_BASE}/inventario/pendientes`, {
             headers: { 'Authorization': `Bearer ${currentToken}` }
         });
+
+        // Fix #25: Manejar token expirado igual que en iniciarDashboard()
+        if (response.status === 401) return btnLogout.click();
+
         const productos = await response.json();
 
         if (response.ok && productos.length > 0) {
@@ -170,12 +203,13 @@ function renderizarProductos(productos) {
         div.dataset.nombre = p.nombre;
 
         // Info básica
+        // Fix #24: Valores dinámicos escapados con escapeHtml() para prevenir XSS.
         let html = `
-            ${p.categoria_nombre ? `<span class="text-[10px] font-bold tracking-widest uppercase text-gray-500 mb-1 block">${p.categoria_nombre}</span>` : ''}
-            <h4 class="text-neon-green font-bold text-lg mb-1">${p.nombre}</h4>
+            ${p.categoria_nombre ? `<span class="text-[10px] font-bold tracking-widest uppercase text-gray-500 mb-1 block">${escapeHtml(p.categoria_nombre)}</span>` : ''}
+            <h4 class="text-neon-green font-bold text-lg mb-1">${escapeHtml(p.nombre)}</h4>
             <div class="text-[10px] text-gray-600 mb-2 flex gap-3">
                 <span>ID: ${p.id_producto}</span>
-                <span>Cód: ${p.codigo}</span>
+                <span>Cód: ${escapeHtml(p.codigo)}</span>
             </div>
             <div class="text-xs text-gray-400 mb-4 flex gap-4">
                 <span class="bg-gray-800 px-2 py-1 rounded">Teórico: ${parseFloat(p.stock_ideal_unidades).toFixed(0)} botellas</span>
@@ -196,12 +230,7 @@ function renderizarProductos(productos) {
             <div class="mt-4 border-t border-gray-800 pt-4">
                 <label class="block text-[10px] font-bold text-gray-400 mb-2 tracking-wider uppercase">Gramos en Abiertas</label>
                 <div class="pesos-container grid grid-cols-2 gap-3" id="pesos-${p.id_producto}">
-                    <div class="relative flex items-center">
-                        <input type="number" min="0" step="1" class="w-full bg-dark-bg border border-gray-700 rounded-lg pl-3 pr-8 py-2 text-white input-peso focus:border-neon-pink focus:outline-none focus:ring-1 focus:ring-neon-pink" placeholder="Ej: 950">
-                        <button type="button" onclick="this.parentElement.remove()" class="absolute right-2 text-gray-500 hover:text-red-400">
-                            <span class="material-symbols-outlined text-sm">close</span>
-                        </button>
-                    </div>
+                    ${crearInputPeso()}
                 </div>
                 <button type="button" onclick="agregarInputPeso(${p.id_producto})" class="mt-3 text-xs text-neon-pink font-semibold flex items-center gap-1 hover:text-white transition-colors uppercase tracking-wider">
                     <span class="material-symbols-outlined text-sm">add_circle</span> Añadir Botella
@@ -215,19 +244,12 @@ function renderizarProductos(productos) {
     });
 }
 
-// Función global para que el botón HTML la pueda llamar
+// Fix #27: Ahora usa crearInputPeso() en lugar de duplicar el HTML del input.
 window.agregarInputPeso = function(idProducto) {
     const container = document.getElementById(`pesos-${idProducto}`);
     const inputWrapper = document.createElement('div');
-    inputWrapper.className = "relative flex items-center";
-    
-    inputWrapper.innerHTML = `
-        <input type="number" min="0" step="1" class="w-full bg-dark-bg border border-gray-700 rounded-lg pl-3 pr-8 py-2 text-white input-peso focus:border-neon-pink focus:outline-none focus:ring-1 focus:ring-neon-pink" placeholder="Ej: 950">
-        <button type="button" onclick="this.parentElement.remove()" class="absolute right-2 text-gray-500 hover:text-red-400">
-            <span class="material-symbols-outlined text-sm">close</span>
-        </button>
-    `;
-    container.appendChild(inputWrapper);
+    inputWrapper.innerHTML = crearInputPeso();
+    container.appendChild(inputWrapper.firstElementChild);
 }
 
 // ==========================================

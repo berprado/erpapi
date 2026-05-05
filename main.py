@@ -9,7 +9,7 @@ import schemas
 from typing import List
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import jwt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from config import settings
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -110,14 +110,14 @@ def login(login_data: schemas.UsuarioLogin, request: Request, db: Session = Depe
     client_ip = request.client.host
     nuevo_acceso = models.Acceso(
         usuario=usuario_db.usuario, 
-        fecha=datetime.now(), 
+        fecha=datetime.now(timezone.utc), 
         ip=client_ip
     )
     db.add(nuevo_acceso)
     db.commit()
 
     # 5. Generar y devolver el Token Real (JWT)
-    expiracion = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    expiracion = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     token_payload = {
         "sub": usuario_db.usuario, # Subject (El usuario)
         "id": usuario_db.id,
@@ -181,7 +181,7 @@ def procesar_paloteo(
     # Extraemos los datos del usuario autenticado directamente del token validado
     username_actual = current_user.usuario
     nombre_formateado = f"{current_user.paterno} {current_user.materno}, {current_user.nombres}".upper()
-    fecha_actual = datetime.now()
+    fecha_actual = datetime.now(timezone.utc)
 
     # --- NUEVO: Lógica de Observaciones ---
     obs_final = payload.observaciones if payload.observaciones else "REGISTRADO VÍA API"

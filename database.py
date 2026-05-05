@@ -4,7 +4,8 @@ from sqlalchemy.orm import sessionmaker
 from config import settings
 
 # Crear el motor de conexión
-engine = create_engine(settings.database_url, echo=False)
+# pool_pre_ping=True verifica la conexión antes de usarla, evitando errores 500 tras reinicios del servidor MySQL
+engine = create_engine(settings.database_url, echo=False, pool_pre_ping=True)
 
 # Crear la fábrica de sesiones
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

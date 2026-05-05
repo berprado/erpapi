@@ -49,8 +49,8 @@ class ProductoPendiente(BaseModel):
     ind_permite_comandar: int
     stock_ideal_unidades: float
     stock_ideal_onzas: float
-    pesable: Optional[int]
-    peso_bruto: Optional[float]
-    tara: Optional[float]
-    gramos_por_oz: Optional[float]
+    pesable: Optional[int] = None
+    peso_bruto: Optional[float] = None
+    tara: Optional[float] = None
+    gramos_por_oz: Optional[float] = None
     onzas_por_botella_llena: float
