@@ -10,6 +10,9 @@ from typing import List
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import jwt
 from datetime import datetime, timedelta, timezone
+import logging
+
+logger = logging.getLogger(__name__)
 from config import settings
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -134,7 +137,10 @@ def login(login_data: schemas.UsuarioLogin, request: Request, db: Session = Depe
     }
     
 @app.get("/api/operacion/activa", response_model=schemas.OperacionResponse)
-def verificar_operacion_activa(db: Session = Depends(get_db)):
+def verificar_operacion_activa(
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_usuario_actual)
+):
     """
     Verifica si la operación actual está en estado de 'INICIO CIERRE' (24)
     para permitir el inventario físico.
@@ -191,6 +197,18 @@ def procesar_paloteo(
     if not operacion or operacion.estado_operacion != 24:
         raise HTTPException(status_code=400, detail="Operación inválida o barra no está en INICIO CIERRE.")
 
+    # Fix #5: Prevenir inventario duplicado por operación.
+    # Si ya existe una cabecera HAB para este id_operacion, rechazamos el registro.
+    inventario_existente = db.query(models.InventarioFisicoPOS).filter(
+        models.InventarioFisicoPOS.id_operacion == payload.id_operacion,
+        models.InventarioFisicoPOS.estado == 'HAB'
+    ).first()
+    if inventario_existente:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Ya existe un inventario registrado para esta operación (ID: {inventario_existente.id}). No se puede registrar dos veces."
+        )
+
     # 2. CREAR CABECERA EN EL POS (Con estado 62 y nombre formateado)
     nueva_cabecera_pos = models.InventarioFisicoPOS(
         fecha=fecha_actual.date(),
@@ -215,7 +233,10 @@ def procesar_paloteo(
             models.ProductoPesajeConfig.id_producto_almacen == item.id_producto
         ).first()
         
-        if not config: continue
+        # Fix #6: Registrar productos sin configuración de pesaje en lugar de ignorarlos silenciosamente.
+        if not config:
+            logger.warning("Producto id=%s omitido: sin configuración de pesaje en app_producto_pesaje_config", item.id_producto)
+            continue
 
         total_onzas = 0.0
         if config.pesable == 1:
@@ -264,11 +285,16 @@ def procesar_paloteo(
 
     db.commit()
 
+    # Fix #6: Incluir en la respuesta los productos que fueron omitidos por falta de configuración.
+    ids_procesados = {r['id_producto'] for r in resultados_procesados}
+    productos_omitidos = [item.id_producto for item in payload.items if item.id_producto not in ids_procesados]
+
     return {
         "status": "success",
         "id_inventario_pos": nueva_cabecera_pos.id,
         "mensaje": f"Se registraron {len(resultados_procesados)} productos en el POS exitosamente.",
-        "detalles": resultados_procesados
+        "detalles": resultados_procesados,
+        "productos_omitidos": productos_omitidos
     }
 
 # OBTENEMOS LOS PRODUCTOS PARA EL PALOTEO
