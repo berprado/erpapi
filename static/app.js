@@ -196,7 +196,12 @@ function renderizarProductos(productos) {
             <div class="mt-4 border-t border-gray-800 pt-4">
                 <label class="block text-[10px] font-bold text-gray-400 mb-2 tracking-wider uppercase">Gramos en Abiertas</label>
                 <div class="pesos-container grid grid-cols-2 gap-3" id="pesos-${p.id_producto}">
-                    <!-- Los inputs dinámicos se inyectarán aquí -->
+                    <div class="relative flex items-center">
+                        <input type="number" min="0" step="1" class="w-full bg-dark-bg border border-gray-700 rounded-lg pl-3 pr-8 py-2 text-white input-peso focus:border-neon-pink focus:outline-none focus:ring-1 focus:ring-neon-pink" placeholder="Ej: 950">
+                        <button type="button" onclick="this.parentElement.remove()" class="absolute right-2 text-gray-500 hover:text-red-400">
+                            <span class="material-symbols-outlined text-sm">close</span>
+                        </button>
+                    </div>
                 </div>
                 <button type="button" onclick="agregarInputPeso(${p.id_producto})" class="mt-3 text-xs text-neon-pink font-semibold flex items-center gap-1 hover:text-white transition-colors uppercase tracking-wider">
                     <span class="material-symbols-outlined text-sm">add_circle</span> Añadir Botella
