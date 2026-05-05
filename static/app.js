@@ -33,14 +33,28 @@ function escapeHtml(str) {
 }
 
 // Fix #27: Función centralizada para crear el HTML de un input de peso.
-// Elimina la duplicación entre renderizarProductos() y agregarInputPeso().
-function crearInputPeso() {
+// Soporta perfiles múltiples para seleccionar el modelo de botella por registro.
+function crearInputPeso(perfilesJson) {
+    const perfiles = JSON.parse(perfilesJson || '[]');
+    let selectHTML = '';
+
+    if (perfiles.length > 1) {
+        selectHTML = `<select class="bg-gray-800 text-[10px] text-neon-green border border-gray-700 rounded-lg px-2 py-2 focus:outline-none select-perfil mr-2 cursor-pointer">`;
+        perfiles.forEach((pf, idx) => {
+            selectHTML += `<option value="${idx}">${escapeHtml(pf.nombre_perfil)}</option>`;
+        });
+        selectHTML += `</select>`;
+    }
+
     return `
-        <div class="relative flex items-center">
-            <input type="number" min="0" step="1" class="w-full bg-dark-bg border border-gray-700 rounded-lg pl-3 pr-8 py-2 text-white input-peso focus:border-neon-pink focus:outline-none focus:ring-1 focus:ring-neon-pink" placeholder="Ej: 950">
-            <button type="button" onclick="this.parentElement.remove()" class="absolute right-2 text-gray-500 hover:text-red-400">
-                <span class="material-symbols-outlined text-sm">close</span>
-            </button>
+        <div class="relative flex items-center item-peso-wrapper">
+            ${selectHTML}
+            <div class="relative flex-1">
+                <input type="number" min="0" step="1" class="w-full bg-dark-bg border border-gray-700 rounded-lg pl-3 pr-8 py-2 text-white input-peso focus:border-neon-pink focus:outline-none focus:ring-1 focus:ring-neon-pink" placeholder="Ej: 950">
+                <button type="button" onclick="this.parentElement.parentElement.remove()" class="absolute right-2 top-2 text-gray-500 hover:text-red-400">
+                    <span class="material-symbols-outlined text-sm">close</span>
+                </button>
+            </div>
         </div>
     `;
 }
@@ -201,10 +215,11 @@ function renderizarProductos(productos) {
         div.dataset.id = p.id_producto;
         div.dataset.pesable = p.pesable || 0;
         div.dataset.nombre = p.nombre;
+        const perfilesJson = JSON.stringify(p.perfiles || []);
+        div.dataset.perfiles = perfilesJson;
         
         // NUEVO: Guardar los datos matemáticos en el DOM para usarlos en vivo
-        div.dataset.tara = p.tara || 0;
-        div.dataset.groz = p.gramos_por_oz || 1; // Evitar división por cero
+        div.dataset.tolerancia = (p.perfiles && p.perfiles.length > 0) ? p.perfiles[0].tolerancia_oz : 0;
         div.dataset.paqsist = parseFloat(p.stock_ideal_unidades) || 0;
         div.dataset.detsist = parseFloat(p.stock_ideal_onzas) || 0;
 
@@ -249,10 +264,10 @@ function renderizarProductos(productos) {
             html += `
             <div class="mt-4 border-t border-gray-800 pt-4">
                 <label class="block text-[10px] font-bold text-gray-400 mb-2 tracking-wider uppercase">Gramos en Abiertas</label>
-                <div class="pesos-container grid grid-cols-2 gap-3" id="pesos-${p.id_producto}">
-                    ${crearInputPeso()}
+                <div class="pesos-container grid grid-cols-1 sm:grid-cols-2 gap-3" id="pesos-${p.id_producto}">
+                    ${crearInputPeso(perfilesJson)}
                 </div>
-                <button type="button" onclick="agregarInputPeso(${p.id_producto})" class="mt-3 text-xs text-neon-pink font-semibold flex items-center gap-1 hover:text-white transition-colors uppercase tracking-wider">
+                <button type="button" onclick="agregarInputPeso(${p.id_producto}, '${perfilesJson.replace(/'/g, "\\'")}')" class="mt-3 text-xs text-neon-pink font-semibold flex items-center gap-1 hover:text-white transition-colors uppercase tracking-wider">
                     <span class="material-symbols-outlined text-sm">add_circle</span> Añadir Botella
                 </button>
             </div>
@@ -266,10 +281,10 @@ function renderizarProductos(productos) {
     inicializarCalculos();
 }
 // Fix #27: Ahora usa crearInputPeso() en lugar de duplicar el HTML del input.
-window.agregarInputPeso = function(idProducto) {
+window.agregarInputPeso = function(idProducto, perfilesJson) {
     const container = document.getElementById(`pesos-${idProducto}`);
     const inputWrapper = document.createElement('div');
-    inputWrapper.innerHTML = crearInputPeso();
+    inputWrapper.innerHTML = crearInputPeso(perfilesJson);
     container.appendChild(inputWrapper.firstElementChild);
 }
 
@@ -300,10 +315,24 @@ btnGuardar.addEventListener('click', async () => {
 
         let pesosAbiertas = [];
         if (pesable === 1) {
-            const inputsPeso = card.querySelectorAll('.input-peso');
-            inputsPeso.forEach(inp => {
+            const wrappersPeso = card.querySelectorAll('.item-peso-wrapper');
+            const perfiles = JSON.parse(card.dataset.perfiles || '[]');
+
+            wrappersPeso.forEach(wrapper => {
+                const inp = wrapper.querySelector('.input-peso');
+                if (!inp) return;
+
                 const val = parseFloat(inp.value);
-                if (!isNaN(val)) pesosAbiertas.push(val);
+                if (isNaN(val)) return;
+
+                const select = wrapper.querySelector('.select-perfil');
+                const perfilIndex = select ? parseInt(select.value, 10) : 0;
+                const perfilValido = Number.isInteger(perfilIndex) && perfilIndex >= 0 && perfilIndex < Math.max(perfiles.length, 1);
+
+                pesosAbiertas.push({
+                    peso: val,
+                    perfil_index: perfilValido ? perfilIndex : 0
+                });
             });
 
             // VALIDACIÓN FAT FINGER: ¿Demasiadas botellas abiertas?
@@ -314,7 +343,7 @@ btnGuardar.addEventListener('click', async () => {
         }
 
         // VALIDACIÓN MATEMÁTICA: Números negativos (por si saltan el HTML)
-        if (cerradas < 0 || pesosAbiertas.some(p => p < 0)) {
+        if (cerradas < 0 || pesosAbiertas.some(p => p.peso < 0)) {
             validacionExitosa = false;
         }
 
@@ -410,8 +439,8 @@ function recalcularTarjeta(card) {
 
     // 2. DET/BARRA
     if (pesable === 1) {
-        const tara = parseFloat(card.dataset.tara);
-        const groz = parseFloat(card.dataset.groz);
+        const perfiles = JSON.parse(card.dataset.perfiles || '[]');
+        const tolerancia = parseFloat(card.dataset.tolerancia) || 0;
         const inputsPeso = card.querySelectorAll('.input-peso');
         const spanDet = document.getElementById(`val-det-${idProducto}`);
         const difDetSpan = document.getElementById(`dif-det-${idProducto}`);
@@ -420,20 +449,38 @@ function recalcularTarjeta(card) {
         const margenError = 10.0;
 
         inputsPeso.forEach(inp => {
+            const wrapper = inp.closest('.item-peso-wrapper');
+            const select = wrapper ? wrapper.querySelector('.select-perfil') : null;
+            const perfilIndex = select ? parseInt(select.value, 10) : 0;
+            const perfil = perfiles[perfilIndex] || perfiles[0];
+
+            if (!perfil) return;
+
+            const tara = parseFloat(perfil.tara);
+            const groz = parseFloat(perfil.gramos_por_oz);
             const pesoMedido = parseFloat(inp.value);
-            if (!isNaN(pesoMedido) && pesoMedido >= (tara - margenError)) {
+
+            if (isNaN(tara) || isNaN(groz) || groz <= 0 || isNaN(pesoMedido)) return;
+
+            if (pesoMedido >= (tara - margenError)) {
                 const pesoLiquido = Math.max(0, pesoMedido - tara);
                 detBarra += (pesoLiquido / groz);
             }
         });
 
         if (spanDet) spanDet.textContent = detBarra.toFixed(2);
-        if (difDetSpan) difDetSpan.innerHTML = formatearDiferencia(detBarra - detSist, true);
+        if (difDetSpan) difDetSpan.innerHTML = formatearDiferencia(detBarra - detSist, true, tolerancia);
     }
 }
 
 listaProductos.addEventListener('input', (e) => {
     if (e.target.classList.contains('input-cerradas') || e.target.classList.contains('input-peso')) {
+        recalcularTarjeta(e.target.closest('.product-card'));
+    }
+});
+
+listaProductos.addEventListener('change', (e) => {
+    if (e.target.classList.contains('select-perfil')) {
         recalcularTarjeta(e.target.closest('.product-card'));
     }
 });

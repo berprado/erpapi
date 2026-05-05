@@ -229,20 +229,33 @@ def procesar_paloteo(
 
     # 3. PROCESAR PRODUCTOS
     for item in payload.items:
-        config = db.query(models.ProductoPesajeConfig).filter(
+        configs_producto = db.query(models.ProductoPesajeConfig).filter(
             models.ProductoPesajeConfig.id_producto_almacen == item.id_producto
-        ).first()
+        ).all()
         
         # Fix #6: Registrar productos sin configuración de pesaje en lugar de ignorarlos silenciosamente.
-        if not config:
+        if not configs_producto:
             logger.warning("Producto id=%s omitido: sin configuración de pesaje en app_producto_pesaje_config", item.id_producto)
             continue
 
+        config_base = configs_producto[0]
+        perfiles = [cfg for cfg in configs_producto if cfg.pesable == 1]
+
         total_onzas = 0.0
-        if config.pesable == 1:
-            gr_oz = float(config.gramos_por_oz)
-            tara = float(config.tara)
-            for peso_medido in item.pesos_abiertas:
+        if config_base.pesable == 1 and perfiles:
+            for abierta in item.pesos_abiertas:
+                perfil_index = abierta.perfil_index
+                if perfil_index < 0 or perfil_index >= len(perfiles):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Perfil de botella inválido para producto {item.id_producto}."
+                    )
+
+                perfil = perfiles[perfil_index]
+                gr_oz = float(perfil.gramos_por_oz)
+                tara = float(perfil.tara)
+                peso_medido = float(abierta.peso)
+
                 if peso_medido >= (tara - margen_error_balanza):
                     peso_liquido = max(0, peso_medido - tara)
                     total_onzas += (peso_liquido / gr_oz)
@@ -270,7 +283,7 @@ def procesar_paloteo(
             id_operacion=payload.id_operacion,
             id_producto=item.id_producto,
             botellas_cerradas=item.botellas_cerradas,
-            pesos_abiertas=json.dumps(item.pesos_abiertas),
+            pesos_abiertas=json.dumps([entrada.model_dump() for entrada in item.pesos_abiertas]),
             onzas_calculadas=total_onzas, # Exacto: 11.92
             usuario_reg=username_actual,
             fecha_reg=fecha_actual
@@ -313,7 +326,7 @@ def obtener_productos_pendientes(
             a.id AS id_producto, a.codigo, a.nombre, a.ind_permite_comandar,
             i.cantidad_paq AS stock_ideal_unidades, i.cantidad_detalle AS stock_ideal_onzas,
             i.categoria_nombre,
-            p.pesable, p.peso_bruto, p.tara, p.gramos_por_oz,
+            p.pesable, p.nombre_perfil, p.peso_bruto, p.tara, p.gramos_por_oz, p.tolerancia_oz,
             a.cantidad_detalle AS onzas_por_botella_llena
         FROM (
             SELECT DISTINCT d.id_producto_receta 
@@ -328,10 +341,38 @@ def obtener_productos_pendientes(
         ORDER BY a.nombre ASC;
  
           """)
-    
-    # Ejecutamos la consulta y devolvemos los resultados mapeados al esquema JSON
-    result = db.execute(query).mappings().all()
-    return result
+
+    rows = db.execute(query).mappings().all()
+
+    # Agrupamos perfiles de pesaje por producto porque ahora puede haber
+    # múltiples modelos de botella para el mismo id_producto.
+    productos_dict = {}
+    for row in rows:
+        prod_id = row["id_producto"]
+        if prod_id not in productos_dict:
+            productos_dict[prod_id] = {
+                "id_producto": prod_id,
+                "codigo": row["codigo"],
+                "nombre": row["nombre"],
+                "categoria_nombre": row["categoria_nombre"],
+                "ind_permite_comandar": row["ind_permite_comandar"],
+                "stock_ideal_unidades": row["stock_ideal_unidades"],
+                "stock_ideal_onzas": row["stock_ideal_onzas"],
+                "pesable": row["pesable"],
+                "onzas_por_botella_llena": row["onzas_por_botella_llena"],
+                "perfiles": []
+            }
+
+        if row["pesable"] == 1 and row["nombre_perfil"]:
+            productos_dict[prod_id]["perfiles"].append({
+                "nombre_perfil": row["nombre_perfil"],
+                "peso_bruto": float(row["peso_bruto"]),
+                "tara": float(row["tara"]),
+                "gramos_por_oz": float(row["gramos_por_oz"]),
+                "tolerancia_oz": float(row["tolerancia_oz"])
+            })
+
+    return list(productos_dict.values())
 
 # --- SERVIDOR DE ARCHIVOS ESTÁTICOS (FRONTEND) ---
 # Montamos una carpeta llamada 'static' donde vivirá el HTML, CSS y JS

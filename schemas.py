@@ -21,25 +21,36 @@ class OperacionResponse(BaseModel):
 
 # Las reglas de validación para el paloteo
 
+class PesoAbierta(BaseModel):
+    peso: float = Field(..., ge=0, description="Peso medido en gramos")
+    perfil_index: int = Field(0, ge=0, description="Indice del perfil de botella seleccionado")
+
 class PaloteoItem(BaseModel):
     id_producto: int = Field(..., gt=0, description="ID del producto de almacén")
     botellas_cerradas: int = Field(..., ge=0, description="Cantidad de botellas enteras (No puede ser negativo)")
-    # Usamos List[float] para recibir el array. Si no hay, recibe una lista vacía []
-    pesos_abiertas: List[float] = Field(default_factory=list, description="Pesos individuales de las botellas abiertas")
+    # Cada registro abierta incluye el peso y el perfil seleccionado.
+    pesos_abiertas: List[PesoAbierta] = Field(default_factory=list, description="Pesos de abiertas con el perfil de botella usado")
 
     @field_validator('pesos_abiertas')
-    def validar_pesos_positivos(cls, pesos):
+    def validar_pesos_positivos(cls, pesos_abiertas):
         """Asegura que ningún peso individual dentro del array sea negativo"""
-        for peso in pesos:
-            if peso < 0:
+        for entrada in pesos_abiertas:
+            if entrada.peso < 0:
                 raise ValueError("Ningún peso puede ser negativo.")
-        return pesos
+        return pesos_abiertas
 
 class PaloteoRequest(BaseModel):
     id_operacion: int = Field(..., gt=0)
     id_barra: int = Field(..., gt=0, description="ID de la barra donde se hace el físico")
     observaciones: Optional[str] = Field(None, description="Nota opcional del bartender") # NUEVO
     items: List[PaloteoItem] = Field(..., min_length=1)
+
+class PerfilPesaje(BaseModel):
+    nombre_perfil: str
+    peso_bruto: float
+    tara: float
+    gramos_por_oz: float
+    tolerancia_oz: float
     
 class ProductoPendiente(BaseModel):
     id_producto: int
@@ -50,7 +61,5 @@ class ProductoPendiente(BaseModel):
     stock_ideal_unidades: float
     stock_ideal_onzas: float
     pesable: Optional[int] = None
-    peso_bruto: Optional[float] = None
-    tara: Optional[float] = None
-    gramos_por_oz: Optional[float] = None
+    perfiles: List[PerfilPesaje] = Field(default_factory=list)
     onzas_por_botella_llena: float
