@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from fastapi import FastAPI, Depends, HTTPException, status, Request
 import hashlib
 import json
@@ -239,19 +240,27 @@ def procesar_paloteo(
             continue
 
         config_base = configs_producto[0]
-        perfiles = [cfg for cfg in configs_producto if cfg.pesable == 1]
+        perfiles = sorted([cfg for cfg in configs_producto if cfg.pesable == 1], key=lambda cfg: cfg.id or 0)
 
         total_onzas = 0.0
         if config_base.pesable == 1 and perfiles:
             for abierta in item.pesos_abiertas:
-                perfil_index = abierta.perfil_index
-                if perfil_index < 0 or perfil_index >= len(perfiles):
+                perfil = None
+
+                if abierta.perfil_id is not None:
+                    perfil = next((pf for pf in perfiles if pf.id == abierta.perfil_id), None)
+
+                if perfil is None and abierta.perfil_index is not None:
+                    perfil_index = abierta.perfil_index
+                    if 0 <= perfil_index < len(perfiles):
+                        perfil = perfiles[perfil_index]
+
+                if perfil is None:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail=f"Perfil de botella inválido para producto {item.id_producto}."
                     )
 
-                perfil = perfiles[perfil_index]
                 gr_oz = float(perfil.gramos_por_oz)
                 tara = float(perfil.tara)
                 peso_medido = float(abierta.peso)
@@ -310,6 +319,57 @@ def procesar_paloteo(
         "productos_omitidos": productos_omitidos
     }
 
+@app.post("/api/pesaje/perfiles", response_model=schemas.PerfilPesaje)
+def crear_perfil_pesaje(
+    payload: schemas.CrearPerfilPesajeRequest,
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_usuario_actual)
+):
+    """Crea un nuevo modelo de botella para un producto pesable."""
+    if payload.tara >= payload.peso_bruto:
+        raise HTTPException(status_code=400, detail="La tara no puede ser mayor o igual al peso bruto.")
+
+    nombre_perfil = payload.nombre_perfil.strip()
+
+    insert_sql = text("""
+        INSERT INTO app_producto_pesaje_config
+        (id_producto_almacen, nombre_perfil, peso_bruto, tara, gramos_por_oz, tolerancia_oz, pesable, usuario_reg)
+        VALUES
+        (:id_producto, :nombre_perfil, :peso_bruto, :tara, :gramos_por_oz, :tolerancia_oz, 1, :usuario_reg)
+    """)
+
+    try:
+        result = db.execute(insert_sql, {
+            "id_producto": payload.id_producto,
+            "nombre_perfil": nombre_perfil,
+            "peso_bruto": payload.peso_bruto,
+            "tara": payload.tara,
+            "gramos_por_oz": payload.gramos_por_oz,
+            "tolerancia_oz": payload.tolerancia_oz,
+            "usuario_reg": current_user.usuario,
+        })
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Ya existe un perfil '{nombre_perfil}' para este producto."
+        ) from exc
+    except Exception as exc:
+        db.rollback()
+        logger.exception("Error creando perfil de pesaje para producto %s", payload.id_producto)
+        raise HTTPException(status_code=500, detail="No se pudo crear el modelo de botella.") from exc
+
+    perfil_id = getattr(result, "lastrowid", None)
+    return schemas.PerfilPesaje(
+        id=perfil_id,
+        nombre_perfil=nombre_perfil,
+        peso_bruto=float(payload.peso_bruto),
+        tara=float(payload.tara),
+        gramos_por_oz=float(payload.gramos_por_oz),
+        tolerancia_oz=float(payload.tolerancia_oz),
+    )
+
 # OBTENEMOS LOS PRODUCTOS PARA EL PALOTEO
 
 @app.get("/api/inventario/pendientes", response_model=List[schemas.ProductoPendiente])
@@ -326,7 +386,7 @@ def obtener_productos_pendientes(
             a.id AS id_producto, a.codigo, a.nombre, a.ind_permite_comandar,
             i.cantidad_paq AS stock_ideal_unidades, i.cantidad_detalle AS stock_ideal_onzas,
             i.categoria_nombre,
-            p.pesable, p.nombre_perfil, p.peso_bruto, p.tara, p.gramos_por_oz, p.tolerancia_oz,
+            p.id AS perfil_id, p.pesable, p.nombre_perfil, p.peso_bruto, p.tara, p.gramos_por_oz, p.tolerancia_oz,
             a.cantidad_detalle AS onzas_por_botella_llena
         FROM (
             SELECT DISTINCT d.id_producto_receta 
@@ -338,7 +398,7 @@ def obtener_productos_pendientes(
         INNER JOIN alm_producto a ON mov.id_producto_receta = a.id
         INNER JOIN vista_inventario_barra_con_filtro i ON a.id = i.id_almacen 
         LEFT JOIN app_producto_pesaje_config p ON a.id = p.id_producto_almacen
-        ORDER BY a.nombre ASC;
+        ORDER BY a.nombre ASC, p.id ASC;
  
           """)
 
@@ -365,6 +425,7 @@ def obtener_productos_pendientes(
 
         if row["pesable"] == 1 and row["nombre_perfil"]:
             productos_dict[prod_id]["perfiles"].append({
+                "id": row["perfil_id"],
                 "nombre_perfil": row["nombre_perfil"],
                 "peso_bruto": float(row["peso_bruto"]),
                 "tara": float(row["tara"]),

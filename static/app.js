@@ -41,7 +41,8 @@ function crearInputPeso(perfilesJson) {
     if (perfiles.length > 1) {
         selectHTML = `<select class="bg-gray-800 text-[10px] text-neon-green border border-gray-700 rounded-lg px-2 py-2 focus:outline-none select-perfil mr-2 cursor-pointer">`;
         perfiles.forEach((pf, idx) => {
-            selectHTML += `<option value="${idx}">${escapeHtml(pf.nombre_perfil)}</option>`;
+                const optionValue = (pf.id != null) ? pf.id : idx;
+                selectHTML += `<option value="${optionValue}">${escapeHtml(pf.nombre_perfil)}</option>`;
         });
         selectHTML += `</select>`;
     }
@@ -267,9 +268,14 @@ function renderizarProductos(productos) {
                 <div class="pesos-container grid grid-cols-1 sm:grid-cols-2 gap-3" id="pesos-${p.id_producto}">
                     ${crearInputPeso(perfilesJson)}
                 </div>
-                <button type="button" onclick="agregarInputPeso(${p.id_producto}, '${perfilesJson.replace(/'/g, "\\'")}')" class="mt-3 text-xs text-neon-pink font-semibold flex items-center gap-1 hover:text-white transition-colors uppercase tracking-wider">
-                    <span class="material-symbols-outlined text-sm">add_circle</span> Añadir Botella
-                </button>
+                <div class="mt-3 flex flex-wrap gap-2">
+                    <button type="button" data-id-producto="${p.id_producto}" class="btn-add-peso text-xs text-neon-pink font-semibold flex items-center gap-1 hover:text-white transition-colors uppercase tracking-wider">
+                        <span class="material-symbols-outlined text-sm">add_circle</span> Añadir Botella
+                    </button>
+                    <button type="button" data-id-producto="${p.id_producto}" class="btn-add-modelo text-xs text-neon-green font-semibold flex items-center gap-1 hover:text-white transition-colors uppercase tracking-wider">
+                        <span class="material-symbols-outlined text-sm">labs</span> Nuevo Modelo
+                    </button>
+                </div>
             </div>
             `;
         }
@@ -282,9 +288,12 @@ function renderizarProductos(productos) {
 }
 // Fix #27: Ahora usa crearInputPeso() en lugar de duplicar el HTML del input.
 window.agregarInputPeso = function(idProducto, perfilesJson) {
+    const card = document.querySelector(`.product-card[data-id="${idProducto}"]`);
+    const perfiles = perfilesJson || (card ? card.dataset.perfiles : '[]');
     const container = document.getElementById(`pesos-${idProducto}`);
+    if (!container) return;
     const inputWrapper = document.createElement('div');
-    inputWrapper.innerHTML = crearInputPeso(perfilesJson);
+    inputWrapper.innerHTML = crearInputPeso(perfiles);
     container.appendChild(inputWrapper.firstElementChild);
 }
 
@@ -326,12 +335,12 @@ btnGuardar.addEventListener('click', async () => {
                 if (isNaN(val)) return;
 
                 const select = wrapper.querySelector('.select-perfil');
-                const perfilIndex = select ? parseInt(select.value, 10) : 0;
-                const perfilValido = Number.isInteger(perfilIndex) && perfilIndex >= 0 && perfilIndex < Math.max(perfiles.length, 1);
+                const { perfil, index } = resolverPerfilSeleccionado(perfiles, select);
 
                 pesosAbiertas.push({
                     peso: val,
-                    perfil_index: perfilValido ? perfilIndex : 0
+                    perfil_id: (perfil && perfil.id != null) ? perfil.id : null,
+                    perfil_index: index >= 0 ? index : 0
                 });
             });
 
@@ -451,8 +460,7 @@ function recalcularTarjeta(card) {
         inputsPeso.forEach(inp => {
             const wrapper = inp.closest('.item-peso-wrapper');
             const select = wrapper ? wrapper.querySelector('.select-perfil') : null;
-            const perfilIndex = select ? parseInt(select.value, 10) : 0;
-            const perfil = perfiles[perfilIndex] || perfiles[0];
+            const { perfil } = resolverPerfilSeleccionado(perfiles, select);
 
             if (!perfil) return;
 
@@ -482,6 +490,26 @@ listaProductos.addEventListener('input', (e) => {
 listaProductos.addEventListener('change', (e) => {
     if (e.target.classList.contains('select-perfil')) {
         recalcularTarjeta(e.target.closest('.product-card'));
+    }
+});
+
+listaProductos.addEventListener('click', (e) => {
+    const btnAdd = e.target.closest('.btn-add-peso');
+    if (btnAdd) {
+        const idProducto = parseInt(btnAdd.dataset.idProducto, 10);
+        if (!isNaN(idProducto)) {
+            agregarInputPeso(idProducto);
+        }
+        return;
+    }
+
+    const btnModelo = e.target.closest('.btn-add-modelo');
+    if (btnModelo) {
+        const idProducto = parseInt(btnModelo.dataset.idProducto, 10);
+        if (!isNaN(idProducto)) {
+            crearModeloBotella(idProducto);
+        }
+        return;
     }
 });
 

@@ -23,7 +23,8 @@ class OperacionResponse(BaseModel):
 
 class PesoAbierta(BaseModel):
     peso: float = Field(..., ge=0, description="Peso medido en gramos")
-    perfil_index: int = Field(0, ge=0, description="Indice del perfil de botella seleccionado")
+    perfil_id: Optional[int] = Field(None, gt=0, description="ID del perfil de botella seleccionado")
+    perfil_index: Optional[int] = Field(None, ge=0, description="Indice de respaldo del perfil de botella")
 
 class PaloteoItem(BaseModel):
     id_producto: int = Field(..., gt=0, description="ID del producto de almacén")
@@ -46,11 +47,20 @@ class PaloteoRequest(BaseModel):
     items: List[PaloteoItem] = Field(..., min_length=1)
 
 class PerfilPesaje(BaseModel):
+    id: Optional[int] = None
     nombre_perfil: str
     peso_bruto: float
     tara: float
     gramos_por_oz: float
     tolerancia_oz: float
+
+class CrearPerfilPesajeRequest(BaseModel):
+    id_producto: int = Field(..., gt=0)
+    nombre_perfil: str = Field(..., min_length=2, max_length=100)
+    peso_bruto: float = Field(..., gt=0)
+    tara: float = Field(..., ge=0)
+    gramos_por_oz: float = Field(..., gt=0)
+    tolerancia_oz: float = Field(0, ge=0)
     
 class ProductoPendiente(BaseModel):
     id_producto: int
