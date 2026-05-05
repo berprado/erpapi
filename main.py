@@ -13,11 +13,21 @@ from datetime import datetime, timedelta
 from config import settings
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(
     title="API Inventario POS",
     description="Backend para control de pesaje y auditoría de barra",
     version="1.0.0"
+)
+
+# Habilita preflight OPTIONS y cabeceras CORS para clientes web (PWA/frontend).
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Configuración de Seguridad
