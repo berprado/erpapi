@@ -212,8 +212,8 @@ function renderizarProductos(productos) {
                 <span>Cód: ${escapeHtml(p.codigo)}</span>
             </div>
             <div class="text-xs text-gray-400 mb-4 flex gap-4">
-                <span class="bg-gray-800 px-2 py-1 rounded">Teórico: ${parseFloat(p.stock_ideal_unidades).toFixed(0)} botellas</span>
-                ${p.pesable === 1 ? `<span class="bg-gray-800 px-2 py-1 rounded border border-gray-700">Tara: ${parseFloat(p.tara).toFixed(0)}g</span>` : ''}
+                <span class="bg-gray-800 px-2 py-1 rounded">PAQ/SIST: ${parseFloat(p.stock_ideal_unidades).toFixed(0)} bot.</span>
+                ${p.pesable === 1 ? `<span class="bg-gray-800 px-2 py-1 rounded border border-gray-700">DET/SIST: ${parseFloat(p.stock_ideal_onzas).toFixed(2)} oz</span>` : ''}
             </div>
             
             <div class="grid grid-cols-2 gap-4">
