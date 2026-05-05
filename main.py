@@ -310,6 +310,11 @@ def obtener_productos_pendientes(
 # Montamos una carpeta llamada 'static' donde vivirá el HTML, CSS y JS
 app.mount("/assets", StaticFiles(directory="static"), name="assets")
 
+# Favicon canónico: se sirve desde static/icons sin duplicar archivos en la raíz
+@app.get("/favicon.ico", include_in_schema=False)
+def serve_favicon():
+    return FileResponse("static/icons/favicon.ico")
+
 # Ruta principal que devuelve la página web
 @app.get("/")
 def serve_frontend():
