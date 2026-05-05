@@ -1,18 +1,49 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from fastapi import FastAPI, Depends, HTTPException, status, Request
-from datetime import datetime
 import hashlib
 import json
-from database import get_db, engine
+from database import get_db
 import models
 import schemas
+from typing import List
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+import jwt
+from datetime import datetime, timedelta
+from config import settings
 
 app = FastAPI(
     title="API Inventario POS",
     description="Backend para control de pesaje y auditoría de barra",
     version="1.0.0"
 )
+
+# Configuración de Seguridad
+security = HTTPBearer()
+SECRET_KEY = settings.SECRET_KEY  # Cargado desde .env
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 600 # 10 horas de vigencia para cubrir toda la noche
+
+# Función para extraer y validar el usuario real del token
+def get_usuario_actual(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
+    token = credentials.credentials
+    try:
+        # Intentamos decodificar el token
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise HTTPException(status_code=401, detail="Token inválido")
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="El token ha expirado. Inicie sesión nuevamente.")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Token inválido o corrupto")
+
+    # Verificamos que el usuario aún exista y esté habilitado en la BD
+    usuario = db.query(models.Usuario).filter(models.Usuario.usuario == username).first()
+    if usuario is None or usuario.estado != 'HAB' or usuario.habilitado != '1':
+        raise HTTPException(status_code=401, detail="Usuario no encontrado o inactivo")
+    
+    return usuario
 
 # --- FUNCIÓN DE ENCRIPTACIÓN ---
 def hash_password(password: str) -> str:
@@ -73,14 +104,21 @@ def login(login_data: schemas.UsuarioLogin, request: Request, db: Session = Depe
     db.add(nuevo_acceso)
     db.commit()
 
-    # 5. Generar y devolver el Token (Por ahora un token simulado)
-    token_simulado = f"jwt-token-secreto-para-{usuario_db.id}"
+    # 5. Generar y devolver el Token Real (JWT)
+    expiracion = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    token_payload = {
+        "sub": usuario_db.usuario, # Subject (El usuario)
+        "id": usuario_db.id,
+        "exp": expiracion # Fecha de caducidad
+    }
+    
+    token_real = jwt.encode(token_payload, SECRET_KEY, algorithm=ALGORITHM)
     
     return {
-        "access_token": token_simulado,
+        "access_token": token_real,
         "token_type": "Bearer",
         "usuario_id": usuario_db.id,
-        "nombres": f"{usuario_db.nombres} {usuario_db.paterno}"
+        "nombres": f"{usuario_db.paterno} {usuario_db.materno}, {usuario_db.nombres}"
     }
     
 @app.get("/api/operacion/activa", response_model=schemas.OperacionResponse)
@@ -123,17 +161,15 @@ def verificar_operacion_activa(db: Session = Depends(get_db)):
     )
     
 @app.post("/api/inventario/paloteo")
-def procesar_paloteo(payload: schemas.PaloteoRequest, db: Session = Depends(get_db)):
-    # Simulación del usuario logueado (esto luego vendrá del Token)
-    username_actual = "BERNARDO" 
+def procesar_paloteo(
+    payload: schemas.PaloteoRequest, 
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_usuario_actual) # <-- CANDADO AQUÍ
+):
+    # Extraemos los datos del usuario autenticado directamente del token validado
+    username_actual = current_user.usuario
+    nombre_formateado = f"{current_user.paterno} {current_user.materno}, {current_user.nombres}".upper()
     fecha_actual = datetime.now()
-    
-    # --- NUEVO: Obtener el nombre formateado (Paterno Materno, Nombres) ---
-    usuario_db = db.query(models.Usuario).filter(models.Usuario.usuario == username_actual).first()
-    if usuario_db:
-        nombre_formateado = f"{usuario_db.paterno} {usuario_db.materno}, {usuario_db.nombres}".upper()
-    else:
-        nombre_formateado = username_actual # Fallback por si acaso
 
     # --- NUEVO: Lógica de Observaciones ---
     obs_final = payload.observaciones if payload.observaciones else "REGISTRADO VÍA API"
@@ -222,3 +258,38 @@ def procesar_paloteo(payload: schemas.PaloteoRequest, db: Session = Depends(get_
         "mensaje": f"Se registraron {len(resultados_procesados)} productos en el POS exitosamente.",
         "detalles": resultados_procesados
     }
+
+# OBTENEMOS LOS PRODUCTOS PARA EL PALOTEO
+
+@app.get("/api/inventario/pendientes", response_model=List[schemas.ProductoPendiente])
+def obtener_productos_pendientes(
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_usuario_actual) # <-- CANDADO AQUÍ
+    ):
+    """
+    Devuelve la lista de productos que tuvieron movimiento en la operación activa,
+    junto con su stock ideal y parámetros de pesaje.
+    """
+    query = text("""
+        SELECT 
+            a.id AS id_producto, a.codigo, a.nombre, a.ind_permite_comandar,
+            i.cantidad_paq AS stock_ideal_unidades, i.cantidad_detalle AS stock_ideal_onzas,
+            p.pesable, p.peso_bruto, p.tara, p.gramos_por_oz,
+            a.cantidad_detalle AS onzas_por_botella_llena
+        FROM (
+            SELECT DISTINCT d.id_producto_receta 
+            FROM comandas_v9_detallada d
+            INNER JOIN bar_comanda c ON d.id_comanda = c.id
+            WHERE d.id_operacion = (SELECT MAX(id_operacion) FROM bar_comanda)
+            AND c.estado_comanda = 26
+        ) mov
+        INNER JOIN alm_producto a ON mov.id_producto_receta = a.id
+        INNER JOIN vista_inventario_barra_con_filtro i ON a.id = i.id_almacen 
+        LEFT JOIN app_producto_pesaje_config p ON a.id = p.id_producto_almacen
+        ORDER BY a.nombre ASC;
+ 
+          """)
+    
+    # Ejecutamos la consulta y devolvemos los resultados mapeados al esquema JSON
+    result = db.execute(query).mappings().all()
+    return result

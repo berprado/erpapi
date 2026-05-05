@@ -2,6 +2,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     APP_ENV: str = "test"
+    SECRET_KEY: str  # Clave para firma de tokens JWT
     
     # Variables de prueba
     TEST_DB_HOST: str
