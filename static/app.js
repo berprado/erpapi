@@ -350,22 +350,33 @@ function renderizarProductos(productos) {
                 <span>Cód: ${escapeHtml(p.codigo)}</span>
             </div>
             
-            <!-- Stocks del Sistema (Teóricos) -->
-            <div class="text-xs text-gray-400 mb-2 flex gap-4">
-                <span class="bg-gray-800 px-2 py-1 rounded">PAQ/SIST: ${parseFloat(p.stock_ideal_unidades).toFixed(0)} bot.</span>
-                ${p.pesable === 1 ? `<span class="bg-gray-800 px-2 py-1 rounded border border-gray-700">DET/SIST: ${parseFloat(p.stock_ideal_onzas).toFixed(2)} oz</span>` : ''}
-            </div>
-
-            <!-- Contadores Dinámicos Reales (Físicos) + Diferencias -->
-            <div class="text-[11px] font-bold mb-4 flex flex-col gap-2">
-                <div class="flex items-center gap-2">
-                    <span class="text-white bg-gray-700 px-2 py-1 rounded">PAQ/BARRA: <span id="val-paq-${p.id_producto}">0</span> bot</span>
-                    <span id="dif-paq-${p.id_producto}" class="px-2 py-1 rounded tracking-wider"></span>
+            <!-- Layout de 2 Columnas: PAQ (izquierda) y DET (derecha, solo si pesable) -->
+            <div class="grid ${p.pesable === 1 ? 'grid-cols-2' : 'grid-cols-1'} gap-4 mb-4 items-stretch">
+                <!-- Columna Izquierda: PAQ -->
+                <div class="text-[11px] font-bold flex flex-col gap-2">
+                    <div class="w-full">
+                        <span class="block w-full text-gray-400 bg-gray-800 px-2 py-1 rounded text-xs">PAQ/SIST: ${parseFloat(p.stock_ideal_unidades).toFixed(0)} bot.</span>
+                    </div>
+                    <div class="w-full">
+                        <span class="inline-flex w-full items-center justify-between text-white bg-gray-700 px-2 py-1 rounded"><span>PAQ/BARRA:</span><span><span id="val-paq-${p.id_producto}">0</span> bot</span></span>
+                    </div>
+                    <div class="w-full">
+                        <span id="dif-paq-${p.id_producto}" class="block w-full px-2 py-1 rounded tracking-wider"></span>
+                    </div>
                 </div>
+
+                <!-- Columna Derecha: DET (solo si pesable) -->
                 ${p.pesable === 1 ? `
-                <div class="flex items-center gap-2">
-                    <span class="text-white bg-gray-700 px-2 py-1 rounded">DET/BARRA: <span id="val-det-${p.id_producto}">0.00</span> oz</span>
-                    <span id="dif-det-${p.id_producto}" class="px-2 py-1 rounded tracking-wider"></span>
+                <div class="text-[11px] font-bold flex flex-col gap-2">
+                    <div class="w-full">
+                        <span class="block w-full text-gray-400 bg-gray-800 px-2 py-1 rounded text-xs border border-gray-700">DET/SIST: ${parseFloat(p.stock_ideal_onzas).toFixed(2)} oz</span>
+                    </div>
+                    <div class="w-full">
+                        <span class="inline-flex w-full items-center justify-between text-white bg-gray-700 px-2 py-1 rounded"><span>DET/BARRA:</span><span><span id="val-det-${p.id_producto}">0.00</span> oz</span></span>
+                    </div>
+                    <div class="w-full">
+                        <span id="dif-det-${p.id_producto}" class="block w-full px-2 py-1 rounded tracking-wider"></span>
+                    </div>
                 </div>` : ''}
             </div>
             
@@ -531,16 +542,16 @@ function formatearDiferencia(diferencia, isOz = false) {
 
     // Tolerancia para decimales (evitar ruido por redondeos)
     if (Math.abs(diferencia) < 0.01) {
-        return '<span class="text-neon-green border border-neon-green/30 bg-neon-green/10 px-2 py-1 rounded inline-flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">check_circle</span> OK</span>';
+        return '<span class="text-neon-green border border-neon-green/30 bg-neon-green/10 px-2 py-1 rounded inline-flex w-full justify-center items-center gap-1"><span class="material-symbols-outlined text-[14px]">check_circle</span> OK</span>';
     }
 
     if (diferencia < 0) {
         const val = isOz ? diferencia.toFixed(2) : Math.round(diferencia);
-        return `<span class="text-neon-pink border border-neon-pink/30 bg-neon-pink/10 px-2 py-1 rounded">${val} ${sufijo}</span>`;
+        return `<span class="text-neon-pink border border-neon-pink/30 bg-neon-pink/10 px-2 py-1 rounded inline-flex w-full justify-center">${val} ${sufijo}</span>`;
     }
 
     const val = isOz ? diferencia.toFixed(2) : Math.round(diferencia);
-    return `<span class="text-yellow-400 border border-yellow-400/30 bg-yellow-400/10 px-2 py-1 rounded">+${val} ${sufijo}</span>`;
+    return `<span class="text-yellow-400 border border-yellow-400/30 bg-yellow-400/10 px-2 py-1 rounded inline-flex w-full justify-center">+${val} ${sufijo}</span>`;
 }
 
 // Recalcula una tarjeta y actualiza PAQ/BARRA, DET/BARRA y sus diferencias contra el sistema
