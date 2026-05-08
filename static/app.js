@@ -390,33 +390,29 @@ function renderizarProductos(productos) {
                 </div>` : ''}
             </div>
             
-            <div class="grid grid-cols-2 gap-md">
+            <div class="grid ${p.pesable === 1 ? 'grid-cols-2' : 'grid-cols-1'} gap-md items-start">
                 <div>
                     <label class="block text-label-mono font-label-mono text-on-surface-variant mb-xs tracking-widest uppercase">Cerradas</label>
                     <input type="number" min="0" class="w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-on-surface input-cerradas focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus font-data-tabular" placeholder="0">
                 </div>
+
+                ${p.pesable === 1 ? `
+                <div class="border-l border-outline-variant pl-md">
+                    <label class="block text-label-mono font-label-mono text-on-surface-variant mb-xs tracking-widest uppercase">Gramos en Abiertas</label>
+                    <div class="pesos-container grid grid-cols-1 gap-sm" id="pesos-${p.id_producto}">
+                        ${crearInputPeso(perfilesJson)}
+                    </div>
+                    <div class="mt-sm flex flex-wrap gap-sm">
+                        <button type="button" data-id-producto="${p.id_producto}" class="btn-add-peso text-label-mono text-error font-semibold flex items-center gap-xs hover:text-primary-fixed-dim transition-colors uppercase tracking-widest rounded-sharp border border-outline-variant px-sm py-xs">
+                            <span class="material-symbols-outlined text-sm">add_circle</span> + Botella
+                        </button>
+                        <button type="button" data-id-producto="${p.id_producto}" class="btn-add-modelo text-label-mono text-primary-fixed font-semibold flex items-center gap-xs hover:text-primary-fixed-dim transition-colors uppercase tracking-widest rounded-sharp border border-outline-variant px-sm py-xs">
+                            <span class="material-symbols-outlined text-sm">labs</span> + Modelo
+                        </button>
+                    </div>
+                </div>` : ''}
             </div>
         `;
-
-        // Sección Pesaje (Solo si es pesable)
-        if (p.pesable === 1) {
-            html += `
-            <div class="mt-md border-t border-outline-variant pt-md">
-                <label class="block text-label-mono font-label-mono text-on-surface-variant mb-md tracking-widest uppercase">Gramos en Abiertas</label>
-                <div class="pesos-container grid grid-cols-1 sm:grid-cols-2 gap-md" id="pesos-${p.id_producto}">
-                    ${crearInputPeso(perfilesJson)}
-                </div>
-                <div class="mt-md flex flex-wrap gap-sm">
-                    <button type="button" data-id-producto="${p.id_producto}" class="btn-add-peso text-label-mono text-error font-semibold flex items-center gap-xs hover:text-primary-fixed-dim transition-colors uppercase tracking-widest rounded-sharp border border-outline-variant px-sm py-xs">
-                        <span class="material-symbols-outlined text-sm">add_circle</span> + Botella
-                    </button>
-                    <button type="button" data-id-producto="${p.id_producto}" class="btn-add-modelo text-label-mono text-primary-fixed font-semibold flex items-center gap-xs hover:text-primary-fixed-dim transition-colors uppercase tracking-widest rounded-sharp border border-outline-variant px-sm py-xs">
-                        <span class="material-symbols-outlined text-sm">labs</span> + Modelo
-                    </button>
-                </div>
-            </div>
-            `;
-        }
 
         div.innerHTML = html;
         listaProductos.appendChild(div);
