@@ -165,45 +165,69 @@
                 <p class="font-label-mono text-label-mono text-outline uppercase tracking-[0.3em]">paloteo v1.0</p>
             </div>
             
-            <!-- Formulario de Ingreso -->
-            <form id="login-form" class="space-y-lg">
-                <!-- Campo Usuario -->
-                <div>
-                    <label class="block text-label-mono font-label-mono text-on-surface-variant tracking-widest mb-sm uppercase flex items-center gap-sm">
-                        <span class="material-symbols-outlined text-sm">alternate_email</span>
-                        Correo Electrónico
-                    </label>
-                    <div class="relative">
+            <!-- Formulario de Ingreso con Corner Accents -->
+            <form id="login-form" class="space-y-lg relative">
+                <!-- Corner Accent Top Right -->
+                <div class="absolute -top-md -right-md w-lg h-lg border-t-2 border-r-2 border-primary-fixed opacity-40 pointer-events-none"></div>
+                
+                <!-- Corner Accent Bottom Left -->
+                <div class="absolute -bottom-md -left-md w-lg h-lg border-b-2 border-l-2 border-primary-fixed opacity-40 pointer-events-none"></div>
+                
+                <!-- Main Form Container -->
+                <div class="bg-surface-container-low border border-outline-variant p-lg rounded-sharp relative z-10 space-y-lg">
+                    <!-- Campo Usuario -->
+                    <div>
+                        <label class="block text-label-mono font-label-mono text-on-surface-variant tracking-widest mb-sm uppercase flex items-center gap-sm">
+                            <span class="material-symbols-outlined text-sm">alternate_email</span>
+                            Correo Electrónico
+                        </label>
                         <input type="email" id="username" placeholder="admin@backstage.local" 
-                            class="w-full bg-surface-container-highest border-b border-outline-variant px-sm py-sm text-on-surface placeholder-outline/50 focus:outline-none focus:border-primary-fixed-dim focus:shadow-cyan-glow-focus transition-all font-data-tabular text-primary" required>
+                            class="w-full bg-surface-container-highest border-b-2 border-outline-variant px-sm py-sm text-primary placeholder-outline/50 focus:outline-none focus:border-b-2 focus:border-primary-fixed-dim focus:shadow-cyan-glow-focus transition-all font-data-tabular" required>
                     </div>
-                </div>
 
-                <!-- Campo Contraseña -->
-                <div>
-                    <label class="block text-label-mono font-label-mono text-on-surface-variant tracking-widest mb-sm uppercase flex items-center gap-sm">
-                        <span class="material-symbols-outlined text-sm">lock</span>
-                        Contraseña
-                    </label>
-                    <div class="relative">
-                        <input type="password" id="password" placeholder="••••••••" 
-                            class="w-full bg-surface-container-highest border-b border-outline-variant px-sm py-sm text-on-surface placeholder-outline/50 focus:outline-none focus:border-primary-fixed-dim focus:shadow-cyan-glow-focus transition-all font-data-tabular text-primary pr-lg" required>
-                        <button type="button" class="absolute right-sm top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-primary-fixed-dim transition-colors">
-                            <span class="material-symbols-outlined text-sm">visibility</span>
-                        </button>
+                    <!-- Campo Contraseña -->
+                    <div>
+                        <label class="block text-label-mono font-label-mono text-on-surface-variant tracking-widest mb-sm uppercase flex items-center gap-sm">
+                            <span class="material-symbols-outlined text-sm">lock</span>
+                            Contraseña
+                        </label>
+                        <div class="relative">
+                            <input type="password" id="password" placeholder="••••••••" 
+                                class="w-full bg-surface-container-highest border-b-2 border-outline-variant px-sm py-sm text-primary placeholder-outline/50 focus:outline-none focus:border-b-2 focus:border-primary-fixed-dim focus:shadow-cyan-glow-focus transition-all font-data-tabular" required>
+                            <button type="button" class="absolute right-sm top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-primary-fixed-dim transition-colors">
+                                <span class="material-symbols-outlined text-sm">visibility</span>
+                            </button>
+                        </div>
                     </div>
-                </div>
 
-                <!-- Botón Ingresar -->
-                <button type="submit" 
-                    class="w-full bg-primary-container text-on-primary-fixed font-headline-md text-body-base py-md px-lg rounded-sharp flex items-center justify-center gap-sm mt-lg hover:brightness-110 active:scale-95 shadow-cyan-glow transition-all uppercase tracking-widest">
-                    <span class="material-symbols-outlined">login</span>
-                    Iniciar Sesión
-                </button>
+                    <!-- Botón Ingresar -->
+                    <button type="submit" 
+                        class="w-full bg-primary-container text-on-primary-fixed font-headline-md text-body-base py-md px-lg rounded-sharp flex items-center justify-center gap-sm mt-lg hover:brightness-110 active:scale-95 shadow-cyan-glow transition-all uppercase tracking-widest">
+                        <span class="material-symbols-outlined">login</span>
+                        Iniciar Sesión
+                    </button>
+                </div>
                 
                 <!-- Caja de Errores -->
-                <div id="login-error" class="text-error text-sm text-center font-semibold hidden mt-md bg-error-container/40 border border-error rounded-sharp py-sm shadow-lg"></div>
+                <div id="login-error" class="text-error text-sm text-center font-semibold hidden mt-md bg-error-container/40 border border-error rounded-sharp py-sm px-md shadow-lg"></div>
             </form>
+        </div>
+
+        <!-- Side Industrial Accents -->
+        <div class="hidden md:flex absolute left-lg top-1/2 -translate-y-1/2 flex-col gap-xl pointer-events-none">
+            <div class="w-px h-32 bg-gradient-to-b from-transparent via-primary-fixed/20 to-transparent"></div>
+            <span class="material-symbols-outlined text-outline-variant rotate-90 text-2xl">barcode_scanner</span>
+            <div class="w-px h-32 bg-gradient-to-b from-transparent via-primary-fixed/20 to-transparent"></div>
+        </div>
+        <div class="hidden md:flex absolute right-lg top-1/2 -translate-y-1/2 flex-col gap-xl pointer-events-none">
+            <div class="w-px h-32 bg-gradient-to-b from-transparent via-primary-fixed/20 to-transparent"></div>
+            <span class="material-symbols-outlined text-outline-variant -rotate-90 text-2xl">sensors</span>
+            <div class="w-px h-32 bg-gradient-to-b from-transparent via-primary-fixed/20 to-transparent"></div>
+        </div>
+
+        <!-- System Node ID -->
+        <div class="absolute bottom-md font-label-mono text-[10px] text-outline/30 uppercase tracking-[0.3em]">
+            Node: Terminal_082_PX // Status: Encrypted
         </div>
     </div>
 
