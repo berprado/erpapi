@@ -364,34 +364,49 @@ function renderizarProductos(productos) {
                 <span class="border-l border-outline-variant pl-sm">Cód: ${escapeHtml(p.codigo)}</span>
             </div>
             
-            <!-- Layout de 2 Columnas: PAQ (izquierda) y DET (derecha, solo si pesable) -->
-            <div class="grid ${p.pesable === 1 ? 'grid-cols-2' : 'grid-cols-1'} gap-md mb-lg items-stretch">
-                <!-- Columna Izquierda: PAQ -->
-                <div class="text-data-tabular font-semibold flex flex-col gap-sm">
-                    <div class="w-full">
-                        <span class="block w-full text-on-surface-variant bg-surface-container-low px-sm py-xs rounded-sharp text-xs border border-outline-variant">PAQ/SIST: ${parseFloat(p.stock_ideal_unidades).toFixed(0)} bot.</span>
+            <!-- Resumen superior: SISTEMA / BARRA / DELTA -->
+            <div class="space-y-sm mb-lg text-data-tabular font-semibold">
+                <div class="flex items-center bg-surface-container-low border border-outline-variant px-sm py-sm rounded-md gap-sm">
+                    <div class="w-10 flex justify-center text-on-surface-variant shrink-0">
+                        <span class="material-symbols-outlined">computer</span>
                     </div>
-                    <div class="w-full">
-                        <span class="inline-flex w-full items-center justify-between text-on-surface bg-surface-container-high px-sm py-xs rounded-sharp border border-outline-variant"><span>PAQ/BARRA:</span><span><span id="val-paq-${p.id_producto}">0</span> bot</span></span>
-                    </div>
-                    <div class="w-full">
-                        <span id="dif-paq-${p.id_producto}" class="block w-full px-sm py-xs rounded-sharp tracking-wider border border-outline-variant"></span>
+                    <div class="flex-1 flex items-center justify-between gap-sm border-l border-outline-variant pl-sm min-w-0">
+                        <span class="text-label-mono uppercase tracking-widest text-on-surface-variant shrink-0">Sistema (Ideal)</span>
+                        <div class="flex items-center gap-sm sm:gap-md text-on-surface min-w-0">
+                            <span class="shrink-0">${parseFloat(p.stock_ideal_unidades).toFixed(0)} bot</span>
+                            <span class="text-outline-variant">|</span>
+                            <span class="shrink-0">${parseFloat(p.stock_ideal_onzas).toFixed(2)} oz</span>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Columna Derecha: DET (solo si pesable) -->
-                ${p.pesable === 1 ? `
-                <div class="text-data-tabular font-semibold flex flex-col gap-sm">
-                    <div class="w-full">
-                        <span class="block w-full text-on-surface-variant bg-surface-container-low px-sm py-xs rounded-sharp text-xs border border-outline-variant">DET/SIST: ${parseFloat(p.stock_ideal_onzas).toFixed(2)} oz</span>
+                <div class="flex items-center bg-surface-container border border-primary-fixed-dim px-sm py-sm rounded-md gap-sm glow-border">
+                    <div class="w-10 flex justify-center text-primary-fixed-dim shrink-0">
+                        <span class="material-symbols-outlined">local_bar</span>
                     </div>
-                    <div class="w-full">
-                        <span class="inline-flex w-full items-center justify-between text-primary-fixed-dim bg-surface-container border border-primary-fixed-dim px-sm py-xs rounded-sharp glow-border"><span>DET/BARRA:</span><span><span id="val-det-${p.id_producto}">0.00</span> oz</span></span>
+                    <div class="flex-1 flex items-center justify-between gap-sm border-l border-outline-variant pl-sm min-w-0">
+                        <span class="text-label-mono uppercase tracking-widest text-primary-fixed-dim shrink-0">Barra (Real)</span>
+                        <div class="flex items-center gap-sm sm:gap-md text-primary-fixed-dim min-w-0">
+                            <span class="shrink-0"><span id="val-paq-${p.id_producto}">0</span> bot</span>
+                            <span class="text-outline-variant">|</span>
+                            <span class="shrink-0"><span id="val-det-${p.id_producto}">0.00</span> oz</span>
+                        </div>
                     </div>
-                    <div class="w-full">
-                        <span id="dif-det-${p.id_producto}" class="block w-full px-sm py-xs rounded-sharp tracking-wider border border-secondary glow-border-secondary text-secondary"></span>
+                </div>
+
+                <div class="flex items-center bg-surface-container border border-secondary px-sm py-sm rounded-md gap-sm glow-border-secondary ${p.pesable === 1 ? '' : 'hidden'}">
+                    <div class="w-10 flex justify-center text-secondary shrink-0">
+                        <span class="material-symbols-outlined">stacked_line_chart</span>
                     </div>
-                </div>` : ''}
+                    <div class="flex-1 flex items-center justify-between gap-sm border-l border-secondary pl-sm min-w-0">
+                        <span class="text-label-mono uppercase tracking-widest text-secondary shrink-0">Delta (R-I)</span>
+                        <div class="flex items-center gap-sm sm:gap-md min-w-0">
+                            <div id="dif-paq-${p.id_producto}" class="min-w-[96px] flex justify-end"></div>
+                            <span class="text-secondary/50">|</span>
+                            <div id="dif-det-${p.id_producto}" class="min-w-[110px] flex justify-end"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
             
             <div class="grid ${p.pesable === 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'} gap-md items-start">
