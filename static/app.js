@@ -34,7 +34,7 @@ function escapeHtml(str) {
 
 // Fix #27: Función centralizada para crear el HTML de un input de peso.
 // Soporta perfiles múltiples para seleccionar el modelo de botella por registro.
-function crearInputPeso(perfilesJson) {
+function crearInputPeso(perfilesJson, removable = true) {
     const perfiles = JSON.parse(perfilesJson || '[]');
     let selectHTML = '';
 
@@ -47,14 +47,18 @@ function crearInputPeso(perfilesJson) {
         selectHTML += `</select>`;
     }
 
+    const removeButtonHtml = removable
+        ? `<button type="button" onclick="this.parentElement.parentElement.remove()" class="absolute right-sm top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-error transition-colors" aria-label="Eliminar campo de peso">
+                    <span class="material-symbols-outlined text-sm">close</span>
+                </button>`
+        : '';
+
     return `
         <div class="relative flex items-center item-peso-wrapper gap-sm">
             ${selectHTML}
             <div class="relative flex-1">
                 <input type="number" min="0" step="1" class="w-full bg-surface border border-outline-variant rounded-md pl-md pr-lg py-sm text-on-surface input-peso focus:border-error focus:outline-none focus:shadow-cyan-glow-focus font-data-tabular" placeholder="Ej: 950" required>
-                <button type="button" onclick="this.parentElement.parentElement.remove()" class="absolute right-sm top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-error transition-colors">
-                    <span class="material-symbols-outlined text-sm">close</span>
-                </button>
+                ${removeButtonHtml}
             </div>
         </div>
     `;
@@ -392,15 +396,15 @@ function renderizarProductos(productos) {
             
             <div class="grid ${p.pesable === 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'} gap-md items-start">
                 <div>
-                    <label class="block text-label-mono font-label-mono text-on-surface-variant mb-xs tracking-widest uppercase">Cerradas</label>
+                    <label class="block text-label-mono font-label-mono text-on-surface-variant mb-xs tracking-widest uppercase">Unidades</label>
                     <input type="number" min="0" class="w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-on-surface input-cerradas focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus font-data-tabular" placeholder="0">
                 </div>
 
                 ${p.pesable === 1 ? `
                 <div class="border-t border-outline-variant pt-md sm:border-t-0 sm:border-l sm:pt-0 sm:pl-md">
-                    <label class="block text-label-mono font-label-mono text-on-surface-variant mb-xs tracking-widest uppercase">Gramos en Abiertas</label>
+                    <label class="block text-label-mono font-label-mono text-on-surface-variant mb-xs tracking-widest uppercase">Peso</label>
                     <div class="pesos-container grid grid-cols-1 gap-sm" id="pesos-${p.id_producto}">
-                        ${crearInputPeso(perfilesJson)}
+                        ${crearInputPeso(perfilesJson, false)}
                     </div>
                     <div class="mt-sm flex flex-wrap gap-sm">
                         <button type="button" data-id-producto="${p.id_producto}" class="btn-add-peso text-label-mono text-error font-semibold flex items-center gap-xs hover:text-primary-fixed-dim transition-colors uppercase tracking-widest rounded-sharp border border-outline-variant px-sm py-xs">
@@ -427,7 +431,7 @@ window.agregarInputPeso = function(idProducto, perfilesJson) {
     const container = document.getElementById(`pesos-${idProducto}`);
     if (!container) return;
     const inputWrapper = document.createElement('div');
-    inputWrapper.innerHTML = crearInputPeso(perfiles);
+    inputWrapper.innerHTML = crearInputPeso(perfiles, true);
     container.appendChild(inputWrapper.firstElementChild);
 }
 
