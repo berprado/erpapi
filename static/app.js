@@ -286,8 +286,14 @@ async function iniciarDashboard() {
         // Luz Verde: Guardamos el ID de operación
         currentOperacionId = dataOp.id_operacion;
         estadoIcon.textContent = "check_circle";
-        estadoIcon.classList.remove('animate-pulse');
-        estadoTexto.textContent = dataOp.mensaje; // "Luz verde..."
+        estadoIcon.classList.remove('animate-pulse', 'text-gray-500', 'text-neon-pink');
+        estadoIcon.classList.add('text-neon-green');
+        // Actualizar título y mensaje según respuesta del servidor
+        const estadoTitulo = document.getElementById('estado-titulo');
+        if (estadoTitulo && dataOp.titulo) {
+            estadoTitulo.textContent = dataOp.titulo;
+        }
+        estadoTexto.textContent = dataOp.mensaje; // "Puedes registrar el Inventario Físico"
 
         // 2. Cargar Lista de Productos Pendientes
         cargarProductos();

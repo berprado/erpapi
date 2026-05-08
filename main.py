@@ -170,7 +170,8 @@ def verificar_operacion_activa(
         return {
             "id_operacion": operacion_actual.id,
             "nombre": operacion_actual.nombre_operacion,
-            "mensaje": "Luz verde: Operación en INICIO CIERRE. Puede comenzar el paloteo."
+            "titulo": f"Se inició el cierre de la operativa {operacion_actual.id}",
+            "mensaje": "Puedes registrar el Inventario Físico"
         }
 
     # 4. Si tiene otro estado distinto (ej. ya se cerró completamente)
