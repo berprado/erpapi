@@ -390,14 +390,14 @@ function renderizarProductos(productos) {
                 </div>` : ''}
             </div>
             
-            <div class="grid ${p.pesable === 1 ? 'grid-cols-2' : 'grid-cols-1'} gap-md items-start">
+            <div class="grid ${p.pesable === 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'} gap-md items-start">
                 <div>
                     <label class="block text-label-mono font-label-mono text-on-surface-variant mb-xs tracking-widest uppercase">Cerradas</label>
                     <input type="number" min="0" class="w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-on-surface input-cerradas focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus font-data-tabular" placeholder="0">
                 </div>
 
                 ${p.pesable === 1 ? `
-                <div class="border-l border-outline-variant pl-md">
+                <div class="border-t border-outline-variant pt-md sm:border-t-0 sm:border-l sm:pt-0 sm:pl-md">
                     <label class="block text-label-mono font-label-mono text-on-surface-variant mb-xs tracking-widest uppercase">Gramos en Abiertas</label>
                     <div class="pesos-container grid grid-cols-1 gap-sm" id="pesos-${p.id_producto}">
                         ${crearInputPeso(perfilesJson)}
