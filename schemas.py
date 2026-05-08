@@ -17,6 +17,7 @@ class Token(BaseModel):
 class OperacionResponse(BaseModel):
     id_operacion: int
     nombre: str
+    titulo: str
     mensaje: str
 
 # Las reglas de validación para el paloteo

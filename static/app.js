@@ -262,6 +262,8 @@ async function iniciarDashboard() {
     estadoIcon.textContent = "hourglass_empty";
     estadoIcon.classList.add('animate-pulse');
     estadoTexto.textContent = "Verificando estado de la caja...";
+    const estadoTituloReset = document.getElementById('estado-titulo');
+    if (estadoTituloReset) estadoTituloReset.textContent = "Verificando operativa...";
 
     // 1. Verificar "Guardia de Seguridad" (Estado de Operación)
     try {
@@ -279,6 +281,8 @@ async function iniciarDashboard() {
             estadoIcon.textContent = "block";
             estadoIcon.classList.remove('animate-pulse', 'text-neon-green');
             estadoIcon.classList.add('text-neon-pink');
+            const estadoTituloErr = document.getElementById('estado-titulo');
+            if (estadoTituloErr) estadoTituloErr.textContent = "Operativa no disponible";
             estadoTexto.textContent = dataOp.detail || "No se puede realizar el paloteo.";
             return; // Bloqueamos la ejecución aquí
         }
