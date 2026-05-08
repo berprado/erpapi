@@ -1,6 +1,9 @@
 # Archivos de entorno
 .env
 
+# Configuración local de VS Code con credenciales (MCP, API keys)
+.vscode/mcp.json
+
 # Archivos de certificados y claves privadas
 *.pem
 
