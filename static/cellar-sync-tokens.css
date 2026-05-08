@@ -1,0 +1,253 @@
+/* ============================================
+   CELLAR SYNC v1.0 - Electric Industrial Design System
+   CSS Design Tokens
+   ============================================ */
+
+:root {
+  /* ===== SURFACE & BACKGROUND ===== */
+  --surface: #0d1515;
+  --surface-dim: #0d1515;
+  --surface-bright: #333b3b;
+  --surface-container-lowest: #080f10;
+  --surface-container-low: #151d1e;
+  --surface-container: #192122;
+  --surface-container-high: #232b2c;
+  --surface-container-highest: #2e3637;
+  --background: #0d1515;
+  --surface-variant: #2e3637;
+
+  /* ===== PRIMARY (Electric Cyan) ===== */
+  --primary: #dbfcff;
+  --primary-container: #00f0ff;
+  --primary-fixed: #7df4ff;
+  --primary-fixed-dim: #00dbe9;
+  --on-primary: #00363a;
+  --on-primary-container: #006970;
+  --on-primary-fixed: #002022;
+  --on-primary-fixed-variant: #004f54;
+
+  /* ===== SECONDARY (Deep Blue) ===== */
+  --secondary: #bcc7de;
+  --secondary-container: #3e495d;
+  --secondary-fixed: #d8e3fb;
+  --secondary-fixed-dim: #bcc7de;
+  --on-secondary: #263143;
+  --on-secondary-container: #aeb9d0;
+  --on-secondary-fixed: #111c2d;
+  --on-secondary-fixed-variant: #3c475a;
+
+  /* ===== TERTIARY (Amber/Gold) ===== */
+  --tertiary: #fff5de;
+  --tertiary-container: #fed639;
+  --tertiary-fixed: #ffe179;
+  --tertiary-fixed-dim: #eac324;
+  --on-tertiary: #3b2f00;
+  --on-tertiary-container: #715d00;
+  --on-tertiary-fixed: #231b00;
+  --on-tertiary-fixed-variant: #554500;
+
+  /* ===== TEXT ===== */
+  --on-surface: #dce4e5;
+  --on-surface-variant: #b9cacb;
+  --on-background: #dce4e5;
+  --inverse-surface: #dce4e5;
+  --inverse-on-surface: #2a3233;
+
+  /* ===== OUTLINE & BORDERS ===== */
+  --outline: #849495;
+  --outline-variant: #3b494b;
+
+  /* ===== FUNCTIONAL COLORS ===== */
+  --error: #ffb4ab;
+  --on-error: #690005;
+  --error-container: #93000a;
+  --on-error-container: #ffdad6;
+  --surface-tint: #00dbe9;
+  --inverse-primary: #006970;
+
+  /* ===== SPACING (4px base unit) ===== */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 40px;
+
+  /* ===== TYPOGRAPHY - Space Grotesk ===== */
+  --font-family: "Space Grotesk", monospace;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* Display & Headlines */
+  --font-display-lg: 48px;
+  --font-display-lg-weight: 700;
+  --font-display-lg-line-height: 1.1;
+  --font-display-lg-letter-spacing: -0.02em;
+
+  --font-headline-md: 24px;
+  --font-headline-md-weight: 600;
+  --font-headline-md-line-height: 1.2;
+  --font-headline-md-letter-spacing: -0.01em;
+
+  /* Body */
+  --font-body-base: 16px;
+  --font-body-base-weight: 400;
+  --font-body-base-line-height: 1.5;
+  --font-body-base-letter-spacing: 0em;
+
+  /* Labels */
+  --font-label-mono: 12px;
+  --font-label-mono-weight: 500;
+  --font-label-mono-line-height: 1;
+  --font-label-mono-letter-spacing: 0.05em;
+
+  /* Data Tabular */
+  --font-data-tabular: 14px;
+  --font-data-tabular-weight: 500;
+  --font-data-tabular-line-height: 1.4;
+
+  /* ===== EFFECTS ===== */
+  /* Cyan Glow: primary indicator for active/focused states */
+  --glow-cyan: 0 0 15px rgba(0, 219, 233, 0.3), 0 0 30px rgba(0, 219, 233, 0.1);
+  --glow-cyan-intense: 0 0 15px rgba(0, 219, 233, 0.5), inset 0 0 5px rgba(0, 219, 233, 0.2);
+  --glow-cyan-focus: 0 4px 10px -4px rgba(0, 219, 233, 0.5);
+
+  /* Secondary Glow */
+  --glow-secondary: 0 0 15px rgba(188, 199, 222, 0.3), inset 0 0 5px rgba(188, 199, 222, 0.2);
+
+  /* ===== BORDER RADIUS (Sharp Industrial Aesthetic) ===== */
+  --border-radius-sharp: 0;
+  --border-radius-sm: 0.25rem;
+  --border-radius-md: 0.5rem;
+  --border-radius-lg: 0.75rem;
+  --border-radius-full: 9999px;
+
+  /* ===== SHADOWS & ELEVATIONS ===== */
+  --shadow-ambient: 0px 20px 40px rgba(0, 0, 0, 0.25);
+  --shadow-bottom-nav: 0 -4px 20px rgba(0, 0, 0, 0.5);
+}
+
+/* ============================================
+   UTILITY CLASSES FOR GLOW EFFECTS
+   ============================================ */
+
+.glow-border {
+  box-shadow: var(--glow-cyan-intense);
+}
+
+.glow-border-secondary {
+  box-shadow: var(--glow-secondary);
+}
+
+.glow-border-focus {
+  border-bottom: 2px solid var(--primary-fixed-dim);
+  box-shadow: var(--glow-cyan-focus);
+}
+
+.neon-text-primary {
+  text-shadow: 0 0 8px rgba(0, 219, 233, 0.8);
+}
+
+.neon-text-secondary {
+  text-shadow: 0 0 8px rgba(188, 199, 222, 0.8);
+}
+
+/* ============================================
+   COMPONENT STYLES - Chassis Panel
+   ============================================ */
+
+.chassis-panel {
+  background-color: var(--surface-container-low);
+  border: 1px solid var(--outline-variant);
+}
+
+.chassis-panel:hover {
+  border-color: var(--primary-fixed-dim);
+  box-shadow: var(--glow-cyan);
+}
+
+/* ============================================
+   SCANLINE EFFECT (Optional Industrial Aesthetic)
+   ============================================ */
+
+.scanline {
+  width: 100%;
+  height: 2px;
+  background: rgba(0, 219, 233, 0.05);
+  position: absolute;
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* ============================================
+   DECORATIVE CORNER ACCENTS
+   ============================================ */
+
+.corner-accent {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--primary-fixed);
+  opacity: 0.5;
+  position: absolute;
+}
+
+.corner-accent--top-right {
+  top: 0;
+  right: 0;
+  border-top: 2px solid var(--primary-fixed);
+  border-right: 2px solid var(--primary-fixed);
+  border-bottom: none;
+  border-left: none;
+}
+
+.corner-accent--bottom-left {
+  bottom: 0;
+  left: 0;
+  border-bottom: 2px solid var(--primary-fixed);
+  border-left: 2px solid var(--primary-fixed);
+  border-top: none;
+  border-right: none;
+}
+
+/* ============================================
+   FOCUS & INTERACTIVE STATES
+   ============================================ */
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-bottom-color: var(--primary-fixed-dim);
+  box-shadow: var(--glow-cyan-focus);
+}
+
+button:hover {
+  filter: brightness(1.1);
+  transition: all 0.2s ease;
+}
+
+button:active {
+  transform: scale(0.95);
+  transition: all 0.1s ease;
+}
+
+/* ============================================
+   RESPONSIVE GRID BACKGROUND (Optional)
+   ============================================ */
+
+body.with-grid-bg {
+  background-color: var(--background);
+  background-image: 
+    linear-gradient(rgba(0, 219, 233, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 219, 233, 0.03) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* ============================================
+   DARK MODE (Tailwind dark: class)
+   ============================================ */
+
+.dark {
+  color-scheme: dark;
+}
