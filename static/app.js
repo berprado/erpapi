@@ -39,7 +39,7 @@ function crearInputPeso(perfilesJson) {
     let selectHTML = '';
 
     if (perfiles.length > 1) {
-        selectHTML = `<select class="bg-gray-800 text-[10px] text-neon-green border border-gray-700 rounded-lg px-2 py-2 focus:outline-none select-perfil mr-2 cursor-pointer">`;
+        selectHTML = `<select class="bg-surface-container-low text-data-tabular text-primary-fixed border border-outline-variant rounded-md px-sm py-xs focus:outline-none select-perfil mr-sm cursor-pointer font-semibold">`;
         perfiles.forEach((pf, idx) => {
                 const optionValue = (pf.id != null) ? pf.id : idx;
                 selectHTML += `<option value="${optionValue}">${escapeHtml(pf.nombre_perfil)}</option>`;
@@ -48,11 +48,11 @@ function crearInputPeso(perfilesJson) {
     }
 
     return `
-        <div class="relative flex items-center item-peso-wrapper">
+        <div class="relative flex items-center item-peso-wrapper gap-sm">
             ${selectHTML}
             <div class="relative flex-1">
-                <input type="number" min="0" step="1" class="w-full bg-dark-bg border border-gray-700 rounded-lg pl-3 pr-8 py-2 text-white input-peso focus:border-neon-pink focus:outline-none focus:ring-1 focus:ring-neon-pink" placeholder="Ej: 950">
-                <button type="button" onclick="this.parentElement.parentElement.remove()" class="absolute right-2 top-2 text-gray-500 hover:text-red-400">
+                <input type="number" min="0" step="1" class="w-full bg-surface border border-outline-variant rounded-md pl-md pr-lg py-sm text-on-surface input-peso focus:border-error focus:outline-none focus:shadow-cyan-glow-focus font-data-tabular" placeholder="Ej: 950" required>
+                <button type="button" onclick="this.parentElement.parentElement.remove()" class="absolute right-sm top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-error transition-colors">
                     <span class="material-symbols-outlined text-sm">close</span>
                 </button>
             </div>
@@ -95,7 +95,7 @@ function refrescarSelectoresPerfil(card) {
         }
 
         const select = document.createElement('select');
-        select.className = 'bg-gray-800 text-[10px] text-neon-green border border-gray-700 rounded-lg px-2 py-2 focus:outline-none select-perfil mr-2 cursor-pointer';
+        select.className = 'bg-surface-container-low text-data-tabular text-primary-fixed border border-outline-variant rounded-md px-sm py-xs focus:outline-none select-perfil mr-sm cursor-pointer font-semibold';
 
         perfiles.forEach((pf, idx) => {
             const option = document.createElement('option');
@@ -258,7 +258,7 @@ async function iniciarDashboard() {
     const estadoTexto = document.getElementById('estado-texto');
     
     // Fix #28: Resetear clases del icóno antes de cada verificación para evitar acumulación de estilos.
-    estadoIcon.className = 'material-symbols-outlined text-4xl text-gray-500';
+    estadoIcon.className = 'material-symbols-outlined text-4xl text-on-surface-variant';
     estadoIcon.textContent = "hourglass_empty";
     estadoIcon.classList.add('animate-pulse');
     estadoTexto.textContent = "Verificando estado de la caja...";
@@ -279,8 +279,8 @@ async function iniciarDashboard() {
 
             // Caja en proceso u otro error
             estadoIcon.textContent = "block";
-            estadoIcon.classList.remove('animate-pulse', 'text-neon-green');
-            estadoIcon.classList.add('text-neon-pink');
+            estadoIcon.classList.remove('animate-pulse', 'text-primary-fixed');
+            estadoIcon.classList.add('text-error');
             const estadoTituloErr = document.getElementById('estado-titulo');
             if (estadoTituloErr) estadoTituloErr.textContent = "Operativa no disponible";
             estadoTexto.textContent = dataOp.detail || "No se puede realizar el paloteo.";
@@ -290,8 +290,8 @@ async function iniciarDashboard() {
         // Luz Verde: Guardamos el ID de operación
         currentOperacionId = dataOp.id_operacion;
         estadoIcon.textContent = "check_circle";
-        estadoIcon.classList.remove('animate-pulse', 'text-gray-500', 'text-neon-pink');
-        estadoIcon.classList.add('text-neon-green');
+        estadoIcon.classList.remove('animate-pulse', 'text-on-surface-variant', 'text-error');
+        estadoIcon.classList.add('text-secondary');
         // Actualizar título y mensaje según respuesta del servidor
         const estadoTitulo = document.getElementById('estado-titulo');
         if (estadoTitulo && dataOp.titulo) {
@@ -323,7 +323,7 @@ async function cargarProductos() {
             actionBar.classList.remove('hidden'); // Mostrar barra de guardado
             actionBar.classList.add('flex');
         } else {
-            listaProductos.innerHTML = `<div class="text-center text-gray-500 py-10">No hay productos consumidos para auditar hoy.</div>`;
+            listaProductos.innerHTML = `<div class="text-center text-on-surface-variant py-lg font-body-base">No hay productos consumidos para auditar hoy.</div>`;
         }
     } catch (error) {
         console.error("Error cargando productos", error);
@@ -339,7 +339,7 @@ function renderizarProductos(productos) {
     productos.forEach(p => {
         // Crear la tarjeta (card)
         const div = document.createElement('div');
-        div.className = "bg-dark-surface border border-gray-800 rounded-xl p-4 shadow-lg product-card transition-colors focus-within:border-gray-600";
+        div.className = "bg-surface-container border border-outline-variant rounded-md p-md shadow-lg product-card transition-colors focus-within:border-primary-fixed-dim chassis-panel";
         div.dataset.id = p.id_producto;
         div.dataset.pesable = p.pesable || 0;
         div.dataset.nombre = p.nombre;
@@ -353,47 +353,47 @@ function renderizarProductos(productos) {
 
         // Info básica
         let html = `
-            ${p.categoria_nombre ? `<span class="text-[10px] font-bold tracking-widest uppercase text-gray-500 mb-1 block">${escapeHtml(p.categoria_nombre)}</span>` : ''}
-            <h4 class="text-neon-green font-bold text-lg mb-1">${escapeHtml(p.nombre)}</h4>
-            <div class="text-[10px] text-gray-600 mb-2 flex gap-3">
+            ${p.categoria_nombre ? `<span class="text-label-mono font-label-mono tracking-widest uppercase text-on-surface-variant mb-xs block">${escapeHtml(p.categoria_nombre)}</span>` : ''}
+            <h4 class="text-primary-fixed font-headline-md text-lg mb-xs neon-text-primary">${escapeHtml(p.nombre)}</h4>
+            <div class="text-data-tabular text-on-surface-variant mb-md flex gap-md">
                 <span>ID: ${p.id_producto}</span>
-                <span>Cód: ${escapeHtml(p.codigo)}</span>
+                <span class="border-l border-outline-variant pl-sm">Cód: ${escapeHtml(p.codigo)}</span>
             </div>
             
             <!-- Layout de 2 Columnas: PAQ (izquierda) y DET (derecha, solo si pesable) -->
-            <div class="grid ${p.pesable === 1 ? 'grid-cols-2' : 'grid-cols-1'} gap-4 mb-4 items-stretch">
+            <div class="grid ${p.pesable === 1 ? 'grid-cols-2' : 'grid-cols-1'} gap-md mb-lg items-stretch">
                 <!-- Columna Izquierda: PAQ -->
-                <div class="text-[11px] font-bold flex flex-col gap-2">
+                <div class="text-data-tabular font-semibold flex flex-col gap-sm">
                     <div class="w-full">
-                        <span class="block w-full text-gray-400 bg-gray-800 px-2 py-1 rounded text-xs">PAQ/SIST: ${parseFloat(p.stock_ideal_unidades).toFixed(0)} bot.</span>
+                        <span class="block w-full text-on-surface-variant bg-surface-container-low px-sm py-xs rounded-sharp text-xs border border-outline-variant">PAQ/SIST: ${parseFloat(p.stock_ideal_unidades).toFixed(0)} bot.</span>
                     </div>
                     <div class="w-full">
-                        <span class="inline-flex w-full items-center justify-between text-white bg-gray-700 px-2 py-1 rounded"><span>PAQ/BARRA:</span><span><span id="val-paq-${p.id_producto}">0</span> bot</span></span>
+                        <span class="inline-flex w-full items-center justify-between text-on-surface bg-surface-container-high px-sm py-xs rounded-sharp border border-outline-variant"><span>PAQ/BARRA:</span><span><span id="val-paq-${p.id_producto}">0</span> bot</span></span>
                     </div>
                     <div class="w-full">
-                        <span id="dif-paq-${p.id_producto}" class="block w-full px-2 py-1 rounded tracking-wider"></span>
+                        <span id="dif-paq-${p.id_producto}" class="block w-full px-sm py-xs rounded-sharp tracking-wider border border-outline-variant"></span>
                     </div>
                 </div>
 
                 <!-- Columna Derecha: DET (solo si pesable) -->
                 ${p.pesable === 1 ? `
-                <div class="text-[11px] font-bold flex flex-col gap-2">
+                <div class="text-data-tabular font-semibold flex flex-col gap-sm">
                     <div class="w-full">
-                        <span class="block w-full text-gray-400 bg-gray-800 px-2 py-1 rounded text-xs border border-gray-700">DET/SIST: ${parseFloat(p.stock_ideal_onzas).toFixed(2)} oz</span>
+                        <span class="block w-full text-on-surface-variant bg-surface-container-low px-sm py-xs rounded-sharp text-xs border border-outline-variant">DET/SIST: ${parseFloat(p.stock_ideal_onzas).toFixed(2)} oz</span>
                     </div>
                     <div class="w-full">
-                        <span class="inline-flex w-full items-center justify-between text-white bg-gray-700 px-2 py-1 rounded"><span>DET/BARRA:</span><span><span id="val-det-${p.id_producto}">0.00</span> oz</span></span>
+                        <span class="inline-flex w-full items-center justify-between text-primary-fixed-dim bg-surface-container border border-primary-fixed-dim px-sm py-xs rounded-sharp glow-border"><span>DET/BARRA:</span><span><span id="val-det-${p.id_producto}">0.00</span> oz</span></span>
                     </div>
                     <div class="w-full">
-                        <span id="dif-det-${p.id_producto}" class="block w-full px-2 py-1 rounded tracking-wider"></span>
+                        <span id="dif-det-${p.id_producto}" class="block w-full px-sm py-xs rounded-sharp tracking-wider border border-secondary glow-border-secondary text-secondary"></span>
                     </div>
                 </div>` : ''}
             </div>
             
-            <div class="grid grid-cols-2 gap-4">
+            <div class="grid grid-cols-2 gap-md">
                 <div>
-                    <label class="block text-[10px] font-bold text-gray-400 mb-1 tracking-wider uppercase">Cerradas</label>
-                    <input type="number" min="0" class="w-full bg-dark-bg border border-gray-700 rounded-lg px-3 py-2 text-white input-cerradas focus:border-neon-green focus:outline-none focus:ring-1 focus:ring-neon-green" placeholder="0">
+                    <label class="block text-label-mono font-label-mono text-on-surface-variant mb-xs tracking-widest uppercase">Cerradas</label>
+                    <input type="number" min="0" class="w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-on-surface input-cerradas focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus font-data-tabular" placeholder="0">
                 </div>
             </div>
         `;
@@ -401,17 +401,17 @@ function renderizarProductos(productos) {
         // Sección Pesaje (Solo si es pesable)
         if (p.pesable === 1) {
             html += `
-            <div class="mt-4 border-t border-gray-800 pt-4">
-                <label class="block text-[10px] font-bold text-gray-400 mb-2 tracking-wider uppercase">Gramos en Abiertas</label>
-                <div class="pesos-container grid grid-cols-1 sm:grid-cols-2 gap-3" id="pesos-${p.id_producto}">
+            <div class="mt-md border-t border-outline-variant pt-md">
+                <label class="block text-label-mono font-label-mono text-on-surface-variant mb-md tracking-widest uppercase">Gramos en Abiertas</label>
+                <div class="pesos-container grid grid-cols-1 sm:grid-cols-2 gap-md" id="pesos-${p.id_producto}">
                     ${crearInputPeso(perfilesJson)}
                 </div>
-                <div class="mt-3 flex flex-wrap gap-2">
-                    <button type="button" data-id-producto="${p.id_producto}" class="btn-add-peso text-xs text-neon-pink font-semibold flex items-center gap-1 hover:text-white transition-colors uppercase tracking-wider">
-                        <span class="material-symbols-outlined text-sm">add_circle</span> Añadir Botella
+                <div class="mt-md flex flex-wrap gap-sm">
+                    <button type="button" data-id-producto="${p.id_producto}" class="btn-add-peso text-label-mono text-error font-semibold flex items-center gap-xs hover:text-primary-fixed-dim transition-colors uppercase tracking-widest rounded-sharp border border-outline-variant px-sm py-xs">
+                        <span class="material-symbols-outlined text-sm">add_circle</span> + Botella
                     </button>
-                    <button type="button" data-id-producto="${p.id_producto}" class="btn-add-modelo text-xs text-neon-green font-semibold flex items-center gap-1 hover:text-white transition-colors uppercase tracking-wider">
-                        <span class="material-symbols-outlined text-sm">labs</span> Nuevo Modelo
+                    <button type="button" data-id-producto="${p.id_producto}" class="btn-add-modelo text-label-mono text-primary-fixed font-semibold flex items-center gap-xs hover:text-primary-fixed-dim transition-colors uppercase tracking-widest rounded-sharp border border-outline-variant px-sm py-xs">
+                        <span class="material-symbols-outlined text-sm">labs</span> + Modelo
                     </button>
                 </div>
             </div>
@@ -546,22 +546,22 @@ btnGuardar.addEventListener('click', async () => {
 // CÁLCULO EN TIEMPO REAL (ONZAS, UNIDADES Y DIFERENCIAS)
 // ==========================================
 
-// Función auxiliar para pintar las diferencias (Verde/Rosa/Amarillo)
+// Función auxiliar para pintar las diferencias (Verde/Roja/Amarillo con Electric Industrial)
 function formatearDiferencia(diferencia, isOz = false) {
     const sufijo = isOz ? "oz" : "bot";
 
     // Tolerancia para decimales (evitar ruido por redondeos)
     if (Math.abs(diferencia) < 0.01) {
-        return '<span class="text-neon-green border border-neon-green/30 bg-neon-green/10 px-2 py-1 rounded inline-flex w-full justify-center items-center gap-1"><span class="material-symbols-outlined text-[14px]">check_circle</span> OK</span>';
+        return '<span class="text-secondary border border-secondary/30 bg-secondary/10 px-sm py-xs rounded-md inline-flex w-full justify-center items-center gap-xs text-data-tabular font-semibold"><span class="material-symbols-outlined text-sm">check_circle</span> OK</span>';
     }
 
     if (diferencia < 0) {
         const val = isOz ? diferencia.toFixed(2) : Math.round(diferencia);
-        return `<span class="text-neon-pink border border-neon-pink/30 bg-neon-pink/10 px-2 py-1 rounded inline-flex w-full justify-center">${val} ${sufijo}</span>`;
+        return `<span class="text-error border border-error/30 bg-error/10 px-sm py-xs rounded-md inline-flex w-full justify-center text-data-tabular font-semibold">${val} ${sufijo}</span>`;
     }
 
     const val = isOz ? diferencia.toFixed(2) : Math.round(diferencia);
-    return `<span class="text-yellow-400 border border-yellow-400/30 bg-yellow-400/10 px-2 py-1 rounded inline-flex w-full justify-center">+${val} ${sufijo}</span>`;
+    return `<span class="text-tertiary border border-tertiary/30 bg-tertiary/10 px-sm py-xs rounded-md inline-flex w-full justify-center text-data-tabular font-semibold">+${val} ${sufijo}</span>`;
 }
 
 // Recalcula una tarjeta y actualiza PAQ/BARRA, DET/BARRA y sus diferencias contra el sistema
