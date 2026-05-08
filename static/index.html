@@ -255,7 +255,7 @@
         </nav>
 
         <!-- Área de Contenido -->
-        <main class="flex-1 p-md pb-52 max-w-2xl mx-auto w-full" id="main-content">
+        <main class="flex-1 p-md pb-96 max-w-2xl mx-auto w-full" id="main-content">
             
             <!-- Status de la Operación -->
             <div id="estado-operacion" class="bg-surface-container border border-outline-variant rounded-md p-md mb-lg shadow-lg flex items-center gap-md">
@@ -275,7 +275,7 @@
         </main>
 
         <!-- Barra Fija Inferior (Confirmación de Guardado) -->
-        <div id="action-bar" class="fixed bottom-0 w-full bg-surface-container/95 backdrop-blur-md border-t border-outline-variant p-md hidden flex-col sm:flex-row justify-center items-center gap-md z-20">
+        <div id="action-bar" class="fixed bottom-20 w-full bg-surface-container/95 backdrop-blur-md border-t border-outline-variant p-md hidden flex-col sm:flex-row justify-center items-center gap-md z-20">
             <div class="w-full max-w-2xl">
                 <label class="block text-label-mono font-label-mono text-on-surface-variant mb-sm tracking-widest uppercase flex items-center gap-sm">
                     <span class="material-symbols-outlined text-sm">edit_note</span> Observaciones del cierre
@@ -288,9 +288,36 @@
                 </button>
             </div>
         </div>
+
+        <!-- Bottom Navigation (4 Tabs) -->
+        <nav class="fixed bottom-0 w-full bg-surface-container border-t border-outline-variant px-0 py-0 flex justify-around items-stretch z-30 h-20">
+            <!-- Tab 1: STOCK -->
+            <button class="flex-1 flex flex-col items-center justify-center gap-xs text-on-surface-variant hover:text-primary-fixed-dim transition-colors border-b-2 border-outline-variant hover:border-primary-fixed-dim group active-tab" data-tab="stock">
+                <span class="material-symbols-outlined text-md group-hover:glow-cyan-intense">inventory_2</span>
+                <span class="text-[10px] font-label-mono tracking-widest uppercase font-semibold">Stock</span>
+            </button>
+            
+            <!-- Tab 2: SCAN -->
+            <button class="flex-1 flex flex-col items-center justify-center gap-xs text-on-surface-variant hover:text-primary-fixed-dim transition-colors border-b-2 border-outline-variant hover:border-primary-fixed-dim group" data-tab="scan">
+                <span class="material-symbols-outlined text-md">qr_code_scanner</span>
+                <span class="text-[10px] font-label-mono tracking-widest uppercase font-semibold">Scan</span>
+            </button>
+            
+            <!-- Tab 3: ALERTS -->
+            <button class="flex-1 flex flex-col items-center justify-center gap-xs text-on-surface-variant hover:text-primary-fixed-dim transition-colors border-b-2 border-outline-variant hover:border-primary-fixed-dim group" data-tab="alerts">
+                <span class="material-symbols-outlined text-md">notifications_active</span>
+                <span class="text-[10px] font-label-mono tracking-widest uppercase font-semibold">Alerts</span>
+            </button>
+            
+            <!-- Tab 4: LOGS -->
+            <button class="flex-1 flex flex-col items-center justify-center gap-xs text-on-surface-variant hover:text-primary-fixed-dim transition-colors border-b-2 border-outline-variant hover:border-primary-fixed-dim group" data-tab="logs">
+                <span class="material-symbols-outlined text-md">history</span>
+                <span class="text-[10px] font-label-mono tracking-widest uppercase font-semibold">Logs</span>
+            </button>
+        </nav>
     </div>
 
-    <script src="/assets/app.js?v=4.3"></script>
+    <script src="/assets/app.js?v=4.4"></script>
 
     <!-- Registro del Service Worker (PWA) -->
     <script>
