@@ -394,7 +394,7 @@ function renderizarProductos(productos) {
                     </div>
                 </div>
 
-                <div class="flex items-center card-row-delta border px-sm py-sm rounded-md gap-sm ${p.pesable === 1 ? '' : 'hidden'}">
+                <div class="flex items-center card-row-delta border px-sm py-sm rounded-md gap-sm">
                     <div class="w-10 flex justify-center" style="color: var(--semantic-info)">
                         <span class="material-symbols-outlined">stacked_line_chart</span>
                     </div>
