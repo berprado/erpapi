@@ -567,16 +567,16 @@ function formatearDiferencia(diferencia, isOz = false) {
 
     // Tolerancia para decimales (evitar ruido por redondeos)
     if (Math.abs(diferencia) < 0.01) {
-        return '<span class="badge-ok px-sm py-xs rounded-md inline-flex w-full justify-center items-center gap-xs text-data-tabular font-semibold"><span class="material-symbols-outlined text-sm">check_circle</span> OK</span>';
+        return '<span class="text-data-tabular font-semibold" style="color: var(--semantic-action)"><span class="material-symbols-outlined text-sm align-middle">check_circle</span></span>';
     }
 
     if (diferencia < 0) {
         const val = isOz ? diferencia.toFixed(2) : Math.round(diferencia);
-        return `<span class="badge-danger px-sm py-xs rounded-md inline-flex w-full justify-center text-data-tabular font-semibold">${val} ${sufijo}</span>`;
+        return `<span class="text-data-tabular font-semibold" style="color: var(--semantic-danger)">${val} ${sufijo}</span>`;
     }
 
     const val = isOz ? diferencia.toFixed(2) : Math.round(diferencia);
-    return `<span class="badge-warning px-sm py-xs rounded-md inline-flex w-full justify-center text-data-tabular font-semibold">+${val} ${sufijo}</span>`;
+    return `<span class="text-data-tabular font-semibold" style="color: var(--semantic-warning)">+${val} ${sufijo}</span>`;
 }
 
 // Recalcula una tarjeta y actualiza PAQ/BARRA, DET/BARRA y sus diferencias contra el sistema
