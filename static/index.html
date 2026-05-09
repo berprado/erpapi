@@ -154,6 +154,46 @@
         html.icons-ready .material-symbols-outlined {
             visibility: visible;
         }
+
+        /* States consistentes para botones en toda la app */
+        button {
+            transition: filter 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+        }
+
+        button:focus-visible {
+            outline: 2px solid var(--primary-fixed-dim);
+            outline-offset: 2px;
+            box-shadow: var(--glow-cyan-focus);
+        }
+
+        button:disabled,
+        button[aria-disabled="true"] {
+            opacity: 0.55;
+            cursor: not-allowed;
+            filter: none;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Ajustes móviles para CTA y dialogo */
+        @media (max-width: 640px) {
+            #submit-section {
+                position: sticky;
+                bottom: 92px;
+                z-index: 15;
+                background: linear-gradient(to top, rgba(13, 21, 21, 0.96), rgba(13, 21, 21, 0.82));
+                padding-top: var(--space-sm);
+                backdrop-filter: blur(6px);
+            }
+
+            #observaciones-dialog .max-w-lg {
+                max-width: 100%;
+            }
+
+            #observaciones-dialog textarea {
+                min-height: 112px;
+            }
+        }
         
         /* Corregir el fondo blanco de autocompletado en Chrome para que siga siendo oscuro (Electric Industrial) */
         input:-webkit-autofill,
@@ -543,7 +583,7 @@
         </nav>
     </div>
 
-    <script src="/assets/app.js?v=7.8"></script>
+    <script src="/assets/app.js?v=7.9"></script>
 
     <script>
         (function () {
