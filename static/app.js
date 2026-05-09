@@ -364,9 +364,9 @@ function renderizarProductos(productos) {
                 <span class="border-l border-outline-variant pl-sm">Cód: ${escapeHtml(p.codigo)}</span>
             </div>
             
-            <!-- Resumen superior: SISTEMA / BARRA / DELTA -->
+            <!-- Resumen superior: SISTEMA / BARRA / DELTA (Semantic Brand Tokens) -->
             <div class="space-y-sm mb-lg text-data-tabular font-semibold">
-                <div class="flex items-center bg-surface-container-low border border-outline-variant px-sm py-sm rounded-md gap-sm">
+                <div class="flex items-center card-row-system border px-sm py-sm rounded-md gap-sm">
                     <div class="w-10 flex justify-center text-on-surface-variant shrink-0">
                         <span class="material-symbols-outlined">computer</span>
                     </div>
@@ -380,13 +380,13 @@ function renderizarProductos(productos) {
                     </div>
                 </div>
 
-                <div class="flex items-center bg-surface-container border border-primary-fixed-dim px-sm py-sm rounded-md gap-sm glow-border">
-                    <div class="w-10 flex justify-center text-primary-fixed-dim shrink-0">
+                <div class="flex items-center card-row-bar border px-sm py-sm rounded-md gap-sm">
+                    <div class="w-10 flex justify-center" style="color: var(--semantic-action)">
                         <span class="material-symbols-outlined">local_bar</span>
                     </div>
                     <div class="flex-1 flex items-center justify-between gap-sm border-l border-outline-variant pl-sm min-w-0">
-                        <span class="text-label-mono uppercase tracking-widest text-primary-fixed-dim shrink-0">Barra (Real)</span>
-                        <div class="flex items-center gap-sm sm:gap-md text-primary-fixed-dim min-w-0">
+                        <span class="text-label-mono uppercase tracking-widest" style="color: var(--semantic-action)">Barra (Real)</span>
+                        <div class="flex items-center gap-sm sm:gap-md" style="color: var(--semantic-action)">
                             <span class="shrink-0"><span id="val-paq-${p.id_producto}">0</span> bot</span>
                             <span class="text-outline-variant">|</span>
                             <span class="shrink-0"><span id="val-det-${p.id_producto}">0.00</span> oz</span>
@@ -394,15 +394,15 @@ function renderizarProductos(productos) {
                     </div>
                 </div>
 
-                <div class="flex items-center bg-surface-container border border-secondary px-sm py-sm rounded-md gap-sm glow-border-secondary ${p.pesable === 1 ? '' : 'hidden'}">
-                    <div class="w-10 flex justify-center text-secondary shrink-0">
+                <div class="flex items-center card-row-delta border px-sm py-sm rounded-md gap-sm ${p.pesable === 1 ? '' : 'hidden'}">
+                    <div class="w-10 flex justify-center" style="color: var(--semantic-info)">
                         <span class="material-symbols-outlined">stacked_line_chart</span>
                     </div>
-                    <div class="flex-1 flex items-center justify-between gap-sm border-l border-secondary pl-sm min-w-0">
-                        <span class="text-label-mono uppercase tracking-widest text-secondary shrink-0">Delta (R-I)</span>
+                    <div class="flex-1 flex items-center justify-between gap-sm border-l" style="border-color: var(--semantic-info)" class="pl-sm min-w-0">
+                        <span class="text-label-mono uppercase tracking-widest" style="color: var(--semantic-info)">Delta (R-I)</span>
                         <div class="flex items-center gap-sm sm:gap-md min-w-0">
                             <div id="dif-paq-${p.id_producto}" class="min-w-[96px] flex justify-end"></div>
-                            <span class="text-secondary/50">|</span>
+                            <span style="color: var(--semantic-info); opacity: 0.5">|</span>
                             <div id="dif-det-${p.id_producto}" class="min-w-[110px] flex justify-end"></div>
                         </div>
                     </div>
@@ -422,10 +422,10 @@ function renderizarProductos(productos) {
                         ${crearInputPeso(perfilesJson, false)}
                     </div>
                     <div class="mt-sm flex flex-wrap gap-sm">
-                        <button type="button" data-id-producto="${p.id_producto}" class="btn-add-peso text-label-mono text-error font-semibold flex items-center gap-xs hover:text-primary-fixed-dim transition-colors uppercase tracking-widest rounded-sharp border border-outline-variant px-sm py-xs">
+                        <button type="button" data-id-producto="${p.id_producto}" class="btn-add-peso btn-action text-label-mono font-semibold flex items-center gap-xs transition-colors uppercase tracking-widest rounded-sharp border px-sm py-xs">
                             <span class="material-symbols-outlined text-sm">add_circle</span> + Botella
                         </button>
-                        <button type="button" data-id-producto="${p.id_producto}" class="btn-add-modelo text-label-mono text-primary-fixed font-semibold flex items-center gap-xs hover:text-primary-fixed-dim transition-colors uppercase tracking-widest rounded-sharp border border-outline-variant px-sm py-xs">
+                        <button type="button" data-id-producto="${p.id_producto}" class="btn-add-modelo btn-highlight text-label-mono font-semibold flex items-center gap-xs transition-colors uppercase tracking-widest rounded-sharp border px-sm py-xs">
                             <span class="material-symbols-outlined text-sm">labs</span> + Modelo
                         </button>
                     </div>
@@ -567,16 +567,16 @@ function formatearDiferencia(diferencia, isOz = false) {
 
     // Tolerancia para decimales (evitar ruido por redondeos)
     if (Math.abs(diferencia) < 0.01) {
-        return '<span class="text-secondary border border-secondary/30 bg-secondary/10 px-sm py-xs rounded-md inline-flex w-full justify-center items-center gap-xs text-data-tabular font-semibold"><span class="material-symbols-outlined text-sm">check_circle</span> OK</span>';
+        return '<span class="badge-ok px-sm py-xs rounded-md inline-flex w-full justify-center items-center gap-xs text-data-tabular font-semibold"><span class="material-symbols-outlined text-sm">check_circle</span> OK</span>';
     }
 
     if (diferencia < 0) {
         const val = isOz ? diferencia.toFixed(2) : Math.round(diferencia);
-        return `<span class="text-error border border-error/30 bg-error/10 px-sm py-xs rounded-md inline-flex w-full justify-center text-data-tabular font-semibold">${val} ${sufijo}</span>`;
+        return `<span class="badge-danger px-sm py-xs rounded-md inline-flex w-full justify-center text-data-tabular font-semibold">${val} ${sufijo}</span>`;
     }
 
     const val = isOz ? diferencia.toFixed(2) : Math.round(diferencia);
-    return `<span class="text-tertiary border border-tertiary/30 bg-tertiary/10 px-sm py-xs rounded-md inline-flex w-full justify-center text-data-tabular font-semibold">+${val} ${sufijo}</span>`;
+    return `<span class="badge-warning px-sm py-xs rounded-md inline-flex w-full justify-center text-data-tabular font-semibold">+${val} ${sufijo}</span>`;
 }
 
 // Recalcula una tarjeta y actualiza PAQ/BARRA, DET/BARRA y sus diferencias contra el sistema

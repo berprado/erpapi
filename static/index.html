@@ -147,11 +147,37 @@
             transition: background-color 5000s ease-in-out 0s;
         }
         
-        /* === Logo Glitch System (Electric Industrial) === */
+        /* === Brand Modes & Semantic Tokens (Electric Industrial) === */
         :root {
+            /* Glitch parameters */
             --glitch-offset: 12px;
             --glitch-opacity: 0.85;
             --glitch-speed: 0.8s;
+
+            /* Brand Modes: Executive (default, less glow) | Commercial (intense neon) */
+            --executive-glow: 0 0 8px rgba(0, 219, 233, 0.15);
+            --executive-intensity: 0.25;
+            --commercial-glow: 0 0 20px rgba(0, 219, 233, 0.5), 0 0 40px rgba(255, 0, 140, 0.2);
+            --commercial-intensity: 0.85;
+            
+            /* Semantic Colors per Brand Manual */
+            --semantic-action: #48E898;
+            --semantic-highlight: #E00078;
+            --semantic-info: #2DD4FF;
+            --semantic-warning: #F59E0B;
+            --semantic-danger: #EF4444;
+        }
+        
+        /* Mode-aware: Executive (default for dashboards) */
+        body.brand-executive {
+            --current-glow: var(--executive-glow);
+            --current-intensity: var(--executive-intensity);
+        }
+        
+        /* Mode-aware: Commercial (high visual impact) */
+        body.brand-commercial {
+            --current-glow: var(--commercial-glow);
+            --current-intensity: var(--commercial-intensity);
         }
 
         .logo-wrapper {
@@ -249,6 +275,64 @@
         @keyframes scanMove {
             from { background-position: 0 0; }
             to   { background-position: 0 100px; }
+        }
+        
+        /* === Card Semantic Styles (Marca-Aware Rows) === */
+        .card-row-system {
+            background: var(--surface-container-low);
+            border-color: var(--outline-variant);
+        }
+        
+        .card-row-bar {
+            background: var(--surface-container);
+            border-color: var(--semantic-action);
+            box-shadow: 0 0 0 1px var(--semantic-action), 0 0 8px rgba(72, 232, 152, 0.1);
+        }
+        
+        .card-row-delta {
+            background: var(--surface-container);
+            border-color: var(--semantic-info);
+            box-shadow: 0 0 0 1px var(--semantic-info), 0 0 8px rgba(45, 212, 255, 0.1);
+        }
+        
+        /* Semantic badges for differences */
+        .badge-ok {
+            color: var(--semantic-action);
+            background: rgba(72, 232, 152, 0.1);
+            border: 1px solid rgba(72, 232, 152, 0.3);
+        }
+        
+        .badge-warning {
+            color: var(--semantic-warning);
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+        
+        .badge-danger {
+            color: var(--semantic-danger);
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        
+        /* Button semantic styles */
+        .btn-action {
+            color: var(--semantic-action);
+            border-color: var(--semantic-action);
+        }
+        
+        .btn-action:hover {
+            background: rgba(72, 232, 152, 0.1);
+            box-shadow: 0 0 8px rgba(72, 232, 152, 0.2);
+        }
+        
+        .btn-highlight {
+            color: var(--semantic-highlight);
+            border-color: var(--semantic-highlight);
+        }
+        
+        .btn-highlight:hover {
+            background: rgba(224, 0, 120, 0.1);
+            box-shadow: 0 0 8px rgba(224, 0, 120, 0.2);
         }
     </style>
 </head>
@@ -424,7 +508,7 @@
         </nav>
     </div>
 
-    <script src="/assets/app.js?v=6.0"></script>
+    <script src="/assets/app.js?v=7.0"></script>
 
     <!-- Trigger aleatorio del Glitch -->
     <script>
