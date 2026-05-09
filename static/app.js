@@ -400,7 +400,10 @@ function renderizarProductos(productos) {
                         <span class="material-symbols-outlined">computer</span>
                     </div>
                     <div class="flex-1 flex items-center justify-between gap-sm border-l border-outline-variant pl-md min-w-0">
-                        <span class="text-label-mono uppercase tracking-widest text-on-surface-variant shrink-0">Sistema (Ideal)</span>
+                        <span class="text-label-mono uppercase tracking-widest text-on-surface-variant leading-tight">
+                            <span class="block sm:inline">Sistema</span>
+                            <span class="block sm:inline">(Ideal)</span>
+                        </span>
                         <div class="flex items-center gap-sm sm:gap-md text-on-surface min-w-0">
                             <span class="w-16 text-right">${parseFloat(p.stock_ideal_unidades).toFixed(0)} bot</span>
                             <span class="text-outline-variant">|</span>
@@ -414,7 +417,10 @@ function renderizarProductos(productos) {
                         <span class="material-symbols-outlined">local_bar</span>
                     </div>
                     <div class="flex-1 flex items-center justify-between gap-sm border-l border-outline-variant pl-md min-w-0">
-                        <span class="text-label-mono uppercase tracking-widest" style="color: var(--semantic-action)">Barra (Real)</span>
+                        <span class="text-label-mono uppercase tracking-widest leading-tight" style="color: var(--semantic-action)">
+                            <span class="block sm:inline">Barra</span>
+                            <span class="block sm:inline">(Real)</span>
+                        </span>
                         <div class="flex items-center gap-sm sm:gap-md" style="color: var(--semantic-action)">
                             <span class="w-16 text-right"><span id="val-paq-${p.id_producto}">0</span> bot</span>
                             <span class="text-outline-variant">|</span>
@@ -428,7 +434,10 @@ function renderizarProductos(productos) {
                         <span class="material-symbols-outlined">stacked_line_chart</span>
                     </div>
                     <div class="flex-1 flex items-center justify-between gap-sm border-l pl-md min-w-0" style="border-color: var(--semantic-info)">
-                        <span class="text-label-mono uppercase tracking-widest" style="color: var(--semantic-info)">Delta (R-I)</span>
+                        <span class="text-label-mono uppercase tracking-widest leading-tight" style="color: var(--semantic-info)">
+                            <span class="block sm:inline">Delta</span>
+                            <span class="block sm:inline">(R-I)</span>
+                        </span>
                         <div class="flex items-center gap-sm sm:gap-md min-w-0">
                             <div id="dif-paq-${p.id_producto}" class="w-16 text-right"></div>
                             <span style="color: var(--semantic-info); opacity: 0.5">|</span>
