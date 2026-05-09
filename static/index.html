@@ -484,16 +484,9 @@
     <div id="app-screen" class="hidden min-h-screen flex flex-col bg-surface">
         
         <!-- Navbar Superior -->
-        <nav class="bg-surface-container border-b border-outline-variant px-lg py-md flex justify-between items-center sticky top-0 z-20 shadow-lg">
+        <nav class="bg-surface-container border-b border-outline-variant px-lg py-sm sm:py-md flex justify-between items-center sticky top-0 z-20 shadow-lg">
             <!-- Logo -->
-            <div class="flex items-center gap-sm">
-                <div class="w-10 h-10 rounded-sharp border border-primary-fixed flex justify-center items-center shadow-cyan-glow">
-                    <img alt="BackStage Icon" class="w-6 h-6" src="https://backstage.localto.net/mysql-realtime-fetching/assets/favicon/android-icon-512x512.png">
-                </div>
-                <div class="font-headline-md tracking-tighter uppercase">
-                    <span class="text-primary-fixed drop-shadow-[0_0_5px_rgba(0,219,233,0.8)]">BACK</span><span class="text-on-surface drop-shadow-[0_0_5px_rgba(220,228,229,0.8)]">STAGE</span>
-                </div>
-            </div>
+            <img alt="BackStage Icon" class="w-8 h-8 sm:w-10 sm:h-10" src="/assets/imgs/android192x192.png" aria-label="BackStage" title="BackStage">
             
             <div class="flex items-center gap-md">
                 <span id="user-display" class="text-label-mono text-on-surface-variant font-semibold tracking-widest hidden sm:inline uppercase"></span>
@@ -583,7 +576,7 @@
         </nav>
     </div>
 
-    <script src="/assets/app.js?v=8.0"></script>
+    <script src="/assets/app.js?v=8.4"></script>
 
     <script>
         (function () {
@@ -597,10 +590,12 @@
                 return;
             }
 
-            Promise.race([
-                document.fonts.load('24px "Material Symbols Outlined"'),
-                new Promise((resolve) => setTimeout(resolve, 1800))
-            ]).finally(marcarIconosListos);
+            document.fonts
+                .load('24px "Material Symbols Outlined"')
+                .then(marcarIconosListos)
+                .catch(() => {
+                    // Si la fuente falla, mantenemos ocultas las ligaduras para evitar texto como "logout".
+                });
         })();
     </script>
 
