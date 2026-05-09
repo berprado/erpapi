@@ -391,6 +391,17 @@
         .btn-highlight:hover {
             background: rgba(224, 0, 120, 0.1);
             box-shadow: 0 0 8px rgba(224, 0, 120, 0.2);
+            }
+        
+            /* Success Check Icon */
+            .success-check-icon {
+                color: var(--semantic-action);
+                filter: drop-shadow(0 0 8px rgba(72, 232, 152, 0.5));
+                transition: filter 0.2s ease;
+            }
+        
+            .success-check-icon:hover {
+                filter: drop-shadow(0 0 12px rgba(72, 232, 152, 0.7));
         }
     </style>
 </head>
@@ -504,9 +515,25 @@
                 <div class="bg-surface-container-low p-sm rounded-sharp border border-outline-variant">
                     <span class="material-symbols-outlined text-primary-fixed animate-pulse" id="estado-icon">hourglass_empty</span>
                 </div>
-                <div>
+                <div class="flex-1">
                     <h3 id="estado-titulo" class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase">Verificando operativa...</h3>
                     <p class="text-xs text-on-surface-variant mt-xs" id="estado-texto">Conectando al servidor...</p>
+                    <div id="estado-resumen" class="hidden mt-md pt-md border-t border-outline-variant">
+                        <div class="grid grid-cols-3 gap-md text-center">
+                            <div>
+                                <p class="text-label-mono text-on-surface-variant tracking-widest uppercase text-[10px] mb-xs">Total</p>
+                                <p class="text-headline-md font-semibold text-primary-fixed" id="resumen-total">0</p>
+                            </div>
+                            <div>
+                                <p class="text-label-mono text-on-surface-variant tracking-widest uppercase text-[10px] mb-xs">Pesables</p>
+                                <p class="text-headline-md font-semibold text-secondary-fixed" id="resumen-pesables">0</p>
+                            </div>
+                            <div>
+                                <p class="text-label-mono text-on-surface-variant tracking-widest uppercase text-[10px] mb-xs">No Pesables</p>
+                                <p class="text-headline-md font-semibold text-tertiary-fixed" id="resumen-no-pesables">0</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             
@@ -576,7 +603,7 @@
         </nav>
     </div>
 
-    <script src="/assets/app.js?v=8.4"></script>
+    <script src="/assets/app.js?v=8.6"></script>
 
     <script>
         (function () {

@@ -302,7 +302,7 @@ async function iniciarDashboard() {
         currentOperacionId = dataOp.id_operacion;
         estadoIcon.textContent = "check_circle";
         estadoIcon.classList.remove('animate-pulse', 'text-on-surface-variant', 'text-error');
-        estadoIcon.classList.add('text-secondary');
+        estadoIcon.classList.add('success-check-icon');
         // Actualizar título y mensaje según respuesta del servidor
         const estadoTitulo = document.getElementById('estado-titulo');
         if (estadoTitulo && dataOp.titulo) {
@@ -332,12 +332,35 @@ async function cargarProductos() {
         if (response.ok && productos.length > 0) {
             renderizarProductos(productos);
             submitSection.classList.remove('hidden'); // Mostrar botón de guardado bajo las tarjetas
+            
+            // NUEVO: Mostrar resumen de productos (total, pesables, no pesables)
+            actualizarResumenProductos(productos);
         } else {
             listaProductos.innerHTML = `<div class="text-center text-on-surface-variant py-lg font-body-base">No hay productos consumidos para auditar hoy.</div>`;
+            ocultarResumenProductos();
         }
     } catch (error) {
         console.error("Error cargando productos", error);
+        ocultarResumenProductos();
     }
+}
+
+// NUEVO: Calcular y mostrar resumen de productos
+function actualizarResumenProductos(productos) {
+    const total = productos.length;
+    const pesables = productos.filter(p => p.pesable === 1).length;
+    const noPesables = total - pesables;
+    
+    document.getElementById('resumen-total').textContent = total;
+    document.getElementById('resumen-pesables').textContent = pesables;
+    document.getElementById('resumen-no-pesables').textContent = noPesables;
+    
+    document.getElementById('estado-resumen').classList.remove('hidden');
+}
+
+// NUEVO: Ocultar resumen de productos
+function ocultarResumenProductos() {
+    document.getElementById('estado-resumen').classList.add('hidden');
 }
 
 // ==========================================
