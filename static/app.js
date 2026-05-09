@@ -13,8 +13,13 @@ const appScreen = document.getElementById('app-screen');
 const loginForm = document.getElementById('login-form');
 const btnLogout = document.getElementById('btn-logout');
 const listaProductos = document.getElementById('lista-productos');
-const actionBar = document.getElementById('action-bar');
+const submitSection = document.getElementById('submit-section');
 const btnGuardar = document.getElementById('btn-guardar');
+const observacionesDialog = document.getElementById('observaciones-dialog');
+const observacionesOverlay = document.getElementById('observaciones-overlay');
+const inputObservaciones = document.getElementById('observaciones-paloteo');
+const btnEnviarInventario = document.getElementById('btn-enviar-inventario');
+const btnCancelarObservaciones = document.getElementById('btn-cancelar-observaciones');
 
 // ==========================================
 // INICIALIZACIÓN
@@ -34,12 +39,12 @@ function escapeHtml(str) {
 
 // Fix #27: Función centralizada para crear el HTML de un input de peso.
 // Soporta perfiles múltiples para seleccionar el modelo de botella por registro.
-function crearInputPeso(perfilesJson) {
+function crearInputPeso(perfilesJson, removable = true) {
     const perfiles = JSON.parse(perfilesJson || '[]');
     let selectHTML = '';
 
     if (perfiles.length > 1) {
-        selectHTML = `<select class="bg-gray-800 text-[10px] text-neon-green border border-gray-700 rounded-lg px-2 py-2 focus:outline-none select-perfil mr-2 cursor-pointer">`;
+        selectHTML = `<select class="bg-surface-container-low text-data-tabular text-primary-fixed border border-outline-variant rounded-md px-sm py-xs focus:outline-none select-perfil mr-sm cursor-pointer font-semibold">`;
         perfiles.forEach((pf, idx) => {
                 const optionValue = (pf.id != null) ? pf.id : idx;
                 selectHTML += `<option value="${optionValue}">${escapeHtml(pf.nombre_perfil)}</option>`;
@@ -47,14 +52,18 @@ function crearInputPeso(perfilesJson) {
         selectHTML += `</select>`;
     }
 
+    const removeButtonHtml = removable
+        ? `<button type="button" onclick="this.parentElement.parentElement.remove()" class="absolute right-sm top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-error transition-colors" aria-label="Eliminar campo de peso">
+                    <span class="material-symbols-outlined text-sm">close</span>
+                </button>`
+        : '';
+
     return `
-        <div class="relative flex items-center item-peso-wrapper">
+        <div class="relative flex items-center item-peso-wrapper gap-sm">
             ${selectHTML}
             <div class="relative flex-1">
-                <input type="number" min="0" step="1" class="w-full bg-dark-bg border border-gray-700 rounded-lg pl-3 pr-8 py-2 text-white input-peso focus:border-neon-pink focus:outline-none focus:ring-1 focus:ring-neon-pink" placeholder="Ej: 950">
-                <button type="button" onclick="this.parentElement.parentElement.remove()" class="absolute right-2 top-2 text-gray-500 hover:text-red-400">
-                    <span class="material-symbols-outlined text-sm">close</span>
-                </button>
+                <input type="number" min="0" step="1" class="w-full bg-surface border border-outline-variant rounded-md pl-md pr-lg py-sm text-on-surface input-peso focus:border-error focus:outline-none focus:shadow-cyan-glow-focus font-data-tabular" placeholder="Ej: 950" required>
+                ${removeButtonHtml}
             </div>
         </div>
     `;
@@ -95,7 +104,7 @@ function refrescarSelectoresPerfil(card) {
         }
 
         const select = document.createElement('select');
-        select.className = 'bg-gray-800 text-[10px] text-neon-green border border-gray-700 rounded-lg px-2 py-2 focus:outline-none select-perfil mr-2 cursor-pointer';
+        select.className = 'bg-surface-container-low text-data-tabular text-primary-fixed border border-outline-variant rounded-md px-sm py-xs focus:outline-none select-perfil mr-sm cursor-pointer font-semibold';
 
         perfiles.forEach((pf, idx) => {
             const option = document.createElement('option');
@@ -252,13 +261,15 @@ function mostrarPantallaApp() {
 // ==========================================
 async function iniciarDashboard() {
     listaProductos.innerHTML = ''; // Limpiar lista
-    actionBar.classList.add('hidden');
+    submitSection.classList.add('hidden');
+    observacionesDialog.classList.add('hidden');
+    inputObservaciones.value = '';
     
     const estadoIcon = document.getElementById('estado-icon');
     const estadoTexto = document.getElementById('estado-texto');
     
     // Fix #28: Resetear clases del icóno antes de cada verificación para evitar acumulación de estilos.
-    estadoIcon.className = 'material-symbols-outlined text-4xl text-gray-500';
+    estadoIcon.className = 'material-symbols-outlined text-4xl text-on-surface-variant';
     estadoIcon.textContent = "hourglass_empty";
     estadoIcon.classList.add('animate-pulse');
     estadoTexto.textContent = "Verificando estado de la caja...";
@@ -279,8 +290,8 @@ async function iniciarDashboard() {
 
             // Caja en proceso u otro error
             estadoIcon.textContent = "block";
-            estadoIcon.classList.remove('animate-pulse', 'text-neon-green');
-            estadoIcon.classList.add('text-neon-pink');
+            estadoIcon.classList.remove('animate-pulse', 'text-primary-fixed');
+            estadoIcon.classList.add('text-error');
             const estadoTituloErr = document.getElementById('estado-titulo');
             if (estadoTituloErr) estadoTituloErr.textContent = "Operativa no disponible";
             estadoTexto.textContent = dataOp.detail || "No se puede realizar el paloteo.";
@@ -290,8 +301,8 @@ async function iniciarDashboard() {
         // Luz Verde: Guardamos el ID de operación
         currentOperacionId = dataOp.id_operacion;
         estadoIcon.textContent = "check_circle";
-        estadoIcon.classList.remove('animate-pulse', 'text-gray-500', 'text-neon-pink');
-        estadoIcon.classList.add('text-neon-green');
+        estadoIcon.classList.remove('animate-pulse', 'text-on-surface-variant', 'text-error');
+        estadoIcon.classList.add('text-secondary');
         // Actualizar título y mensaje según respuesta del servidor
         const estadoTitulo = document.getElementById('estado-titulo');
         if (estadoTitulo && dataOp.titulo) {
@@ -320,10 +331,9 @@ async function cargarProductos() {
 
         if (response.ok && productos.length > 0) {
             renderizarProductos(productos);
-            actionBar.classList.remove('hidden'); // Mostrar barra de guardado
-            actionBar.classList.add('flex');
+            submitSection.classList.remove('hidden'); // Mostrar botón de guardado bajo las tarjetas
         } else {
-            listaProductos.innerHTML = `<div class="text-center text-gray-500 py-10">No hay productos consumidos para auditar hoy.</div>`;
+            listaProductos.innerHTML = `<div class="text-center text-on-surface-variant py-lg font-body-base">No hay productos consumidos para auditar hoy.</div>`;
         }
     } catch (error) {
         console.error("Error cargando productos", error);
@@ -339,7 +349,7 @@ function renderizarProductos(productos) {
     productos.forEach(p => {
         // Crear la tarjeta (card)
         const div = document.createElement('div');
-        div.className = "bg-dark-surface border border-gray-800 rounded-xl p-4 shadow-lg product-card transition-colors focus-within:border-gray-600";
+        div.className = "bg-surface-container border border-outline-variant rounded-md p-md shadow-lg product-card transition-colors focus-within:border-primary-fixed-dim chassis-panel";
         div.dataset.id = p.id_producto;
         div.dataset.pesable = p.pesable || 0;
         div.dataset.nombre = p.nombre;
@@ -353,70 +363,81 @@ function renderizarProductos(productos) {
 
         // Info básica
         let html = `
-            ${p.categoria_nombre ? `<span class="text-[10px] font-bold tracking-widest uppercase text-gray-500 mb-1 block">${escapeHtml(p.categoria_nombre)}</span>` : ''}
-            <h4 class="text-neon-green font-bold text-lg mb-1">${escapeHtml(p.nombre)}</h4>
-            <div class="text-[10px] text-gray-600 mb-2 flex gap-3">
+            ${p.categoria_nombre ? `<span class="text-label-mono font-label-mono tracking-widest uppercase text-on-surface-variant mb-xs block">${escapeHtml(p.categoria_nombre)}</span>` : ''}
+            <h4 class="text-primary-fixed font-headline-md text-lg mb-xs neon-text-primary">${escapeHtml(p.nombre)}</h4>
+            <div class="text-data-tabular text-on-surface-variant mb-md flex gap-md">
                 <span>ID: ${p.id_producto}</span>
-                <span>Cód: ${escapeHtml(p.codigo)}</span>
+                <span class="border-l border-outline-variant pl-sm">Cód: ${escapeHtml(p.codigo)}</span>
             </div>
             
-            <!-- Layout de 2 Columnas: PAQ (izquierda) y DET (derecha, solo si pesable) -->
-            <div class="grid ${p.pesable === 1 ? 'grid-cols-2' : 'grid-cols-1'} gap-4 mb-4 items-stretch">
-                <!-- Columna Izquierda: PAQ -->
-                <div class="text-[11px] font-bold flex flex-col gap-2">
-                    <div class="w-full">
-                        <span class="block w-full text-gray-400 bg-gray-800 px-2 py-1 rounded text-xs">PAQ/SIST: ${parseFloat(p.stock_ideal_unidades).toFixed(0)} bot.</span>
+            <!-- Resumen superior: SISTEMA / BARRA / DELTA (Semantic Brand Tokens) -->
+            <div class="space-y-sm mb-lg text-data-tabular font-semibold">
+                <div class="flex items-center card-row-system border px-sm py-sm rounded-md gap-sm">
+                    <div class="w-10 flex items-center justify-center text-on-surface-variant">
+                        <span class="material-symbols-outlined">computer</span>
                     </div>
-                    <div class="w-full">
-                        <span class="inline-flex w-full items-center justify-between text-white bg-gray-700 px-2 py-1 rounded"><span>PAQ/BARRA:</span><span><span id="val-paq-${p.id_producto}">0</span> bot</span></span>
-                    </div>
-                    <div class="w-full">
-                        <span id="dif-paq-${p.id_producto}" class="block w-full px-2 py-1 rounded tracking-wider"></span>
+                    <div class="flex-1 flex items-center justify-between gap-sm border-l border-outline-variant pl-md min-w-0">
+                        <span class="text-label-mono uppercase tracking-widest text-on-surface-variant shrink-0">Sistema (Ideal)</span>
+                        <div class="flex items-center gap-sm sm:gap-md text-on-surface min-w-0">
+                            <span class="w-16 text-right">${parseFloat(p.stock_ideal_unidades).toFixed(0)} bot</span>
+                            <span class="text-outline-variant">|</span>
+                            <span class="w-20 text-right">${parseFloat(p.stock_ideal_onzas).toFixed(2)} oz</span>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Columna Derecha: DET (solo si pesable) -->
+                <div class="flex items-center card-row-bar border px-sm py-sm rounded-md gap-sm">
+                    <div class="w-10 flex items-center justify-center" style="color: var(--semantic-action)">
+                        <span class="material-symbols-outlined">local_bar</span>
+                    </div>
+                    <div class="flex-1 flex items-center justify-between gap-sm border-l border-outline-variant pl-md min-w-0">
+                        <span class="text-label-mono uppercase tracking-widest" style="color: var(--semantic-action)">Barra (Real)</span>
+                        <div class="flex items-center gap-sm sm:gap-md" style="color: var(--semantic-action)">
+                            <span class="w-16 text-right"><span id="val-paq-${p.id_producto}">0</span> bot</span>
+                            <span class="text-outline-variant">|</span>
+                            <span class="w-20 text-right"><span id="val-det-${p.id_producto}">0.00</span> oz</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex items-center card-row-delta border px-sm py-sm rounded-md gap-sm">
+                    <div class="w-10 flex items-center justify-center" style="color: var(--semantic-info)">
+                        <span class="material-symbols-outlined">stacked_line_chart</span>
+                    </div>
+                    <div class="flex-1 flex items-center justify-between gap-sm border-l pl-md min-w-0" style="border-color: var(--semantic-info)">
+                        <span class="text-label-mono uppercase tracking-widest" style="color: var(--semantic-info)">Delta (R-I)</span>
+                        <div class="flex items-center gap-sm sm:gap-md min-w-0">
+                            <div id="dif-paq-${p.id_producto}" class="w-16 text-right"></div>
+                            <span style="color: var(--semantic-info); opacity: 0.5">|</span>
+                            <div id="dif-det-${p.id_producto}" class="w-20 text-right"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="grid ${p.pesable === 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'} gap-md items-start">
+                <div>
+                    <label class="block text-label-mono font-label-mono text-on-surface-variant mb-xs tracking-widest uppercase">Unidades</label>
+                    <input type="number" min="0" class="w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-on-surface input-cerradas focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus font-data-tabular" placeholder="0">
+                </div>
+
                 ${p.pesable === 1 ? `
-                <div class="text-[11px] font-bold flex flex-col gap-2">
-                    <div class="w-full">
-                        <span class="block w-full text-gray-400 bg-gray-800 px-2 py-1 rounded text-xs border border-gray-700">DET/SIST: ${parseFloat(p.stock_ideal_onzas).toFixed(2)} oz</span>
+                <div class="border-t border-outline-variant pt-md sm:border-t-0 sm:border-l sm:pt-0 sm:pl-md">
+                    <label class="block text-label-mono font-label-mono text-on-surface-variant mb-xs tracking-widest uppercase">Peso</label>
+                    <div class="pesos-container grid grid-cols-1 gap-sm" id="pesos-${p.id_producto}">
+                        ${crearInputPeso(perfilesJson, false)}
                     </div>
-                    <div class="w-full">
-                        <span class="inline-flex w-full items-center justify-between text-white bg-gray-700 px-2 py-1 rounded"><span>DET/BARRA:</span><span><span id="val-det-${p.id_producto}">0.00</span> oz</span></span>
-                    </div>
-                    <div class="w-full">
-                        <span id="dif-det-${p.id_producto}" class="block w-full px-2 py-1 rounded tracking-wider"></span>
+                    <div class="mt-sm flex flex-wrap gap-sm">
+                        <button type="button" data-id-producto="${p.id_producto}" class="btn-add-peso btn-action text-label-mono font-semibold flex items-center gap-xs transition-colors uppercase tracking-widest rounded-sharp border px-sm py-xs">
+                            <span class="material-symbols-outlined text-sm">add_circle</span> + Botella
+                        </button>
+                        <button type="button" data-id-producto="${p.id_producto}" class="btn-add-modelo btn-highlight text-label-mono font-semibold flex items-center gap-xs transition-colors uppercase tracking-widest rounded-sharp border px-sm py-xs">
+                            <span class="material-symbols-outlined text-sm">labs</span> + Modelo
+                        </button>
                     </div>
                 </div>` : ''}
             </div>
-            
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-[10px] font-bold text-gray-400 mb-1 tracking-wider uppercase">Cerradas</label>
-                    <input type="number" min="0" class="w-full bg-dark-bg border border-gray-700 rounded-lg px-3 py-2 text-white input-cerradas focus:border-neon-green focus:outline-none focus:ring-1 focus:ring-neon-green" placeholder="0">
-                </div>
-            </div>
         `;
-
-        // Sección Pesaje (Solo si es pesable)
-        if (p.pesable === 1) {
-            html += `
-            <div class="mt-4 border-t border-gray-800 pt-4">
-                <label class="block text-[10px] font-bold text-gray-400 mb-2 tracking-wider uppercase">Gramos en Abiertas</label>
-                <div class="pesos-container grid grid-cols-1 sm:grid-cols-2 gap-3" id="pesos-${p.id_producto}">
-                    ${crearInputPeso(perfilesJson)}
-                </div>
-                <div class="mt-3 flex flex-wrap gap-2">
-                    <button type="button" data-id-producto="${p.id_producto}" class="btn-add-peso text-xs text-neon-pink font-semibold flex items-center gap-1 hover:text-white transition-colors uppercase tracking-wider">
-                        <span class="material-symbols-outlined text-sm">add_circle</span> Añadir Botella
-                    </button>
-                    <button type="button" data-id-producto="${p.id_producto}" class="btn-add-modelo text-xs text-neon-green font-semibold flex items-center gap-1 hover:text-white transition-colors uppercase tracking-wider">
-                        <span class="material-symbols-outlined text-sm">labs</span> Nuevo Modelo
-                    </button>
-                </div>
-            </div>
-            `;
-        }
 
         div.innerHTML = html;
         listaProductos.appendChild(div);
@@ -431,19 +452,27 @@ window.agregarInputPeso = function(idProducto, perfilesJson) {
     const container = document.getElementById(`pesos-${idProducto}`);
     if (!container) return;
     const inputWrapper = document.createElement('div');
-    inputWrapper.innerHTML = crearInputPeso(perfiles);
+    inputWrapper.innerHTML = crearInputPeso(perfiles, true);
     container.appendChild(inputWrapper.firstElementChild);
 }
 
 // ==========================================
 // ENVÍO AL SERVIDOR Y VALIDACIONES
 // ==========================================
-btnGuardar.addEventListener('click', async () => {
-    // 1. Recolectar datos del DOM
+function abrirDialogoObservaciones() {
+    observacionesDialog.classList.remove('hidden');
+    inputObservaciones.focus();
+}
+
+function cerrarDialogoObservaciones() {
+    observacionesDialog.classList.add('hidden');
+}
+
+function construirPayloadInventario(observaciones = null) {
     const payload = {
         id_operacion: currentOperacionId,
         id_barra: ID_BARRA_ACTUAL,
-        observaciones: document.getElementById('observaciones-paloteo').value.trim() || null,
+        observaciones,
         items: []
     };
 
@@ -502,18 +531,27 @@ btnGuardar.addEventListener('click', async () => {
     });
 
     if (!validacionExitosa) {
-        return alert("Error: No puedes ingresar números negativos en el inventario.");
+        alert("Error: No puedes ingresar números negativos en el inventario.");
+        return null;
     }
 
     if (advertenciaFatFinger) {
         const confirmar = confirm(`⚠️ ADVERTENCIA (Revisa tus datos):\n${mensajeFatFinger}\n¿Estás completamente seguro de que estos datos son correctos?`);
-        if (!confirmar) return; // Si el usuario cancela, detenemos el envío
+        if (!confirmar) return null;
     }
 
-    // 2. Enviar a FastAPI
+    return payload;
+}
+
+async function enviarInventario(payload) {
+    const textoOriginalConfirmar = btnGuardar.innerHTML;
+    const textoOriginalEnviar = btnEnviarInventario.innerHTML;
+
     try {
         btnGuardar.disabled = true;
+        btnEnviarInventario.disabled = true;
         btnGuardar.innerHTML = `<span class="material-symbols-outlined animate-spin">refresh</span> Procesando...`;
+        btnEnviarInventario.innerHTML = `<span class="material-symbols-outlined animate-spin">refresh</span> Enviando...`;
 
         const response = await fetch(`${API_BASE}/inventario/paloteo`, {
             method: 'POST',
@@ -528,8 +566,8 @@ btnGuardar.addEventListener('click', async () => {
 
         if (response.ok) {
             alert(`✅ ¡Inventario Guardado!\n${result.mensaje}`);
-            // Limpiar y resetear
-            document.getElementById('observaciones-paloteo').value = '';
+            inputObservaciones.value = '';
+            cerrarDialogoObservaciones();
             iniciarDashboard(); // Recargar para mostrar que ya no hay pendientes
         } else {
             alert(`❌ Error del servidor: ${result.detail || "Error desconocido"}`);
@@ -538,30 +576,57 @@ btnGuardar.addEventListener('click', async () => {
         alert("❌ Error de red al intentar guardar.");
     } finally {
         btnGuardar.disabled = false;
-        btnGuardar.innerHTML = `<span class="material-symbols-outlined">save</span> Confirmar Inventario`;
+        btnEnviarInventario.disabled = false;
+        btnGuardar.innerHTML = textoOriginalConfirmar;
+        btnEnviarInventario.innerHTML = textoOriginalEnviar;
     }
+}
+
+btnGuardar.addEventListener('click', () => {
+    abrirDialogoObservaciones();
+});
+
+btnCancelarObservaciones.addEventListener('click', () => {
+    cerrarDialogoObservaciones();
+});
+
+observacionesOverlay.addEventListener('click', () => {
+    cerrarDialogoObservaciones();
+});
+
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !observacionesDialog.classList.contains('hidden')) {
+        cerrarDialogoObservaciones();
+    }
+});
+
+btnEnviarInventario.addEventListener('click', async () => {
+    const observaciones = inputObservaciones.value.trim() || null;
+    const payload = construirPayloadInventario(observaciones);
+    if (!payload) return;
+    await enviarInventario(payload);
 });
 
 // ==========================================
 // CÁLCULO EN TIEMPO REAL (ONZAS, UNIDADES Y DIFERENCIAS)
 // ==========================================
 
-// Función auxiliar para pintar las diferencias (Verde/Rosa/Amarillo)
+// Función auxiliar para pintar las diferencias (Verde/Roja/Amarillo con Electric Industrial)
 function formatearDiferencia(diferencia, isOz = false) {
     const sufijo = isOz ? "oz" : "bot";
 
     // Tolerancia para decimales (evitar ruido por redondeos)
     if (Math.abs(diferencia) < 0.01) {
-        return '<span class="text-neon-green border border-neon-green/30 bg-neon-green/10 px-2 py-1 rounded inline-flex w-full justify-center items-center gap-1"><span class="material-symbols-outlined text-[14px]">check_circle</span> OK</span>';
+        return '<span class="text-data-tabular font-semibold" style="color: var(--semantic-action)"><span class="material-symbols-outlined text-sm align-middle">check_circle</span></span>';
     }
 
     if (diferencia < 0) {
         const val = isOz ? diferencia.toFixed(2) : Math.round(diferencia);
-        return `<span class="text-neon-pink border border-neon-pink/30 bg-neon-pink/10 px-2 py-1 rounded inline-flex w-full justify-center">${val} ${sufijo}</span>`;
+        return `<span class="text-data-tabular font-semibold" style="color: var(--semantic-danger)">${val} ${sufijo}</span>`;
     }
 
     const val = isOz ? diferencia.toFixed(2) : Math.round(diferencia);
-    return `<span class="text-yellow-400 border border-yellow-400/30 bg-yellow-400/10 px-2 py-1 rounded inline-flex w-full justify-center">+${val} ${sufijo}</span>`;
+    return `<span class="text-data-tabular font-semibold" style="color: var(--semantic-warning)">+${val} ${sufijo}</span>`;
 }
 
 // Recalcula una tarjeta y actualiza PAQ/BARRA, DET/BARRA y sus diferencias contra el sistema

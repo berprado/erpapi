@@ -1,0 +1,257 @@
+<!DOCTYPE html><html class="dark" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>CELLAR_SYNC_v1.0 - Product Registration</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary-container": "#aeb9d0",
+                        "on-tertiary": "#3b2f00",
+                        "on-background": "#dce4e5",
+                        "tertiary": "#fff5de",
+                        "background": "#0d1515",
+                        "surface": "#0d1515",
+                        "tertiary-fixed": "#ffe179",
+                        "on-primary": "#00363a",
+                        "on-primary-fixed-variant": "#004f54",
+                        "secondary-fixed": "#d8e3fb",
+                        "on-surface": "#dce4e5",
+                        "secondary-fixed-dim": "#bcc7de",
+                        "inverse-primary": "#006970",
+                        "on-secondary-fixed-variant": "#3c475a",
+                        "primary": "#dbfcff",
+                        "error": "#ffb4ab",
+                        "surface-bright": "#333b3b",
+                        "on-error-container": "#ffdad6",
+                        "tertiary-container": "#fed639",
+                        "secondary": "#bcc7de",
+                        "on-secondary": "#263143",
+                        "surface-dim": "#0d1515",
+                        "outline": "#849495",
+                        "on-tertiary-fixed-variant": "#554500",
+                        "surface-container-high": "#232b2c",
+                        "inverse-on-surface": "#2a3233",
+                        "inverse-surface": "#dce4e5",
+                        "surface-container-low": "#151d1e",
+                        "surface-container": "#192122",
+                        "primary-fixed-dim": "#00dbe9",
+                        "on-primary-fixed": "#002022",
+                        "surface-container-lowest": "#080f10",
+                        "on-error": "#690005",
+                        "surface-variant": "#2e3637",
+                        "on-tertiary-container": "#715d00",
+                        "on-surface-variant": "#b9cacb",
+                        "surface-container-highest": "#2e3637",
+                        "on-secondary-fixed": "#111c2d",
+                        "secondary-container": "#3e495d",
+                        "primary-fixed": "#7df4ff",
+                        "on-primary-container": "#006970",
+                        "primary-container": "#00f0ff",
+                        "outline-variant": "#3b494b",
+                        "surface-tint": "#00dbe9",
+                        "on-tertiary-fixed": "#231b00",
+                        "error-container": "#93000a",
+                        "tertiary-fixed-dim": "#eac324"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "sm": "8px",
+                        "xl": "40px",
+                        "gutter": "16px",
+                        "xs": "4px",
+                        "container-max": "1440px",
+                        "md": "16px",
+                        "lg": "24px",
+                        "unit": "4px"
+                    },
+                    "fontFamily": {
+                        "body-base": ["Space Grotesk"],
+                        "display-lg": ["Space Grotesk"],
+                        "data-tabular": ["Space Grotesk"],
+                        "label-mono": ["Space Grotesk"],
+                        "headline-md": ["Space Grotesk"]
+                    },
+                    "fontSize": {
+                        "body-base": ["16px", { "lineHeight": "1.5", "letterSpacing": "0em", "fontWeight": "400" }],
+                        "display-lg": ["48px", { "lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "data-tabular": ["14px", { "lineHeight": "1.4", "fontWeight": "500" }],
+                        "label-mono": ["12px", { "lineHeight": "1.0", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                        "headline-md": ["24px", { "lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .glow-border {
+            box-shadow: 0 0 10px rgba(0, 219, 233, 0.5), inset 0 0 5px rgba(0, 219, 233, 0.2);
+        }
+        .glow-border-secondary {
+            box-shadow: 0 0 10px rgba(188, 199, 222, 0.5), inset 0 0 5px rgba(188, 199, 222, 0.2);
+        }
+        .neon-text-primary {
+            text-shadow: 0 0 8px rgba(0, 219, 233, 0.8);
+        }
+        .neon-text-secondary {
+            text-shadow: 0 0 8px rgba(188, 199, 222, 0.8);
+        }
+        .chassis-panel {
+            background-color: #151d1e;
+            border: 1px solid #3b494b;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen pb-[100px] font-body-base">
+<!-- TopAppBar -->
+<header class="bg-surface text-primary border-b border-outline-variant flex justify-between items-center px-lg py-md w-full sticky top-0 z-50">
+<button aria-label="Scan" class="text-primary hover:text-primary-fixed-dim transition-transform active:scale-95">
+<img alt="Scan Icon" class="w-auto drop-shadow-[0_0_8px_rgba(0,219,233,0.8)] h-[56px]" src="https://backstage.localto.net/mysql-realtime-fetching/assets/favicon/android-icon-512x512.png">
+</button>
+<h1 class="font-display-lg text-headline-md tracking-tighter text-primary drop-shadow-[0_0_8px_rgba(0,219,233,0.8)] absolute left-1/2 -translate-x-1/2">BACKSTAGE</h1>
+<button aria-label="Settings" class="text-on-surface-variant hover:text-primary-fixed-dim transition-colors">
+<span class="material-symbols-outlined" style="font-variation-settings: &quot;FILL&quot; 0;">settings</span>
+</button>
+</header>
+<!-- Main Content Canvas -->
+<main class="p-gutter max-w-2xl mx-auto space-y-gutter mt-sm">
+<!-- Registration Card -->
+<article class="chassis-panel rounded-lg p-md relative overflow-hidden group">
+<!-- Focus Glow -->
+<div class="absolute inset-0 border border-primary-fixed-dim opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none rounded-lg glow-border"></div>
+<!-- Header Section -->
+<header class="border-b border-outline-variant pb-sm mb-md flex flex-col relative">
+<div class="flex flex-col w-full gap-xs">
+<div class="flex justify-between items-start">
+<div class="text-label-mono uppercase tracking-widest text-on-surface-variant mb-xs">
+                            FERNET
+                        </div>
+</div>
+<h2 class="font-headline-md text-primary neon-text-primary">BRANCA MENTA 750ML</h2>
+<div class="flex items-center gap-sm mt-xs">
+<span class="text-data-tabular text-on-surface-variant">ID: 17</span>
+<span class="text-data-tabular text-on-surface-variant border-l border-outline-variant pl-sm">Cód: 526</span>
+</div>
+</div>
+</header>
+<!-- Metrics Grid -->
+<div class="space-y-sm mb-lg">
+<!-- SISTEMA (Ideal) -->
+<div class="flex items-center bg-surface-container-low border border-outline-variant p-sm rounded">
+<div class="w-10 flex justify-center text-on-surface-variant">
+<span class="material-symbols-outlined">computer</span>
+</div>
+<div class="flex-1 flex justify-between items-center pl-sm border-l border-outline-variant">
+<span class="text-label-mono uppercase text-on-surface-variant">SISTEMA (Ideal)</span>
+<div class="flex gap-md text-data-tabular text-on-surface">
+<span class="">1 bot</span>
+<span class="text-outline-variant">|</span>
+<span class="">11.00 oz</span>
+</div>
+</div>
+</div>
+<!-- BARRA (Real) -->
+<div class="flex items-center bg-surface-container border border-primary-fixed-dim p-sm rounded">
+<div class="w-10 flex justify-center text-primary-fixed-dim">
+<span class="material-symbols-outlined">local_bar</span>
+</div>
+<div class="flex-1 flex justify-between items-center pl-sm border-l border-outline-variant">
+<span class="text-label-mono uppercase text-primary-fixed-dim">BARRA (Real)</span>
+<div class="flex gap-md text-data-tabular text-primary-fixed-dim">
+<span class="">3 bot</span>
+<span class="text-outline-variant">|</span>
+<span class="">33.90 oz</span>
+</div>
+</div>
+</div>
+<!-- DELTA (Real - Ideal) -->
+<div class="flex items-center bg-surface-container border border-secondary p-sm rounded glow-border-secondary">
+<div class="w-10 flex justify-center text-secondary">
+<span class="material-symbols-outlined">stacked_line_chart</span>
+</div>
+<div class="flex-1 flex justify-between items-center pl-sm border-l border-secondary">
+<span class="text-label-mono uppercase text-secondary">DELTA (R-I)</span>
+<div class="flex gap-md text-data-tabular text-secondary neon-text-secondary font-bold">
+<span class="">+2 bot</span>
+<span class="text-secondary opacity-50">|</span>
+<span class="">+22.90 oz</span>
+</div>
+</div>
+</div>
+</div>
+<!-- REGISTRO (Físico) -->
+<section class="border border-outline-variant rounded relative mt-lg">
+<div class="absolute top-0 left-0 w-full h-1 bg-primary-fixed-dim shadow-[0_0_10px_#00dbe9]"></div>
+<div class="p-md pt-lg">
+<h3 class="text-label-mono uppercase text-primary mb-md">REGISTRO (Físico)</h3>
+<div class="space-y-md">
+<!-- Bot. Cerradas Stepper -->
+<div class="flex justify-between items-center bg-surface-container-lowest p-sm rounded border border-outline-variant">
+<span class="font-body-base text-on-surface">Bot. Cerradas</span>
+<div class="flex items-center gap-md">
+<button class="w-8 h-8 flex items-center justify-center border border-outline-variant text-on-surface hover:text-primary hover:border-primary-fixed-dim hover:glow-border rounded transition-all">
+<span class="material-symbols-outlined text-sm">remove</span>
+</button>
+<span class="text-data-tabular text-primary text-xl font-bold">3</span>
+<button class="w-8 h-8 flex items-center justify-center border border-outline-variant text-on-surface hover:text-primary hover:border-primary-fixed-dim hover:glow-border rounded transition-all">
+<span class="material-symbols-outlined text-sm">add</span>
+</button>
+</div>
+</div>
+<!-- Peso Botellas Grid -->
+<div class="grid grid-cols-2 gap-sm">
+<div class="bg-surface-container-lowest p-sm rounded border border-outline-variant flex justify-between items-center">
+<span class="text-data-tabular text-on-surface-variant text-sm">Bot 1 (g)</span>
+<input class="w-20 bg-surface border border-outline-variant text-primary text-data-tabular text-right p-xs focus:border-primary-fixed-dim focus:glow-border outline-none transition-all" style="box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);" type="text" value="1250">
+</div>
+<div class="bg-surface-container-lowest p-sm rounded border border-outline-variant flex justify-between items-center">
+<span class="text-data-tabular text-on-surface-variant text-sm">Bot 2 (g)</span>
+<input class="w-20 bg-surface border border-outline-variant text-primary text-data-tabular text-right p-xs focus:border-primary-fixed-dim focus:glow-border outline-none transition-all" style="box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);" type="text" value="980">
+</div>
+</div>
+</div>
+<!-- Actions -->
+<div class="flex gap-sm mt-md pt-md border-t border-outline-variant">
+<button class="flex-1 py-sm border border-outline-variant text-on-surface hover:text-primary hover:border-primary-fixed-dim hover:glow-border text-label-mono uppercase transition-all flex justify-center items-center gap-xs px-1 text-[10px]">
+                            + BOTELLA
+                        </button>
+<button class="flex-1 py-sm border border-outline-variant text-on-surface hover:text-primary hover:border-primary-fixed-dim hover:glow-border text-label-mono uppercase transition-all flex justify-center items-center px-1 text-[10px]">
+                            + MODELO
+                        </button>
+</div>
+</div>
+</section>
+</article>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full flex justify-around items-center h-xl px-gutter bg-surface-container border-t-2 border-outline-variant shadow-[0_-4px_20px_rgba(0,0,0,0.5)] z-50 md:hidden">
+<a class="flex flex-col items-center justify-center text-on-surface-variant opacity-60 pt-sm hover:opacity-100 hover:text-primary" href="#">
+<span class="material-symbols-outlined mb-xs">shelves</span>
+<span class="text-label-mono uppercase text-[10px]">Stock</span>
+</a>
+<a class="flex flex-col items-center justify-center text-primary-fixed-dim drop-shadow-[0_0_5px_rgba(0,219,233,0.7)] border-t-2 border-primary-fixed-dim pt-sm scale-110 transition-all duration-150" href="#">
+<span class="material-symbols-outlined mb-xs">qr_code_scanner</span>
+<span class="text-label-mono uppercase text-[10px]">Scan</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant opacity-60 pt-sm hover:opacity-100 hover:text-primary" href="#">
+<span class="material-symbols-outlined mb-xs">warning</span>
+<span class="text-label-mono uppercase text-[10px]">Alerts</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant opacity-60 pt-sm hover:opacity-100 hover:text-primary" href="#">
+<span class="material-symbols-outlined mb-xs">history</span>
+<span class="text-label-mono uppercase text-[10px]">Logs</span>
+</a>
+</nav>
+
+
+</body></html>
