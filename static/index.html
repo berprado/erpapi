@@ -447,7 +447,7 @@
         </nav>
 
         <!-- Área de Contenido -->
-        <main class="flex-1 p-md pb-96 max-w-2xl mx-auto w-full" id="main-content">
+        <main class="flex-1 p-md pb-28 max-w-2xl mx-auto w-full" id="main-content">
             
             <!-- Status de la Operación -->
             <div id="estado-operacion" class="bg-surface-container border border-outline-variant rounded-md p-md mb-lg shadow-lg flex items-center gap-md">
@@ -464,20 +464,37 @@
             <div id="lista-productos" class="space-y-4">
                 <!-- JS inyectará las "tarjetas" aquí -->
             </div>
-        </main>
 
-        <!-- Barra Fija Inferior (Confirmación de Guardado) -->
-        <div id="action-bar" class="fixed bottom-20 w-full bg-surface-container/95 backdrop-blur-md border-t border-outline-variant p-md hidden flex-col sm:flex-row justify-center items-center gap-md z-20">
-            <div class="w-full max-w-2xl">
-                <label class="block text-label-mono font-label-mono text-on-surface-variant mb-sm tracking-widest uppercase flex items-center gap-sm">
-                    <span class="material-symbols-outlined text-sm">edit_note</span> Observaciones del cierre
-                </label>
-                <input type="text" id="observaciones-paloteo" placeholder="Ej: Faltó reportar la merma de una copa" class="w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface mb-md focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-body-base">
-                
+            <!-- Acción principal: debajo de la última tarjeta -->
+            <div id="submit-section" class="hidden mt-lg">
                 <button id="btn-guardar" class="w-full bg-primary-container text-on-primary-fixed font-headline-md text-body-base py-md px-lg rounded-sharp flex items-center justify-center gap-sm hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest">
                     <span class="material-symbols-outlined">save</span>
                     Confirmar Inventario
                 </button>
+            </div>
+        </main>
+
+        <!-- Diálogo opcional de observaciones previo al envío -->
+        <div id="observaciones-dialog" class="fixed inset-0 hidden z-40">
+            <div id="observaciones-overlay" class="absolute inset-0 bg-black/70"></div>
+            <div class="relative z-10 min-h-screen flex items-center justify-center p-md">
+                <div class="w-full max-w-lg bg-surface-container border border-outline-variant rounded-md p-md shadow-lg">
+                    <h3 class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase mb-sm flex items-center gap-sm">
+                        <span class="material-symbols-outlined text-sm">edit_note</span>
+                        Observaciones del cierre (opcional)
+                    </h3>
+                    <p class="text-sm text-on-surface-variant mb-md">Puedes dejar este campo en blanco y enviar de todas formas.</p>
+                    <textarea id="observaciones-paloteo" rows="3" placeholder="Ej: Faltó reportar la merma de una copa" class="w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface mb-md focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-body-base resize-none"></textarea>
+                    <div class="flex flex-col sm:flex-row gap-sm">
+                        <button id="btn-cancelar-observaciones" class="w-full sm:w-auto bg-surface text-on-surface border border-outline-variant py-sm px-md rounded-sharp uppercase tracking-widest text-label-mono hover:border-primary-fixed-dim transition-colors">
+                            Volver
+                        </button>
+                        <button id="btn-enviar-inventario" class="w-full bg-primary-container text-on-primary-fixed font-headline-md text-body-base py-sm px-md rounded-sharp flex items-center justify-center gap-sm hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest">
+                            <span class="material-symbols-outlined">send</span>
+                            Enviar inventario
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -509,7 +526,7 @@
         </nav>
     </div>
 
-    <script src="/assets/app.js?v=7.5"></script>
+    <script src="/assets/app.js?v=7.6"></script>
 
     <!-- Trigger aleatorio del Glitch -->
     <script>

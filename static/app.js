@@ -13,8 +13,13 @@ const appScreen = document.getElementById('app-screen');
 const loginForm = document.getElementById('login-form');
 const btnLogout = document.getElementById('btn-logout');
 const listaProductos = document.getElementById('lista-productos');
-const actionBar = document.getElementById('action-bar');
+const submitSection = document.getElementById('submit-section');
 const btnGuardar = document.getElementById('btn-guardar');
+const observacionesDialog = document.getElementById('observaciones-dialog');
+const observacionesOverlay = document.getElementById('observaciones-overlay');
+const inputObservaciones = document.getElementById('observaciones-paloteo');
+const btnEnviarInventario = document.getElementById('btn-enviar-inventario');
+const btnCancelarObservaciones = document.getElementById('btn-cancelar-observaciones');
 
 // ==========================================
 // INICIALIZACIÓN
@@ -256,7 +261,9 @@ function mostrarPantallaApp() {
 // ==========================================
 async function iniciarDashboard() {
     listaProductos.innerHTML = ''; // Limpiar lista
-    actionBar.classList.add('hidden');
+    submitSection.classList.add('hidden');
+    observacionesDialog.classList.add('hidden');
+    inputObservaciones.value = '';
     
     const estadoIcon = document.getElementById('estado-icon');
     const estadoTexto = document.getElementById('estado-texto');
@@ -324,8 +331,7 @@ async function cargarProductos() {
 
         if (response.ok && productos.length > 0) {
             renderizarProductos(productos);
-            actionBar.classList.remove('hidden'); // Mostrar barra de guardado
-            actionBar.classList.add('flex');
+            submitSection.classList.remove('hidden'); // Mostrar botón de guardado bajo las tarjetas
         } else {
             listaProductos.innerHTML = `<div class="text-center text-on-surface-variant py-lg font-body-base">No hay productos consumidos para auditar hoy.</div>`;
         }
@@ -453,12 +459,20 @@ window.agregarInputPeso = function(idProducto, perfilesJson) {
 // ==========================================
 // ENVÍO AL SERVIDOR Y VALIDACIONES
 // ==========================================
-btnGuardar.addEventListener('click', async () => {
-    // 1. Recolectar datos del DOM
+function abrirDialogoObservaciones() {
+    observacionesDialog.classList.remove('hidden');
+    inputObservaciones.focus();
+}
+
+function cerrarDialogoObservaciones() {
+    observacionesDialog.classList.add('hidden');
+}
+
+function construirPayloadInventario(observaciones = null) {
     const payload = {
         id_operacion: currentOperacionId,
         id_barra: ID_BARRA_ACTUAL,
-        observaciones: document.getElementById('observaciones-paloteo').value.trim() || null,
+        observaciones,
         items: []
     };
 
@@ -517,18 +531,27 @@ btnGuardar.addEventListener('click', async () => {
     });
 
     if (!validacionExitosa) {
-        return alert("Error: No puedes ingresar números negativos en el inventario.");
+        alert("Error: No puedes ingresar números negativos en el inventario.");
+        return null;
     }
 
     if (advertenciaFatFinger) {
         const confirmar = confirm(`⚠️ ADVERTENCIA (Revisa tus datos):\n${mensajeFatFinger}\n¿Estás completamente seguro de que estos datos son correctos?`);
-        if (!confirmar) return; // Si el usuario cancela, detenemos el envío
+        if (!confirmar) return null;
     }
 
-    // 2. Enviar a FastAPI
+    return payload;
+}
+
+async function enviarInventario(payload) {
+    const textoOriginalConfirmar = btnGuardar.innerHTML;
+    const textoOriginalEnviar = btnEnviarInventario.innerHTML;
+
     try {
         btnGuardar.disabled = true;
+        btnEnviarInventario.disabled = true;
         btnGuardar.innerHTML = `<span class="material-symbols-outlined animate-spin">refresh</span> Procesando...`;
+        btnEnviarInventario.innerHTML = `<span class="material-symbols-outlined animate-spin">refresh</span> Enviando...`;
 
         const response = await fetch(`${API_BASE}/inventario/paloteo`, {
             method: 'POST',
@@ -543,8 +566,8 @@ btnGuardar.addEventListener('click', async () => {
 
         if (response.ok) {
             alert(`✅ ¡Inventario Guardado!\n${result.mensaje}`);
-            // Limpiar y resetear
-            document.getElementById('observaciones-paloteo').value = '';
+            inputObservaciones.value = '';
+            cerrarDialogoObservaciones();
             iniciarDashboard(); // Recargar para mostrar que ya no hay pendientes
         } else {
             alert(`❌ Error del servidor: ${result.detail || "Error desconocido"}`);
@@ -553,8 +576,35 @@ btnGuardar.addEventListener('click', async () => {
         alert("❌ Error de red al intentar guardar.");
     } finally {
         btnGuardar.disabled = false;
-        btnGuardar.innerHTML = `<span class="material-symbols-outlined">save</span> Confirmar Inventario`;
+        btnEnviarInventario.disabled = false;
+        btnGuardar.innerHTML = textoOriginalConfirmar;
+        btnEnviarInventario.innerHTML = textoOriginalEnviar;
     }
+}
+
+btnGuardar.addEventListener('click', () => {
+    abrirDialogoObservaciones();
+});
+
+btnCancelarObservaciones.addEventListener('click', () => {
+    cerrarDialogoObservaciones();
+});
+
+observacionesOverlay.addEventListener('click', () => {
+    cerrarDialogoObservaciones();
+});
+
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !observacionesDialog.classList.contains('hidden')) {
+        cerrarDialogoObservaciones();
+    }
+});
+
+btnEnviarInventario.addEventListener('click', async () => {
+    const observaciones = inputObservaciones.value.trim() || null;
+    const payload = construirPayloadInventario(observaciones);
+    if (!payload) return;
+    await enviarInventario(payload);
 });
 
 // ==========================================
