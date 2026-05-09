@@ -18,6 +18,15 @@
     <meta name="apple-mobile-web-app-title" content="BackStage">
     <link rel="apple-touch-icon" href="/assets/icons/apple-icon-180x180.png">
 
+    <!-- Performance: acelerar descarga de fuentes externas -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <script>
+        // Evita mostrar ligaduras (logout/save/history) antes de que cargue Material Symbols.
+        document.documentElement.classList.add('icons-pending');
+    </script>
+
     <!-- Integración de Google Material Symbols & Space Grotesk -->
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet" />
@@ -137,6 +146,14 @@
     <style>
         /* Alinear iconos verticalmente */
         .material-symbols-outlined { vertical-align: middle; }
+
+        html.icons-pending .material-symbols-outlined {
+            visibility: hidden;
+        }
+
+        html.icons-ready .material-symbols-outlined {
+            visibility: visible;
+        }
         
         /* Corregir el fondo blanco de autocompletado en Chrome para que siga siendo oscuro (Electric Industrial) */
         input:-webkit-autofill,
@@ -526,7 +543,26 @@
         </nav>
     </div>
 
-    <script src="/assets/app.js?v=7.7"></script>
+    <script src="/assets/app.js?v=7.8"></script>
+
+    <script>
+        (function () {
+            function marcarIconosListos() {
+                document.documentElement.classList.remove('icons-pending');
+                document.documentElement.classList.add('icons-ready');
+            }
+
+            if (!('fonts' in document) || !document.fonts.load) {
+                marcarIconosListos();
+                return;
+            }
+
+            Promise.race([
+                document.fonts.load('24px "Material Symbols Outlined"'),
+                new Promise((resolve) => setTimeout(resolve, 1800))
+            ]).finally(marcarIconosListos);
+        })();
+    </script>
 
     <!-- Trigger aleatorio del Glitch -->
     <script>
