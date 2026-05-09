@@ -373,9 +373,9 @@ function renderizarProductos(productos) {
                     <div class="flex-1 flex items-center justify-between gap-sm border-l border-outline-variant pl-sm min-w-0">
                         <span class="text-label-mono uppercase tracking-widest text-on-surface-variant shrink-0">Sistema (Ideal)</span>
                         <div class="flex items-center gap-sm sm:gap-md text-on-surface min-w-0">
-                            <span class="shrink-0">${parseFloat(p.stock_ideal_unidades).toFixed(0)} bot</span>
+                            <span class="w-16 text-right">${parseFloat(p.stock_ideal_unidades).toFixed(0)} bot</span>
                             <span class="text-outline-variant">|</span>
-                            <span class="shrink-0">${parseFloat(p.stock_ideal_onzas).toFixed(2)} oz</span>
+                            <span class="w-20 text-right">${parseFloat(p.stock_ideal_onzas).toFixed(2)} oz</span>
                         </div>
                     </div>
                 </div>
@@ -387,9 +387,9 @@ function renderizarProductos(productos) {
                     <div class="flex-1 flex items-center justify-between gap-sm border-l border-outline-variant pl-sm min-w-0">
                         <span class="text-label-mono uppercase tracking-widest" style="color: var(--semantic-action)">Barra (Real)</span>
                         <div class="flex items-center gap-sm sm:gap-md" style="color: var(--semantic-action)">
-                            <span class="shrink-0"><span id="val-paq-${p.id_producto}">0</span> bot</span>
+                            <span class="w-16 text-right"><span id="val-paq-${p.id_producto}">0</span> bot</span>
                             <span class="text-outline-variant">|</span>
-                            <span class="shrink-0"><span id="val-det-${p.id_producto}">0.00</span> oz</span>
+                            <span class="w-20 text-right"><span id="val-det-${p.id_producto}">0.00</span> oz</span>
                         </div>
                     </div>
                 </div>
@@ -401,9 +401,9 @@ function renderizarProductos(productos) {
                     <div class="flex-1 flex items-center justify-between gap-sm border-l" style="border-color: var(--semantic-info)" class="pl-sm min-w-0">
                         <span class="text-label-mono uppercase tracking-widest" style="color: var(--semantic-info)">Delta (R-I)</span>
                         <div class="flex items-center gap-sm sm:gap-md min-w-0">
-                            <div id="dif-paq-${p.id_producto}" class="min-w-[96px] flex justify-end"></div>
+                            <div id="dif-paq-${p.id_producto}" class="w-16 text-right"></div>
                             <span style="color: var(--semantic-info); opacity: 0.5">|</span>
-                            <div id="dif-det-${p.id_producto}" class="min-w-[110px] flex justify-end"></div>
+                            <div id="dif-det-${p.id_producto}" class="w-20 text-right"></div>
                         </div>
                     </div>
                 </div>
