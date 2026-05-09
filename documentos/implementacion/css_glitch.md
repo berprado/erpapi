@@ -69,31 +69,7 @@ Controla la **duración del ciclo completo** de las animaciones de glitch.
 
 ---
 
-# 2) Parámetro de activación
-
-## `glitchToggle`
-
-Es el checkbox que activa o desactiva el glitch.
-
-Internamente agrega o quita esta clase del `<body>`:
-
-```css
-body.glitch-on
-```
-
-Cuando esa clase está activa:
-
-* aparecen las capas glitch
-* aparecen también las scanlines
-
-Cuando no está activa:
-
-* el logo queda solo con glow fijo
-* el glitch desaparece
-
----
-
-# 3) Cómo está armado el glitch internamente
+# 2) Cómo está armado el glitch internamente
 
 El efecto no se hace sobre una sola imagen, sino sobre **varias copias de la misma imagen superpuestas**.
 
@@ -116,7 +92,7 @@ El efecto no se hace sobre una sola imagen, sino sobre **varias copias de la mis
 
 ---
 
-# 4) Clases internas del glitch
+# 3) Clases internas del glitch
 
 ## `.glitch-layer`
 
@@ -219,7 +195,7 @@ Al hacerlas diferentes:
 
 ---
 
-# 5) Las animaciones reales del glitch
+# 4) Las animaciones reales del glitch
 
 ---
 
@@ -262,7 +238,7 @@ Eso produce el efecto de:
 
 ---
 
-# 6) Scanlines
+# 5) Scanlines
 
 ## `.scanlines`
 
@@ -312,33 +288,8 @@ Eso hace que las líneas solo aparezcan cuando activas el modo glitch.
 
 ---
 
-# 7) Resumen rápido de cada control que ve el usuario
 
-## Controles de glitch visibles en la interfaz
-
-### **Activar efecto glitch**
-
-Enciende o apaga:
-
-* capas duplicadas de color
-* cortes por franjas
-* scanlines
-
-### **Desplazamiento Glitch**
-
-Controla cuánto se separan las copias del logo.
-
-### **Opacidad Glitch**
-
-Controla qué tan visibles son las capas glitch.
-
-### **Velocidad Glitch**
-
-Controla la rapidez del ciclo de animación.
-
----
-
-# 8) En una frase: ¿cómo funciona el glitch?
+# 6) En una frase: ¿cómo funciona el glitch?
 
 El efecto glitch se logra así:
 
@@ -352,7 +303,7 @@ El efecto glitch se logra así:
 
 ---
 
-# 9) Si quieres tunearlo, estas son buenas guías
+# 7) Si quieres tunearlo, estas son buenas guías
 
 ## Glitch más sutil
 
