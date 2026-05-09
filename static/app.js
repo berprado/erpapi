@@ -384,7 +384,7 @@ function renderizarProductos(productos) {
                     <div class="w-10 flex justify-center" style="color: var(--semantic-action)">
                         <span class="material-symbols-outlined">local_bar</span>
                     </div>
-                    <div class="flex-1 flex items-center justify-between gap-sm border-l border-outline-variant pl-sm min-w-0">
+                    <div class="flex-1 flex items-center justify-between gap-sm border-l border-outline-variant pl-md min-w-0">
                         <span class="text-label-mono uppercase tracking-widest" style="color: var(--semantic-action)">Barra (Real)</span>
                         <div class="flex items-center gap-sm sm:gap-md" style="color: var(--semantic-action)">
                             <span class="w-16 text-right"><span id="val-paq-${p.id_producto}">0</span> bot</span>
@@ -398,7 +398,7 @@ function renderizarProductos(productos) {
                     <div class="w-10 flex justify-center" style="color: var(--semantic-info)">
                         <span class="material-symbols-outlined">stacked_line_chart</span>
                     </div>
-                    <div class="flex-1 flex items-center justify-between gap-sm border-l" style="border-color: var(--semantic-info)" class="pl-sm min-w-0">
+                    <div class="flex-1 flex items-center justify-between gap-sm border-l" style="border-color: var(--semantic-info)" class="pl-md min-w-0">
                         <span class="text-label-mono uppercase tracking-widest" style="color: var(--semantic-info)">Delta (R-I)</span>
                         <div class="flex items-center gap-sm sm:gap-md min-w-0">
                             <div id="dif-paq-${p.id_producto}" class="w-16 text-right"></div>
