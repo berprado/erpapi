@@ -1,8 +1,8 @@
 # Archivos de entorno
 .env
 
-# Configuración local de VS Code con credenciales (MCP, API keys)
-.vscode/mcp.json
+# Configuración local de VS Code (personal, no se comparte)
+.vscode/
 
 # Archivos de certificados y claves privadas
 *.pem
@@ -12,7 +12,7 @@
 *.zip
 
 # Archivos de texto temporales o de respaldo
-*.txt
+# (No usar *.txt genérico: excluiría requirements.txt y otros archivos de proyecto)
 
 # Directorios de entornos virtuales
 venv/
