@@ -367,10 +367,10 @@ function renderizarProductos(productos) {
             <!-- Resumen superior: SISTEMA / BARRA / DELTA (Semantic Brand Tokens) -->
             <div class="space-y-sm mb-lg text-data-tabular font-semibold">
                 <div class="flex items-center card-row-system border px-sm py-sm rounded-md gap-sm">
-                    <div class="w-10 flex justify-center text-on-surface-variant shrink-0">
+                    <div class="w-10 flex items-center justify-center text-on-surface-variant">
                         <span class="material-symbols-outlined">computer</span>
                     </div>
-                    <div class="flex-1 flex items-center justify-between gap-sm border-l border-outline-variant pl-sm min-w-0">
+                    <div class="flex-1 flex items-center justify-between gap-sm border-l border-outline-variant pl-md min-w-0">
                         <span class="text-label-mono uppercase tracking-widest text-on-surface-variant shrink-0">Sistema (Ideal)</span>
                         <div class="flex items-center gap-sm sm:gap-md text-on-surface min-w-0">
                             <span class="w-16 text-right">${parseFloat(p.stock_ideal_unidades).toFixed(0)} bot</span>
@@ -381,7 +381,7 @@ function renderizarProductos(productos) {
                 </div>
 
                 <div class="flex items-center card-row-bar border px-sm py-sm rounded-md gap-sm">
-                    <div class="w-10 flex justify-center" style="color: var(--semantic-action)">
+                    <div class="w-10 flex items-center justify-center" style="color: var(--semantic-action)">
                         <span class="material-symbols-outlined">local_bar</span>
                     </div>
                     <div class="flex-1 flex items-center justify-between gap-sm border-l border-outline-variant pl-md min-w-0">
@@ -395,7 +395,7 @@ function renderizarProductos(productos) {
                 </div>
 
                 <div class="flex items-center card-row-delta border px-sm py-sm rounded-md gap-sm">
-                    <div class="w-10 flex justify-center" style="color: var(--semantic-info)">
+                    <div class="w-10 flex items-center justify-center" style="color: var(--semantic-info)">
                         <span class="material-symbols-outlined">stacked_line_chart</span>
                     </div>
                     <div class="flex-1 flex items-center justify-between gap-sm border-l" style="border-color: var(--semantic-info)" class="pl-md min-w-0">
