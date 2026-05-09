@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BackStage — Vista Ejecutiva · Brand System</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Barlow+Condensed:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Sharp:opsz,wght,FILL,GRAD@24,300,0,0" rel="stylesheet">
+<style>
+  :root {
+    /* BackStage Brand System — Ejecutivo */
+    --bg-base:  #0B0F12;
+    --bg-panel: #111820820;
+    --bg-card:  #151B20;
+    --bg-table: #0F1419;
+    --bg-row:   #131A21;
+
+    --green:    #48E898;
+    --pink:     #E00078;
+    --blue:     #2DD4FF;
+    --gold:     #C9A646;
+
+    --warning:  #F59E0B;
+    --danger:   #EF4444;
+
+    --border:   #263238;
+    --text:     #F2F2F2;
+    --muted:    #9CA3AF;
+    --soft:     #6B7280;
+
+    --font-ui:  'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-title:'Barlow Condensed', sans-serif;
+    --font-data:'JetBrains Mono', monospace;
+
+    --radius-card: 14px;
+    --radius-panel: 18px;
+    --shadow-panel: 0 18px 60px rgba(0,0,0,.32);
+    --glow-green: 0 0 18px rgba(72,232,152,.18);
+    --glow-pink:  0 0 18px rgba(224,0,120,.16);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  .material-symbols-sharp { font-size: 14px; font-variation-settings:'FILL' 0,'wght' 300,'GRAD' 0,'opsz' 24; vertical-align: middle; }
+  body { background: var(--bg-base); color: var(--text); font-family: var(--font-ui); min-height: 100vh; padding: 20px; }
+  .wrapper { max-width: 960px; margin: 0 auto; }
+
+  /* ── HEADER ── */
+  .header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 16px; gap: 12px; flex-wrap: wrap; }
+  .title { font-size: 22px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; line-height: 1.1; }
+  .subtitle { font-size: 13px; color: var(--muted); margin-top: 4px; letter-spacing: 0.02em; }
+  .header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .export-group { display: flex; gap: 4px; }
+
+  /* ── BUTTONS ── */
+  .btn-export {
+    position: relative; display: flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; border-radius: 5px; border: 1px solid var(--border);
+    background: var(--bg-card); color: var(--muted); cursor: pointer; transition: all 0.2s;
+  }
+  .btn-export:hover { border-color: var(--gold); color: var(--gold); }
+  .btn-export.active { border-color: var(--gold); color: var(--gold); }
+  .btn-icon-sm {
+    position: relative; display: flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; border-radius: 4px; border: 1px solid var(--border);
+    background: transparent; color: #6B7280; cursor: pointer; transition: all 0.18s; flex-shrink: 0;
+  }
+  .btn-icon-sm:hover { border-color: var(--gold); color: var(--gold); }
+  .btn-icon-sm .material-symbols-sharp { font-size: 13px; }
+  .btn-ver {
+    display: flex; align-items: center; gap: 5px;
+    padding: 5px 10px; border-radius: 4px;
+    border: 1px solid var(--border); background: transparent;
+    color: var(--muted); font-family: var(--font-ui); font-size: 12px;
+    font-weight: 600; letter-spacing: 0.04em; cursor: pointer; transition: all 0.18s;
+  }
+  .btn-ver:hover { border-color: var(--gold); color: var(--gold); }
+  .btn-ver .material-symbols-sharp { font-size: 13px; }
+  [data-tip] { position: relative; }
+  [data-tip]::after {
+    content: attr(data-tip); position: absolute; bottom: calc(100% + 6px); left: 50%;
+    transform: translateX(-50%); background: #111820; color: var(--text);
+    font-family: var(--font-ui); font-size: 11px; white-space: nowrap;
+    padding: 3px 7px; border-radius: 3px; opacity: 0; pointer-events: none;
+    transition: opacity 0.15s; z-index: 20;
+  }
+  [data-tip]:hover::after { opacity: 1; }
+
+  /* ── KPI HERO ── */
+  .kpi-hero { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin-bottom: 12px; }
+  .kpi-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; position: relative; overflow: hidden; transition: border-color 0.2s; }
+  .kpi-card:hover { border-color: #263238; }
+  .kpi-card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; border-radius:8px 8px 0 0; }
+  .kpi-card.gold::before  { background: var(--gold); }
+  .kpi-card.green::before { background: var(--green); }
+  .kpi-card.pink::before  { background: var(--pink); }
+  .kpi-card.blue::before  { background: #2DD4FF; }
+  .kpi-icon { display:block; margin-bottom:6px; }
+  .kpi-icon .material-symbols-sharp { font-size:16px; color:#263238; }
+  .kpi-label { font-size:11px; color:var(--muted); letter-spacing:.06em; text-transform:uppercase; }
+  .kpi-main { font-family:var(--font-data); font-size:20px; font-weight:600; margin-top:4px; line-height:1; }
+  .kpi-main.gold  { color:var(--gold); }
+  .kpi-main.green { color:var(--green); }
+  .kpi-main.pink  { color:var(--pink); }
+  .kpi-main.blue  { color:#2DD4FF; }
+  .kpi-badge { display:inline-block; margin-top:6px; font-family:var(--font-data); font-size:14px; font-weight:600; padding:2px 8px; border-radius:4px; line-height:1.4; }
+  .kpi-badge.green { background:rgba(71,219,149,.12); color:var(--green); }
+  .kpi-badge.pink  { background:rgba(213,0,117,.12);  color:var(--pink); }
+  .kpi-badge.gold  { background:rgba(240,180,41,.12);  color:var(--gold); }
+  .kpi-badge.blue  { background:rgba(96,165,250,.12);  color:#2DD4FF; }
+  .kpi-sub { font-size:10px; color:var(--muted); margin-top:4px; font-family:var(--font-ui); }
+
+  /* ── RANKING SUMMARY ── */
+  .ranking-card { background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:12px 16px; margin-bottom:12px; }
+  .ranking-inner { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .rank-stat { text-align:center; padding:8px; background:#0F1419; border-radius:6px; border:1px solid var(--border); }
+  .rank-stat-val { font-family:var(--font-data); font-size:15px; font-weight:600; color:var(--gold); }
+  .rank-stat-lbl { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin-top:2px; }
+  .rank-stat-sub { font-size:10px; color:#6B7280; margin-top:2px; font-family:var(--font-ui); }
+
+  /* ── HERO SLIDER ── */
+  .slider-section { margin-bottom:12px; }
+  .slider-wrap { background:var(--bg-card); border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+  /* Content row: arrow | slide | arrow */
+  .slider-content-row { display:flex; align-items:stretch; }
+  .slider-arrow-side {
+    display:flex; align-items:center; justify-content:center;
+    width:32px; flex-shrink:0; cursor:pointer;
+    border:none; background:transparent; color:#263238;
+    transition:color 0.18s; padding:0;
+  }
+  .slider-arrow-side:hover { color:var(--gold); }
+  .slider-arrow-side .material-symbols-sharp { font-size:20px; }
+  .slider-viewport { flex:1; overflow:hidden; min-width:0; }
+  .slider-track { display:flex; transition:transform 0.42s cubic-bezier(.4,0,.2,1); will-change:transform; }
+  .slider-card {
+    min-width:100%; padding:14px 8px 8px; display:flex;
+    align-items:flex-start; justify-content:space-between; gap:12px; position:relative;
+  }
+  .slider-cat-name { font-size:clamp(18px,5vw,28px); font-weight:700; letter-spacing:.04em; text-transform:uppercase; line-height:1; }
+  .slider-cat-rec  { font-family:var(--font-data); font-size:clamp(16px,4vw,24px); font-weight:600; color:var(--gold); margin-top:4px; }
+  .slider-cat-meta { font-size:12px; color:var(--muted); margin-top:4px; }
+  .slider-cat-right { text-align:right; flex-shrink:0; }
+  .slider-cat-margen { font-family:var(--font-data); font-size:13px; color:var(--green); }
+  .slider-cat-pc    { font-family:var(--font-data); font-size:12px; margin-top:3px; }
+  .slider-counter-inline {
+    position:absolute; bottom:6px; right:8px;
+    font-family:var(--font-data); font-size:10px; color:#263238; letter-spacing:.04em;
+  }
+  /* Bottom nav: only dots */
+  .slider-nav { padding:6px 12px 10px; border-top:1px solid var(--border); display:flex; align-items:center; justify-content:center; }
+  .slider-dots { display:flex; gap:7px; align-items:center; flex-wrap:wrap; justify-content:center; }
+  .slider-dot {
+    width:8px; height:8px; border-radius:50%; border:1px solid transparent;
+    cursor:pointer; transition:all 0.22s; opacity:0.35; position:relative;
+  }
+  .slider-dot.active { opacity:1; transform:scale(1.35); }
+  .slider-dot.active { box-shadow: 0 0 6px 2px var(--dot-glow, #fff); }
+  .slider-dot:hover  { opacity:0.75; }
+  .slider-dot::after {
+    content:attr(data-tip); position:absolute; bottom:calc(100% + 6px); left:50%;
+    transform:translateX(-50%); background:#111820; color:var(--text);
+    font-family:var(--font-ui); font-size:11px; white-space:nowrap;
+    padding:3px 8px; border-radius:3px; opacity:0; pointer-events:none;
+    transition:opacity .15s; z-index:20;
+  }
+  .slider-dot:hover::after { opacity:1; }
+
+  /* ── MID ROW ── */
+  .mid-row { display:grid; grid-template-columns:1fr 1.6fr; gap:12px; margin-bottom:12px; }
+  .chart-card { background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:16px; position:relative; }
+  .chart-card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; gap:8px; }
+  .chart-card-title { font-size:11px; color:var(--muted); letter-spacing:.06em; text-transform:uppercase; }
+  .chart-card-actions { display:flex; gap:4px; align-items:center; flex-shrink:0; }
+  #chart-waterfall { width:100%; height:240px; }
+  #chart-margen    { width:100%; height:240px; }
+  #chart-margen-full { width:100%; }
+
+  /* ── MODAL UNIVERSAL ── */
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.78); backdrop-filter:blur(5px); z-index:100; align-items:center; justify-content:center; padding:20px; }
+  .modal-overlay.open { display:flex; }
+  .modal {
+    background:#151B20; border:1px solid #263238; border-radius:10px;
+    width:100%; max-width:680px; padding:24px 28px;
+    position:relative; animation:modalIn .2s ease;
+    display:flex; flex-direction:column; max-height:88vh;
+  }
+  @keyframes modalIn { from{opacity:0;transform:translateY(12px) scale(.98)} to{opacity:1;transform:translateY(0) scale(1)} }
+  .modal-close { position:absolute; top:14px; right:14px; background:transparent; border:none; color:var(--muted); cursor:pointer; padding:4px; border-radius:4px; transition:color .15s; display:flex; z-index:2; }
+  .modal-close:hover { color:var(--text); }
+  .modal-close .material-symbols-sharp { font-size:18px; }
+  .modal-header { margin-bottom:14px; flex-shrink:0; }
+  .modal-header-row { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .modal-title { font-size:16px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--gold); display:flex; align-items:center; gap:8px; }
+  .modal-title .material-symbols-sharp { font-size:17px; }
+  .modal-subtitle { font-size:12px; color:var(--muted); margin-top:4px; }
+  .modal-tabs { display:flex; gap:4px; background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:3px; flex-shrink:0; }
+  .modal-tab { padding:4px 10px; border-radius:4px; border:none; background:transparent; color:var(--muted); font-family:var(--font-ui); font-size:12px; font-weight:600; cursor:pointer; transition:all .18s; letter-spacing:.03em; }
+  .modal-tab.active { background:var(--border); color:var(--text); }
+  .modal-body { overflow-y:auto; flex:1; padding-right:2px; }
+  .modal-body::-webkit-scrollbar { width:4px; }
+  .modal-body::-webkit-scrollbar-track { background:#111820; border-radius:2px; }
+  .modal-body::-webkit-scrollbar-thumb { background:#263238; border-radius:2px; }
+  .modal-section { margin-bottom:18px; }
+  .modal-section:last-child { margin-bottom:0; }
+  .modal-section-title { font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin-bottom:8px; padding-bottom:5px; border-bottom:1px solid var(--border); }
+  .modal-section p { font-size:13px; color:#9CA3AF; line-height:1.6; }
+  .modal-pill { display:inline-flex; padding:2px 8px; border-radius:20px; font-family:var(--font-data); font-size:11px; margin:2px 3px; }
+  .modal-pill.green { background:rgba(71,219,149,.12); color:var(--green); }
+  .modal-pill.gold  { background:rgba(240,180,41,.12);  color:var(--gold); }
+  .modal-pill.pink  { background:rgba(213,0,117,.12);   color:var(--pink); }
+
+  /* Modal table */
+  .modal-table-wrap { overflow-x:auto; }
+  .modal-table { width:100%; border-collapse:collapse; font-size:12px; }
+  .modal-table th { background:#111820; color:var(--muted); font-family:var(--font-ui); font-size:10px; letter-spacing:.06em; text-transform:uppercase; padding:7px 10px; text-align:right; border-bottom:1px solid var(--border); cursor:pointer; transition:color .15s; position:sticky; top:0; z-index:2; }
+  .modal-table th:hover { color:var(--text); }
+  .modal-table th:first-child { text-align:left; }
+  .modal-table td { padding:6px 10px; border-bottom:1px solid #0f0f0f; font-family:var(--font-data); font-size:11px; text-align:right; color:var(--text); }
+  .modal-table td:first-child { text-align:left; font-family:var(--font-ui); font-size:12px; }
+  .modal-table tr:hover td { background:#0a0a0a; }
+  .pc-good { color:var(--green); }
+  .pc-ok   { color:var(--gold); }
+  .pc-bad  { color:var(--pink); }
+
+  .note { font-size:11px; color:#6B7280; margin-top:10px; letter-spacing:.04em; text-align:right; }
+  .note span { color:#9CA3AF; }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width:640px) {
+    .kpi-hero { grid-template-columns:repeat(2,1fr); }
+    .mid-row  { grid-template-columns:1fr; }
+    .ranking-inner { grid-template-columns:repeat(3,1fr); }
+    .title { font-size:18px; }
+    #chart-waterfall { height:200px; }
+    #chart-margen    { height:200px; }
+    .modal { padding:18px 16px; }
+    .modal-header-row { flex-direction:column; align-items:flex-start; gap:8px; }
+  }
+  @media (orientation:landscape) and (max-height:500px) {
+    .kpi-hero { grid-template-columns:repeat(4,1fr); }
+    #chart-waterfall, #chart-margen { height:160px; }
+    .slider-card { padding:10px 8px 6px; }
+  }
+
+  /* ── BACKSTAGE BRAND HEADER ── */
+  .brand-block { display:flex; align-items:center; gap:14px; min-width:0; }
+  .brand-mini {
+    min-width:118px; height:34px; border:1px solid rgba(72,232,152,.25);
+    border-radius:999px; display:flex; align-items:center; justify-content:center;
+    background:rgba(5,5,5,.34); box-shadow:var(--glow-green);
+    font-family:var(--font-title); font-size:20px; letter-spacing:-.02em; line-height:1;
+  }
+  .brand-mini span { color:var(--green); font-weight:700; text-shadow:0 0 10px rgba(72,232,152,.45); }
+  .brand-mini strong { color:var(--pink); font-weight:400; text-shadow:0 0 10px rgba(224,0,120,.45); }
+
+  body {
+    background:
+      radial-gradient(circle at 10% 0%, rgba(224,0,120,.10), transparent 28%),
+      radial-gradient(circle at 90% 10%, rgba(72,232,152,.10), transparent 30%),
+      var(--bg-base) !important;
+  }
+
+  .wrapper { max-width:1120px !important; }
+  .title {
+    font-family:var(--font-title) !important;
+    font-size:26px !important;
+    letter-spacing:.06em !important;
+    line-height:1 !important;
+  }
+
+  .kpi-card, .ranking-card, .slider-wrap, .chart-card {
+    background:var(--bg-card) !important;
+    border-color:var(--border) !important;
+    border-radius:var(--radius-card) !important;
+    box-shadow:var(--shadow-panel);
+  }
+
+  .kpi-card:hover, .ranking-card:hover, .slider-wrap:hover, .chart-card:hover {
+    border-color:rgba(72,232,152,.22) !important;
+  }
+
+  .rank-stat, .modal-tabs {
+    background:var(--bg-table) !important;
+    border-color:var(--border) !important;
+  }
+
+  .modal {
+    background:var(--bg-card) !important;
+    border-color:var(--border) !important;
+    border-radius:var(--radius-panel) !important;
+    box-shadow:0 30px 90px rgba(0,0,0,.52);
+  }
+
+  .modal-overlay { background:rgba(3,7,10,.82) !important; }
+  .modal-title { color:var(--green) !important; }
+  .chart-card-title, .kpi-label, .rank-stat-lbl { color:var(--muted) !important; }
+  .kpi-icon .material-symbols-sharp { color:var(--soft) !important; }
+
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="brand-block">
+      <div class="brand-mini"><span>BACK</span><strong>STAGE</strong></div>
+      <div>
+        <div class="title">Vista Ejecutiva</div>
+        <div class="subtitle">KPIs consolidados · Categorías · Análisis — sesión actual</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="export-group">
+        <button class="btn-export" data-tip="Acerca de este panel" onclick="toggleModal('modal-info')">
+          <span class="material-symbols-sharp">info</span>
+        </button>
+        <button class="btn-export" data-tip="Descargar CSV" onclick="exportCSV()">
+          <span class="material-symbols-sharp">csv</span>
+        </button>
+        <button class="btn-export" data-tip="Descargar Excel" onclick="exportXLSX()">
+          <span class="material-symbols-sharp">table</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- KPI HERO -->
+  <div class="kpi-hero">
+    <div class="kpi-card green">
+      <span class="kpi-icon"><span class="material-symbols-sharp">payments</span></span>
+      <div class="kpi-label">Recaudación</div>
+      <div class="kpi-main green" id="kpi-rec">—</div>
+      <div class="kpi-sub" id="kpi-rec-sub">— productos</div>
+    </div>
+    <div class="kpi-card pink">
+      <span class="kpi-icon"><span class="material-symbols-sharp">receipt_long</span></span>
+      <div class="kpi-label">COGS / Pour Cost</div>
+      <div class="kpi-main pink" id="kpi-cogs">—</div>
+      <div class="kpi-badge pink" id="kpi-pc-badge">—</div>
+      <div class="kpi-sub">costo operacional total</div>
+    </div>
+    <div class="kpi-card green">
+      <span class="kpi-icon"><span class="material-symbols-sharp">trending_up</span></span>
+      <div class="kpi-label">Utilidad / Margen</div>
+      <div class="kpi-main green" id="kpi-util">—</div>
+      <div class="kpi-badge green" id="kpi-mrg-badge">—</div>
+      <div class="kpi-sub">margen bruto operacional</div>
+    </div>
+    <div class="kpi-card blue">
+      <span class="kpi-icon"><span class="material-symbols-sharp">bar_chart_4_bars</span></span>
+      <div class="kpi-label">Ítems Vendidos</div>
+      <div class="kpi-main blue" id="kpi-items">—</div>
+      <div class="kpi-sub" id="kpi-items-sub">— promedio / ítem</div>
+    </div>
+  </div>
+
+  <!-- RANKING SUMMARY (encima del slider) -->
+  <div class="ranking-card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <div style="font-size:11px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;">Resumen de Recaudación</div>
+      <button class="btn-ver" onclick="openModalRanking()">
+        <span class="material-symbols-sharp">open_in_full</span>
+        Ver ranking completo
+      </button>
+    </div>
+    <div class="ranking-inner" id="ranking-summary"></div>
+  </div>
+
+  <!-- HERO SLIDER -->
+  <div class="slider-section">
+    <div class="slider-wrap">
+      <div class="slider-content-row">
+        <button class="slider-arrow-side" onclick="sliderMove(-1)" aria-label="Anterior">
+          <span class="material-symbols-sharp">chevron_left</span>
+        </button>
+        <div class="slider-viewport">
+          <div class="slider-track" id="slider-track"></div>
+        </div>
+        <button class="slider-arrow-side" onclick="sliderMove(1)" aria-label="Siguiente">
+          <span class="material-symbols-sharp">chevron_right</span>
+        </button>
+      </div>
+      <div class="slider-nav">
+        <div class="slider-dots" id="slider-dots"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MID ROW: WATERFALL + TOP MARGEN -->
+  <div class="mid-row">
+
+    <!-- WATERFALL -->
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <div class="chart-card-title">Ventas · COGS · Utilidad</div>
+        <div class="chart-card-actions">
+          <button class="btn-icon-sm" data-tip="Descargar PNG" onclick="exportChartPNG('waterfall')">
+            <span class="material-symbols-sharp">image</span>
+          </button>
+        </div>
+      </div>
+      <div id="chart-waterfall"></div>
+    </div>
+
+    <!-- TOP MARGEN -->
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <div class="chart-card-title">Top productos por margen</div>
+        <div class="chart-card-actions">
+          <button class="btn-icon-sm" data-tip="Ver gráfico completo" onclick="openModalMargen('chart')">
+            <span class="material-symbols-sharp">open_in_full</span>
+          </button>
+          <button class="btn-icon-sm" data-tip="Ver tabla completa" onclick="openModalMargen('table')">
+            <span class="material-symbols-sharp">table_rows</span>
+          </button>
+          <button class="btn-icon-sm" data-tip="Descargar PNG (top 5)" onclick="exportChartPNG('margen')">
+            <span class="material-symbols-sharp">image</span>
+          </button>
+        </div>
+      </div>
+      <div id="chart-margen"></div>
+    </div>
+  </div>
+
+  <div class="note">* BackApp2026 <span>·</span> datos de sesión</div>
+</div>
+
+<!-- ══ MODALES ══════════════════════════════════════════════ -->
+
+<!-- INFO -->
+<div class="modal-overlay" id="modal-info" onclick="handleOverlayClick(event,'modal-info')">
+  <div class="modal" style="max-width:520px">
+    <button class="modal-close" onclick="closeModal('modal-info')"><span class="material-symbols-sharp">close</span></button>
+    <div class="modal-header">
+      <div class="modal-title"><span class="material-symbols-sharp">dashboard</span>Vista Ejecutiva</div>
+      <div class="modal-subtitle">Panel consolidado de KPIs para lectura rápida de alto nivel</div>
+    </div>
+    <div class="modal-body">
+      <div class="modal-section">
+        <div class="modal-section-title">Componentes</div>
+        <p>
+          <strong style="color:var(--text)">KPIs superiores</strong> — recaudación, COGS/pour cost, utilidad/margen e ítems vendidos.<br><br>
+          <strong style="color:var(--text)">Resumen de recaudación</strong> — producto líder, promedio y total. Acceso al ranking completo.<br><br>
+          <strong style="color:var(--text)">Slider de categorías</strong> — cada categoría con su recaudación, margen y pour cost.<br><br>
+          <strong style="color:var(--text)">Waterfall</strong> — relación visual Ventas → COGS → Utilidad.<br><br>
+          <strong style="color:var(--text)">Top por margen</strong> — los 5 productos con mayor margen. Botones para ver gráfico completo o tabla.
+        </p>
+      </div>
+      <div class="modal-section">
+        <div class="modal-section-title">Pour Cost</div>
+        <p style="margin-bottom:8px">Porcentaje del precio de venta destinado a cubrir el costo del producto.</p>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <span class="modal-pill green">≤ 20% · Excelente</span>
+          <span class="modal-pill gold">21–35% · Aceptable</span>
+          <span class="modal-pill pink">&gt; 35% · Revisar</span>
+        </div>
+      </div>
+      <div class="modal-section">
+        <div class="modal-section-title">Fuente de datos</div>
+        <p>BackApp2026 · fetch_grouped_sales.php · Datos de sesión actual.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MARGEN COMPLETO (chart + table tabs) -->
+<div class="modal-overlay" id="modal-margen" onclick="handleOverlayClick(event,'modal-margen')">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('modal-margen')"><span class="material-symbols-sharp">close</span></button>
+    <div class="modal-header">
+      <div class="modal-header-row">
+        <div>
+          <div class="modal-title"><span class="material-symbols-sharp">trending_up</span>Ranking por Margen Real</div>
+          <div class="modal-subtitle" id="modal-margen-sub">Todos los productos · mayor a menor margen</div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <div class="modal-tabs">
+            <button class="modal-tab active" id="mtab-chart" onclick="setMargenTab('chart')">
+              <span class="material-symbols-sharp" style="font-size:12px">bar_chart</span> Gráfico
+            </button>
+            <button class="modal-tab" id="mtab-table" onclick="setMargenTab('table')">
+              <span class="material-symbols-sharp" style="font-size:12px">table_rows</span> Tabla
+            </button>
+          </div>
+          <button class="btn-icon-sm" data-tip="Descargar PNG" id="btn-modal-png" onclick="exportModalMargenPNG()">
+            <span class="material-symbols-sharp">image</span>
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-body" id="modal-margen-body"></div>
+  </div>
+</div>
+
+<!-- RANKING COMPLETO -->
+<div class="modal-overlay" id="modal-ranking" onclick="handleOverlayClick(event,'modal-ranking')">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('modal-ranking')"><span class="material-symbols-sharp">close</span></button>
+    <div class="modal-header">
+      <div class="modal-title"><span class="material-symbols-sharp">bar_chart</span>Ranking Completo de Recaudación</div>
+      <div class="modal-subtitle" id="modal-ranking-sub">Todos los productos · mayor a menor recaudación</div>
+    </div>
+    <div class="modal-body" id="modal-ranking-body"></div>
+  </div>
+</div>
+
+<script>
+var chartWaterfall, chartMargen, chartMargenFull;
+var rawData = [];
+var TOTAL_REC = 0;
+var sliderIdx = 0;
+var sliderData = [];
+var sliderTimer = null;
+var margenTabMode = 'chart';
+
+// ── PALETA ────────────────────────────────────────────────────
+var CAT_PALETTE = {
+  'GINVIP':'#48E898','CERVEZAS':'#C9A646','FERNET':'#7A00FF','RON':'#F59E0B',
+  'WHISKYS':'#2DD4FF','SINGANI':'#E00078','COCTELES':'#48E898','GASEOSAS':'#9CA3AF',
+  'SHOT':'#E00078','TEQUILAS':'#48E898','TONICA ENERG':'#EF4444',
+  'AGUAS Y JUGOS':'#2DD4FF','LICOR':'#C9A646','CIGARRILLOS':'#EF4444'
+};
+function getCatColor(c){ return CAT_PALETTE[c]||'#9CA3AF'; }
+
+// ── DATASET ───────────────────────────────────────────────────
+var localData = [
+  {nombre_item_vendido:"V GEORGE FOSTER AZUL",categoria:"GINVIP",total_vendidos:39,recaudacion_real:2145,cogs_total:386.506,margen_real:1758.494,pour_cost_pct:18.019},
+  {nombre_item_vendido:"C JOHNNY WALKER BLACK",categoria:"WHISKYS",total_vendidos:2,recaudacion_real:1700,cogs_total:697.912,margen_real:1002.088,pour_cost_pct:41.054},
+  {nombre_item_vendido:"C FERNET BRANCA 750ML",categoria:"FERNET",total_vendidos:3,recaudacion_real:1140,cogs_total:313.268,margen_real:826.732,pour_cost_pct:27.48},
+  {nombre_item_vendido:"C HAVANA 7A 700ML",categoria:"RON",total_vendidos:2,recaudacion_real:900,cogs_total:342.846,margen_real:557.154,pour_cost_pct:38.094},
+  {nombre_item_vendido:"C 37 LENGUAS 1LT",categoria:"RON",total_vendidos:2,recaudacion_real:740,cogs_total:199.691,margen_real:540.309,pour_cost_pct:26.985},
+  {nombre_item_vendido:"CHOPP AMSTEL 500ML",categoria:"CERVEZAS",total_vendidos:17,recaudacion_real:680,cogs_total:145.86,margen_real:534.14,pour_cost_pct:21.45},
+  {nombre_item_vendido:"CHOPP AMSTEL 1LT",categoria:"CERVEZAS",total_vendidos:8,recaudacion_real:480,cogs_total:137.28,margen_real:342.72,pour_cost_pct:28.6},
+  {nombre_item_vendido:"C CASA REAL NEGRA 750ML",categoria:"SINGANI",total_vendidos:1,recaudacion_real:320,cogs_total:90.504,margen_real:229.496,pour_cost_pct:28.282},
+  {nombre_item_vendido:"JARRA COCA COLA",categoria:"GASEOSAS",total_vendidos:8,recaudacion_real:200,cogs_total:51.382,margen_real:148.618,pour_cost_pct:25.691},
+  {nombre_item_vendido:"C BRANCA 750ML MEDIA",categoria:"FERNET",total_vendidos:1,recaudacion_real:190,cogs_total:55.423,margen_real:134.577,pour_cost_pct:29.17},
+  {nombre_item_vendido:"V JOHNNY WALKER BLACK",categoria:"WHISKYS",total_vendidos:3,recaudacion_real:150,cogs_total:48.3,margen_real:101.7,pour_cost_pct:32.2},
+  {nombre_item_vendido:"V DAIQUIRI",categoria:"COCTELES",total_vendidos:3,recaudacion_real:135,cogs_total:15.818,margen_real:119.182,pour_cost_pct:11.717},
+  {nombre_item_vendido:"RED BULL",categoria:"TONICA ENERG",total_vendidos:3,recaudacion_real:120,cogs_total:55.718,margen_real:64.282,pour_cost_pct:46.432},
+  {nombre_item_vendido:"V MOJITO",categoria:"COCTELES",total_vendidos:2,recaudacion_real:90,cogs_total:9.577,margen_real:80.423,pour_cost_pct:10.641},
+  {nombre_item_vendido:"COCA COLA 500ML",categoria:"GASEOSAS",total_vendidos:4,recaudacion_real:80,cogs_total:21.833,margen_real:58.167,pour_cost_pct:27.292},
+  {nombre_item_vendido:"V JAGERMAISTER",categoria:"SHOT",total_vendidos:2,recaudacion_real:80,cogs_total:16.894,margen_real:63.106,pour_cost_pct:21.117},
+  {nombre_item_vendido:"V J CUERVO REPOSADO",categoria:"TEQUILAS",total_vendidos:2,recaudacion_real:80,cogs_total:16.8,margen_real:63.2,pour_cost_pct:21.0},
+  {nombre_item_vendido:"SPRITE 500ML",categoria:"GASEOSAS",total_vendidos:3,recaudacion_real:60,cogs_total:12.75,margen_real:47.25,pour_cost_pct:21.25},
+  {nombre_item_vendido:"JARRA GINGERALE",categoria:"GASEOSAS",total_vendidos:2,recaudacion_real:50,cogs_total:11.007,margen_real:38.993,pour_cost_pct:22.014},
+  {nombre_item_vendido:"MICHELADA CORONA",categoria:"CERVEZAS",total_vendidos:1,recaudacion_real:45,cogs_total:14.38,margen_real:30.62,pour_cost_pct:31.956},
+  {nombre_item_vendido:"V PIÑA COLADA",categoria:"COCTELES",total_vendidos:1,recaudacion_real:45,cogs_total:9.409,margen_real:35.591,pour_cost_pct:20.909},
+  {nombre_item_vendido:"AGUAS SIN GAS 600ML",categoria:"AGUAS Y JUGOS",total_vendidos:2,recaudacion_real:40,cogs_total:9.0,margen_real:31.0,pour_cost_pct:22.5},
+  {nombre_item_vendido:"AGUA CON GAS 600ML",categoria:"AGUAS Y JUGOS",total_vendidos:2,recaudacion_real:40,cogs_total:8.181,margen_real:31.819,pour_cost_pct:20.452},
+  {nombre_item_vendido:"V CUCARACHA",categoria:"SHOT",total_vendidos:1,recaudacion_real:40,cogs_total:7.508,margen_real:32.492,pour_cost_pct:18.771},
+  {nombre_item_vendido:"V FERNET BRANCA",categoria:"FERNET",total_vendidos:1,recaudacion_real:35,cogs_total:6.2,margen_real:28.8,pour_cost_pct:17.715},
+  {nombre_item_vendido:"MOCK PIÑA COLADA",categoria:"LICOR",total_vendidos:1,recaudacion_real:35,cogs_total:0,margen_real:35,pour_cost_pct:0},
+  {nombre_item_vendido:"MOCK MOJITO",categoria:"LICOR",total_vendidos:1,recaudacion_real:35,cogs_total:0,margen_real:35,pour_cost_pct:0},
+  {nombre_item_vendido:"CAMEL DOBLE ACTIVE P",categoria:"CIGARRILLOS",total_vendidos:1,recaudacion_real:25,cogs_total:12,margen_real:13,pour_cost_pct:48},
+  {nombre_item_vendido:"COCA COLA ZERO 500ML",categoria:"GASEOSAS",total_vendidos:1,recaudacion_real:20,cogs_total:5.5,margen_real:14.5,pour_cost_pct:27.5}
+];
+
+// ── FORMAT ────────────────────────────────────────────────────
+function fmtBo(v,dec){ dec=dec===undefined?0:dec; return (v||0).toLocaleString('es-BO',{minimumFractionDigits:dec,maximumFractionDigits:dec}); }
+function fmtBs(v)  { return 'Bs\u00a0'+fmtBo(v); }
+function fmtPct(v) { return fmtBo(v,1)+'%'; }
+function cleanName(n){
+  n=(n||'').trim();
+  if(/^(C |V )/i.test(n))  return n.substring(2).trim();
+  if(/^CHOPP /i.test(n))   return n.substring(6).trim();
+  if(/^JARRA /i.test(n))   return n.substring(6).trim();
+  if(/^BALDE /i.test(n))   return n.substring(6).trim();
+  if(/^MOCK /i.test(n))    return n.substring(5).trim();
+  return n;
+}
+function pcClass(v){ return v<=20?'pc-good':v<=35?'pc-ok':'pc-bad'; }
+function pcColorBright(v){ return v<=20?'#48E898':v<=35?'#C9A646':'#E00078'; }
+
+// ── INIT ──────────────────────────────────────────────────────
+function initAll(){
+  rawData   = localData;
+  TOTAL_REC = rawData.reduce(function(s,d){ return s+(d.recaudacion_real||0); },0);
+  updateKPIs();
+  buildRankingSummary();
+  buildSlider();
+  buildWaterfall();
+  buildMargenChart();
+}
+
+// ── KPIs ──────────────────────────────────────────────────────
+function updateKPIs(){
+  var totalCogs  = rawData.reduce(function(s,d){ return s+(d.cogs_total||0); },0);
+  var totalMrg   = rawData.reduce(function(s,d){ return s+(d.margen_real||0); },0);
+  var totalItems = rawData.reduce(function(s,d){ return s+(d.total_vendidos||0); },0);
+  var pcGlobal   = TOTAL_REC>0?(totalCogs/TOTAL_REC*100):0;
+  var mrgPct     = TOTAL_REC>0?(totalMrg/TOTAL_REC*100):0;
+  var avgItem    = totalItems>0?(TOTAL_REC/totalItems):0;
+
+  document.getElementById('kpi-rec').textContent      = fmtBs(TOTAL_REC);
+  document.getElementById('kpi-rec-sub').textContent  = rawData.length+' productos';
+  document.getElementById('kpi-cogs').textContent     = fmtBs(totalCogs);
+  document.getElementById('kpi-pc-badge').textContent = fmtPct(pcGlobal)+' pour cost';
+  document.getElementById('kpi-util').textContent     = fmtBs(totalMrg);
+  document.getElementById('kpi-mrg-badge').textContent= fmtPct(mrgPct)+' margen';
+  document.getElementById('kpi-items').textContent    = fmtBo(totalItems)+' unid';
+  document.getElementById('kpi-items-sub').textContent= fmtBs(avgItem)+' promedio / ítem';
+
+  var pcBadge = document.getElementById('kpi-pc-badge');
+  pcBadge.className = 'kpi-badge '+(pcGlobal<=20?'green':pcGlobal<=35?'gold':'pink');
+}
+
+// ── RANKING SUMMARY ───────────────────────────────────────────
+function buildRankingSummary(){
+  var sorted = rawData.slice().sort(function(a,b){ return b.recaudacion_real-a.recaudacion_real; });
+  var top1   = sorted[0];
+  var avgRec = TOTAL_REC/rawData.length;
+  var totalU = rawData.reduce(function(s,d){ return s+d.total_vendidos; },0);
+  document.getElementById('ranking-summary').innerHTML =
+    '<div class="rank-stat"><div class="rank-stat-val">'+fmtBs(top1.recaudacion_real)+'</div>'
+    +'<div class="rank-stat-lbl">Producto líder</div>'
+    +'<div class="rank-stat-sub">'+cleanName(top1.nombre_item_vendido)+'</div></div>'
+    +'<div class="rank-stat"><div class="rank-stat-val">'+fmtBs(avgRec)+'</div>'
+    +'<div class="rank-stat-lbl">Recaud. promedio</div>'
+    +'<div class="rank-stat-sub">por producto</div></div>'
+    +'<div class="rank-stat"><div class="rank-stat-val">'+fmtBo(totalU)+' unid</div>'
+    +'<div class="rank-stat-lbl">Total ítems</div>'
+    +'<div class="rank-stat-sub">'+rawData.length+' productos distintos</div></div>';
+}
+
+// ── SLIDER ────────────────────────────────────────────────────
+function buildSlider(){
+  var catMap={};
+  rawData.forEach(function(d){
+    var c=d.categoria;
+    if(!catMap[c]) catMap[c]={rec:0,mrg:0,cogs:0,uds:0};
+    catMap[c].rec+=d.recaudacion_real; catMap[c].mrg+=d.margen_real;
+    catMap[c].cogs+=d.cogs_total;     catMap[c].uds+=d.total_vendidos;
+  });
+  sliderData = Object.keys(catMap)
+    .sort(function(a,b){ return catMap[b].rec-catMap[a].rec; })
+    .map(function(cat){
+      var c=catMap[cat];
+      return {cat:cat,rec:c.rec,mrg:c.mrg,uds:c.uds,pc:c.rec>0?(c.cogs/c.rec*100):0};
+    });
+
+  var track=document.getElementById('slider-track');
+  var dots =document.getElementById('slider-dots');
+  track.innerHTML=''; dots.innerHTML='';
+
+  sliderData.forEach(function(s,i){
+    var col=getCatColor(s.cat);
+    var pct=TOTAL_REC>0?(s.rec/TOTAL_REC*100):0;
+    var pcCol=pcColorBright(s.pc);
+
+    var card=document.createElement('div');
+    card.className='slider-card';
+    card.innerHTML=
+      '<div style="flex:1;min-width:0">'
+      +'<div class="slider-cat-name" style="color:'+col+'">'+s.cat+'</div>'
+      +'<div class="slider-cat-rec">'+fmtBs(s.rec)+'</div>'
+      +'<div class="slider-cat-meta">'+fmtPct(pct)+' del total · '+s.uds+' unid</div>'
+      +'</div>'
+      +'<div class="slider-cat-right">'
+      +'<div class="slider-cat-margen">Margen<br>'+fmtBs(s.mrg)+'</div>'
+      +'<div class="slider-cat-pc" style="color:'+pcCol+'">Pour cost<br>'+fmtPct(s.pc)+'</div>'
+      +'</div>'
+      +'<div class="slider-counter-inline">'+(i+1)+' / '+sliderData.length+'</div>';
+    track.appendChild(card);
+
+    var dot=document.createElement('div');
+    dot.className='slider-dot'+(i===0?' active':'');
+    dot.style.background=col;
+    dot.style.borderColor=col;
+    dot.style.setProperty('--dot-glow', col);
+    dot.setAttribute('data-tip',s.cat);
+    dot.setAttribute('data-idx',i);
+    (function(idx){ dot.onclick=function(){ resetSliderAuto(); sliderGoTo(idx); }; })(i);
+    dots.appendChild(dot);
+  });
+  sliderGoTo(0);
+  startSliderAuto();
+}
+
+function sliderGoTo(idx){
+  if(idx<0) idx=sliderData.length-1;
+  if(idx>=sliderData.length) idx=0;
+  sliderIdx=idx;
+  document.getElementById('slider-track').style.transform='translateX(-'+idx+'00%)';
+  document.querySelectorAll('.slider-dot').forEach(function(d,i){
+    d.classList.toggle('active',i===idx);
+  });
+}
+function sliderMove(dir){ resetSliderAuto(); sliderGoTo(sliderIdx+dir); }
+function startSliderAuto(){
+  clearInterval(sliderTimer);
+  sliderTimer=setInterval(function(){ sliderGoTo(sliderIdx+1); },4000);
+}
+function resetSliderAuto(){
+  clearInterval(sliderTimer);
+  sliderTimer=setInterval(function(){ sliderGoTo(sliderIdx+1); },4000);
+}
+
+// ── WATERFALL ─────────────────────────────────────────────────
+function buildWaterfall(){
+  var totalCogs=rawData.reduce(function(s,d){ return s+(d.cogs_total||0); },0);
+  var totalMrg =rawData.reduce(function(s,d){ return s+(d.margen_real||0); },0);
+  var pcGlobal =TOTAL_REC>0?(totalCogs/TOTAL_REC*100):0;
+  var values=[TOTAL_REC,totalCogs,totalMrg];
+  var placeholders=[0,totalMrg,0];
+  var labels=['VENTAS','COGS','UTILIDAD'];
+
+  chartWaterfall.setOption({
+    backgroundColor:'transparent',
+    animation:true, animationDuration:900, animationEasing:'cubicOut',
+    animationDelay:function(idx){ return idx*180; },
+    tooltip:{
+      trigger:'axis', axisPointer:{type:'shadow'},
+      backgroundColor:'#111820',borderColor:'#263238',borderWidth:1,padding:[10,14],
+      textStyle:{color:'#F2F2F2',fontFamily:'Barlow Condensed',fontSize:13},
+      formatter:function(params){
+        var i=params[0].dataIndex;
+        var pcts=['100%',fmtPct(pcGlobal),fmtPct(100-pcGlobal)];
+        var cols=['#48E898','#E00078','#48E898'];
+        return '<b style="font-size:14px">'+labels[i]+'</b><br/>'
+          +'<b style="color:'+cols[i]+';font-size:16px">'+fmtBs(values[i])+'</b>'
+          +'<div style="color:#6B7280;font-size:11px;margin-top:2px">'+pcts[i]+' del ingreso</div>';
+      }
+    },
+    grid:{top:10,bottom:30,left:10,right:10,containLabel:true},
+    xAxis:{type:'category',data:labels,
+      axisLabel:{color:'#6B7280',fontFamily:'Barlow Condensed',fontSize:11,fontWeight:600,letterSpacing:2},
+      axisLine:{lineStyle:{color:'#263238'}},axisTick:{show:false}},
+    yAxis:{type:'value',
+      axisLabel:{color:'#6B7280',fontFamily:'JetBrains Mono',fontSize:9,
+        formatter:function(v){ return v>=1000?(v/1000).toLocaleString('es-BO',{maximumFractionDigits:1})+'K':v; }},
+      splitLine:{lineStyle:{color:'#0f0f0f'}},axisLine:{show:false}},
+    series:[
+      {type:'bar',stack:'wf',barMaxWidth:70,data:placeholders,
+        itemStyle:{color:'transparent',borderColor:'transparent'},tooltip:{show:false}},
+      {type:'bar',stack:'wf',barMaxWidth:70,
+        data:values.map(function(v,i){
+          return {value:v,itemStyle:{
+            color:new echarts.graphic.LinearGradient(0,0,0,1,[
+              {offset:0,color:i===1?'#E00078':'#48E898'},
+              {offset:1,color:i===1?'#E00078':'#48E898'}
+            ]),
+            borderRadius:[6,6,0,0],
+            shadowBlur:16,shadowColor:i===1?'rgba(213,0,117,0.5)':'rgba(71,219,149,0.4)'
+          }};
+        }),
+        label:{
+          show:true,position:'inside',
+          fontFamily:'JetBrains Mono',fontSize:11,fontWeight:600,
+          color:'#fff',
+          textBorderColor:'#000',textBorderWidth:3,
+          formatter:function(p){ return fmtBs(values[p.dataIndex]); }
+        },
+        emphasis:{itemStyle:{shadowBlur:24}}
+      }
+    ]
+  });
+  chartWaterfall.resize();
+}
+
+// ── TOP 5 MARGEN CHART ────────────────────────────────────────
+function buildMargenChart(){
+  var top5=rawData.slice().sort(function(a,b){ return b.margen_real-a.margen_real; }).slice(0,5);
+  var opt=makeMargenOption(top5);
+  chartMargen.setOption(opt,true);
+  chartMargen.resize();
+}
+
+function makeMargenOption(data){
+  return {
+    backgroundColor:'transparent',
+    animation:true,animationDuration:700,animationEasing:'cubicOut',
+    animationDelay:function(idx){ return idx*55; },
+    tooltip:{
+      trigger:'axis',axisPointer:{type:'shadow'},
+      backgroundColor:'#111820',borderColor:'#263238',borderWidth:1,padding:[10,14],
+      textStyle:{color:'#F2F2F2',fontFamily:'Barlow Condensed',fontSize:13},
+      formatter:function(params){
+        var d=data[params[0].dataIndex];
+        var pc=Number(d.pour_cost_pct)||0;
+        var catCol=getCatColor(d.categoria);
+        return '<b style="font-size:14px">'+d.nombre_item_vendido+'</b>'
+          +'<div style="color:'+catCol+';font-size:10px;margin-bottom:6px;margin-top:2px">'+d.categoria+'</div>'
+          +'<div style="display:grid;grid-template-columns:auto auto;gap:2px 14px;font-size:12px">'
+          +'<span style="color:#9CA3AF">Margen</span><b style="color:#48E898">'+fmtBs(d.margen_real)+'</b>'
+          +'<span style="color:#9CA3AF">Recaudación</span><b style="color:#C9A646">'+fmtBs(d.recaudacion_real)+'</b>'
+          +'<span style="color:#9CA3AF">Pour cost</span><b style="color:'+pcColorBright(pc)+'">'+fmtPct(pc)+'</b>'
+          +'</div>';
+      }
+    },
+    grid:{top:4,bottom:4,left:4,right:10,containLabel:true},
+    xAxis:{type:'value',
+      axisLabel:{color:'#6B7280',fontFamily:'JetBrains Mono',fontSize:9,
+        formatter:function(v){ return v>=1000?(v/1000).toLocaleString('es-BO',{maximumFractionDigits:1})+'K':v; }},
+      splitLine:{lineStyle:{color:'#0f0f0f'}},axisLine:{show:false}},
+    yAxis:{type:'category',
+      data:data.map(function(d){ return cleanName(d.nombre_item_vendido); }),
+      axisLabel:{color:'#9CA3AF',fontFamily:'Barlow Condensed',fontSize:11},
+      axisLine:{lineStyle:{color:'#263238'}},axisTick:{show:false}},
+    series:[{
+      type:'bar',barMaxWidth:20,
+      data:data.map(function(d){
+        return {value:parseFloat(d.margen_real.toFixed(2)),
+          itemStyle:{borderRadius:[4,4,4,4],
+            color:new echarts.graphic.LinearGradient(0,0,1,0,[
+              {offset:0,color:'rgba(71,219,149,0.3)'},{offset:1,color:'#48E898'}]),
+            shadowBlur:8,shadowColor:'rgba(71,219,149,0.2)'}};
+      }),
+      emphasis:{scale:false,itemStyle:{shadowBlur:18,shadowColor:'rgba(71,219,149,0.5)'}},
+      label:{show:true,position:'right',fontFamily:'JetBrains Mono',fontSize:10,color:'#9CA3AF',
+        formatter:function(p){ return fmtBs(data[p.dataIndex].margen_real); }}
+    }]
+  };
+}
+
+// ── MODAL MARGEN ──────────────────────────────────────────────
+var margenChartFull = null;
+
+function openModalMargen(tab){
+  margenTabMode = tab;
+  document.getElementById('modal-margen').classList.add('open');
+  setMargenTab(tab);
+}
+
+function setMargenTab(tab){
+  margenTabMode = tab;
+  document.getElementById('mtab-chart').classList.toggle('active', tab==='chart');
+  document.getElementById('mtab-table').classList.toggle('active', tab==='table');
+  document.getElementById('btn-modal-png').style.display = tab==='chart' ? 'flex' : 'none';
+
+  var body = document.getElementById('modal-margen-body');
+  var allSorted = rawData.slice().sort(function(a,b){ return b.margen_real-a.margen_real; });
+  document.getElementById('modal-margen-sub').textContent =
+    allSorted.length+' productos · mayor a menor margen';
+
+  if(tab==='chart'){
+    var h = Math.max(280, allSorted.length * 28);
+    body.innerHTML = '<div id="chart-margen-full" style="width:100%;height:'+h+'px"></div>';
+    // pequeño delay para que el DOM se renderice
+    setTimeout(function(){
+      if(margenChartFull){ margenChartFull.dispose(); }
+      margenChartFull = echarts.init(document.getElementById('chart-margen-full'),null,{renderer:'canvas'});
+      margenChartFull.setOption(makeMargenOption(allSorted));
+      margenChartFull.resize();
+    }, 60);
+  } else {
+    var html='<div class="modal-table-wrap"><table class="modal-table"><thead><tr>'
+      +'<th style="text-align:left">Producto</th>'
+      +'<th style="text-align:left">Categ.</th>'
+      +'<th>Unid</th><th>Recaud.</th><th>Margen</th><th>Pour Cost</th>'
+      +'</tr></thead><tbody>';
+    allSorted.forEach(function(d){
+      var cls=pcClass(d.pour_cost_pct);
+      html+='<tr>'
+        +'<td>'+d.nombre_item_vendido+'</td>'
+        +'<td style="color:'+getCatColor(d.categoria)+';font-family:var(--font-ui);font-size:11px">'+d.categoria+'</td>'
+        +'<td>'+d.total_vendidos+'</td>'
+        +'<td>'+fmtBs(d.recaudacion_real)+'</td>'
+        +'<td style="color:var(--green)">'+fmtBs(d.margen_real)+'</td>'
+        +'<td class="'+cls+'">'+fmtPct(d.pour_cost_pct)+'</td>'
+        +'</tr>';
+    });
+    html+='</tbody></table></div>';
+    body.innerHTML=html;
+  }
+}
+
+function exportModalMargenPNG(){
+  if(margenChartFull){
+    var url=margenChartFull.getDataURL({type:'png',pixelRatio:2,backgroundColor:'#151B20'});
+    var a=document.createElement('a');a.href=url;a.download='backstage_margen_completo.png';a.click();
+  }
+}
+
+// ── MODAL RANKING ─────────────────────────────────────────────
+function openModalRanking(){
+  var sorted=rawData.slice().sort(function(a,b){ return b.recaudacion_real-a.recaudacion_real; });
+  document.getElementById('modal-ranking-sub').textContent=sorted.length+' productos · mayor a menor recaudación';
+  var html='<div class="modal-table-wrap"><table class="modal-table"><thead><tr>'
+    +'<th style="text-align:left">Producto</th>'
+    +'<th style="text-align:left">Categ.</th>'
+    +'<th>Unid</th><th>Recaud.</th><th>COGS</th><th>Margen</th><th>Pour Cost</th>'
+    +'</tr></thead><tbody>';
+  sorted.forEach(function(d){
+    var cls=pcClass(d.pour_cost_pct);
+    html+='<tr>'
+      +'<td>'+d.nombre_item_vendido+'</td>'
+      +'<td style="color:'+getCatColor(d.categoria)+';font-family:var(--font-ui);font-size:11px">'+d.categoria+'</td>'
+      +'<td>'+d.total_vendidos+'</td>'
+      +'<td style="color:var(--gold)">'+fmtBs(d.recaudacion_real)+'</td>'
+      +'<td style="color:var(--pink)">'+fmtBs(d.cogs_total)+'</td>'
+      +'<td style="color:var(--green)">'+fmtBs(d.margen_real)+'</td>'
+      +'<td class="'+cls+'">'+fmtPct(d.pour_cost_pct)+'</td>'
+      +'</tr>';
+  });
+  html+='</tbody></table></div>';
+  document.getElementById('modal-ranking-body').innerHTML=html;
+  toggleModal('modal-ranking');
+}
+
+// ── MODAL UTILS ───────────────────────────────────────────────
+function toggleModal(id){
+  document.getElementById(id).classList.toggle('open');
+}
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+function handleOverlayClick(e,id){ if(e.target===document.getElementById(id)) closeModal(id); }
+document.addEventListener('keydown',function(e){
+  if(e.key==='Escape'){
+    ['modal-info','modal-margen','modal-ranking'].forEach(closeModal);
+  }
+});
+
+// ── EXPORTS ───────────────────────────────────────────────────
+function exportChartPNG(which){
+  var c=which==='waterfall'?chartWaterfall:chartMargen;
+  var n=which==='waterfall'?'backstage_waterfall.png':'backstage_top5_margen.png';
+  var url=c.getDataURL({type:'png',pixelRatio:2,backgroundColor:'#151B20'});
+  var a=document.createElement('a');a.href=url;a.download=n;a.click();
+}
+function exportCSV(){
+  var rows=[['Producto','Categoria','Unid','Recaudacion_Bs','COGS_Bs','Margen_Bs','Pour_Cost_Pct']];
+  rawData.forEach(function(d){
+    rows.push([d.nombre_item_vendido,d.categoria,d.total_vendidos,
+      d.recaudacion_real.toFixed(2),d.cogs_total.toFixed(2),
+      d.margen_real.toFixed(2),d.pour_cost_pct.toFixed(2)]);
+  });
+  var csv=rows.map(function(r){return r.map(function(v){return '"'+v+'"';}).join(';');}).join('\n');
+  var blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+  var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='backstage_ejecutivo.csv';a.click();
+}
+function exportXLSX(){
+  var det=[['Producto','Categoria','Unid','Recaudacion_Bs','COGS_Bs','Margen_Bs','Pour_Cost_Pct']];
+  rawData.forEach(function(d){
+    det.push([d.nombre_item_vendido,d.categoria,d.total_vendidos,
+      parseFloat(d.recaudacion_real.toFixed(2)),parseFloat(d.cogs_total.toFixed(2)),
+      parseFloat(d.margen_real.toFixed(2)),parseFloat(d.pour_cost_pct.toFixed(2))]);
+  });
+  var wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(det),'Ejecutivo');
+  XLSX.writeFile(wb,'backstage_ejecutivo.xlsx');
+}
+
+// ── RESIZE HANDLER (orientationchange + resize) ───────────────
+function handleResize(){
+  setTimeout(function(){
+    if(chartWaterfall) chartWaterfall.resize();
+    if(chartMargen)    chartMargen.resize();
+    if(margenChartFull && document.getElementById('chart-margen-full')){
+      margenChartFull.resize();
+    }
+  }, 150);
+}
+
+// ── INIT ──────────────────────────────────────────────────────
+window.addEventListener('load',function(){
+  chartWaterfall = echarts.init(document.getElementById('chart-waterfall'),null,{renderer:'canvas'});
+  chartMargen    = echarts.init(document.getElementById('chart-margen'),   null,{renderer:'canvas'});
+  window.addEventListener('resize', handleResize);
+  window.addEventListener('orientationchange', handleResize);
+  initAll();
+});
+</script>
+</body>
+</html>
