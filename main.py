@@ -162,7 +162,11 @@ def verificar_operacion_activa(
     if operacion_actual.estado_operacion == 22:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Aún hay ventas activas. Cambie el estado de la operativa a INICIO CIERRE en el POS para poder realizar el inventario."
+            detail={
+                "id_operacion": operacion_actual.id,
+                "titulo": f"Operativa {operacion_actual.id} en proceso",
+                "mensaje": "Debes iniciar el cierre de la operativa para realizar el paloteo"
+            }
         )
 
     # 3. Luz Verde: ¿Está lista para cierre?

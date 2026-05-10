@@ -270,8 +270,11 @@ async function iniciarDashboard() {
     
     // Fix #28: Resetear clases del icóno antes de cada verificación para evitar acumulación de estilos.
     estadoIcon.className = 'material-symbols-outlined text-4xl text-on-surface-variant';
+    estadoIcon.style.color = '';
+    estadoIcon.style.filter = '';
     estadoIcon.textContent = "hourglass_empty";
     estadoIcon.classList.add('animate-pulse');
+    estadoIcon.classList.add('status-checking-icon');
     estadoTexto.textContent = "Verificando estado de la caja...";
     const estadoTituloReset = document.getElementById('estado-titulo');
     if (estadoTituloReset) estadoTituloReset.textContent = "Verificando operativa...";
@@ -290,18 +293,25 @@ async function iniciarDashboard() {
 
             // Caja en proceso u otro error
             estadoIcon.textContent = "block";
-            estadoIcon.classList.remove('animate-pulse', 'text-primary-fixed');
-            estadoIcon.classList.add('text-error');
+            estadoIcon.classList.remove('animate-pulse', 'text-primary-fixed', 'text-error', 'text-on-surface-variant', 'success-check-icon', 'status-checking-icon');
+            estadoIcon.classList.add('status-warning-icon');
             const estadoTituloErr = document.getElementById('estado-titulo');
-            if (estadoTituloErr) estadoTituloErr.textContent = "Operativa no disponible";
-            estadoTexto.textContent = dataOp.detail || "No se puede realizar el paloteo.";
+            if (estadoTituloErr) {
+                const idOperacion = dataOp.detail && typeof dataOp.detail === 'object' ? dataOp.detail.id_operacion : null;
+                estadoTituloErr.textContent = idOperacion ? `Operativa ${idOperacion} en proceso` : "Operativa en proceso";
+            }
+            if (dataOp.detail && typeof dataOp.detail === 'object') {
+                estadoTexto.textContent = dataOp.detail.mensaje || "Debes iniciar el cierre de la operativa para realizar el paloteo";
+            } else {
+                estadoTexto.textContent = "Debes iniciar el cierre de la operativa para realizar el paloteo";
+            }
             return; // Bloqueamos la ejecución aquí
         }
 
         // Luz Verde: Guardamos el ID de operación
         currentOperacionId = dataOp.id_operacion;
         estadoIcon.textContent = "check_circle";
-        estadoIcon.classList.remove('animate-pulse', 'text-on-surface-variant', 'text-error');
+        estadoIcon.classList.remove('animate-pulse', 'text-on-surface-variant', 'text-error', 'status-warning-icon', 'status-checking-icon');
         estadoIcon.classList.add('success-check-icon');
         // Actualizar título y mensaje según respuesta del servidor
         const estadoTitulo = document.getElementById('estado-titulo');

@@ -395,7 +395,7 @@
         
             /* Success Check Icon */
             .success-check-icon {
-                color: var(--semantic-action);
+                color: var(--semantic-action) !important;
                 filter: drop-shadow(0 0 8px rgba(72, 232, 152, 0.5));
                 transition: filter 0.2s ease;
             }
@@ -403,6 +403,26 @@
             .success-check-icon:hover {
                 filter: drop-shadow(0 0 12px rgba(72, 232, 152, 0.7));
         }
+
+            .status-warning-icon {
+                color: var(--semantic-highlight) !important;
+                filter: drop-shadow(0 0 8px rgba(224, 0, 120, 0.5));
+                transition: filter 0.2s ease;
+            }
+
+            .status-warning-icon:hover {
+                filter: drop-shadow(0 0 12px rgba(224, 0, 120, 0.7));
+            }
+
+            .status-checking-icon {
+                color: var(--primary-fixed-dim) !important;
+                filter: drop-shadow(0 0 8px rgba(0, 219, 233, 0.45));
+                transition: filter 0.2s ease;
+            }
+
+            .status-checking-icon:hover {
+                filter: drop-shadow(0 0 12px rgba(0, 219, 233, 0.7));
+            }
     </style>
 </head>
 <body class="bg-surface text-on-surface font-body-base antialiased min-h-screen dark">
@@ -603,7 +623,7 @@
         </nav>
     </div>
 
-    <script src="/assets/app.js?v=8.9"></script>
+    <script src="/assets/app.js?v=9.3"></script>
 
     <script>
         (function () {
