@@ -287,3 +287,35 @@ button[data-tab]:hover {
 .active-tab {
   animation: glow-pulse 2s ease-in-out infinite;
 }
+
+/* ============================================
+   STATUS ICON CLASSES
+   ============================================ */
+
+/* Estado 22: EN PROCESO (Warning - Acción requerida) */
+.status-warning-icon {
+  color: var(--semantic-warning);
+  filter: drop-shadow(0 0 12px rgba(245, 158, 11, 0.8)) drop-shadow(0 0 6px rgba(245, 158, 11, 0.4));
+  text-shadow: 0 0 12px rgba(245, 158, 11, 0.6);
+}
+
+/* Estado 23: CERRADO (Info - Neutral, bloqueado) */
+.status-info-icon {
+  color: var(--semantic-info);
+  filter: drop-shadow(0 0 12px rgba(45, 212, 255, 0.8)) drop-shadow(0 0 6px rgba(45, 212, 255, 0.4));
+  text-shadow: 0 0 12px rgba(45, 212, 255, 0.6);
+}
+
+/* Estado 24: INICIO DE CIERRE (Success - Adelante) */
+.success-check-icon {
+  color: var(--semantic-action);
+  filter: drop-shadow(0 0 12px rgba(72, 232, 152, 0.8)) drop-shadow(0 0 6px rgba(72, 232, 152, 0.4));
+  text-shadow: 0 0 12px rgba(72, 232, 152, 0.6);
+}
+
+/* Estado verificando (Loading) */
+.status-checking-icon {
+  color: var(--on-surface-variant);
+  filter: drop-shadow(0 0 8px rgba(185, 202, 203, 0.4)) drop-shadow(0 0 4px rgba(185, 202, 203, 0.2));
+  text-shadow: 0 0 6px rgba(185, 202, 203, 0.3);
+}

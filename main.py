@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from fastapi import FastAPI, Depends, HTTPException, status, Request
+from fastapi.responses import FileResponse, JSONResponse
 import hashlib
 import json
 from database import get_db
@@ -158,30 +159,60 @@ def verificar_operacion_activa(
             detail="No se encontró ninguna operación activa en el sistema."
         )
 
-    # 2. Evaluamos la regla de negocio: ¿Está en proceso de venta?
+    # 2. Evaluamos la regla de negocio según el estado_operacion
     if operacion_actual.estado_operacion == 22:
-        raise HTTPException(
+        # Estado: EN PROCESO (vendiendo)
+        return JSONResponse(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "id_operacion": operacion_actual.id,
-                "titulo": f"Operativa {operacion_actual.id} en proceso",
-                "mensaje": "Debes iniciar el cierre de la operativa para realizar el paloteo"
+            content={
+                "detail": {
+                    "id_operacion": operacion_actual.id,
+                    "icon": "block",
+                    "titulo": f"OPERATIVA {operacion_actual.id}: EN PROCESO",
+                    "mensaje": "Inicia el cierre de la operativa para realizar el paloteo.",
+                    "status_class": "status-warning-icon"
+                }
             }
         )
 
-    # 3. Luz Verde: ¿Está lista para cierre?
+    # 3. Estado CERRADO: Paloteo ya realizado
+    if operacion_actual.estado_operacion == 23:
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={
+                "detail": {
+                    "id_operacion": operacion_actual.id,
+                    "icon": "lock",
+                    "titulo": f"OPERATIVA {operacion_actual.id}: CERRADA",
+                    "mensaje": "El paloteo de esta operativa ya fue realizado.",
+                    "status_class": "status-info-icon"
+                }
+            }
+        )
+
+    # 4. Luz Verde: Estado INICIO CIERRE (24)
     if operacion_actual.estado_operacion == 24:
         return {
             "id_operacion": operacion_actual.id,
             "nombre": operacion_actual.nombre_operacion,
-            "titulo": f"Se inició el cierre de la operativa {operacion_actual.id}",
-            "mensaje": "Puedes registrar el Inventario Físico"
+            "icon": "check_circle",
+            "titulo": f"OPERATIVA {operacion_actual.id}: INICIO DE CIERRE",
+            "mensaje": "Puedes realizar el paloteo de esta operativa.",
+            "status_class": "success-check-icon"
         }
 
-    # 4. Si tiene otro estado distinto (ej. ya se cerró completamente)
-    raise HTTPException(
+    # 5. Si tiene otro estado distinto
+    return JSONResponse(
         status_code=status.HTTP_400_BAD_REQUEST,
-        detail=f"La operación no está en un estado válido para paloteo (Estado: {operacion_actual.estado_operacion})."
+        content={
+            "detail": {
+                "id_operacion": operacion_actual.id,
+                "icon": "warning",
+                "titulo": f"OPERATIVA {operacion_actual.id}: ESTADO NO VÁLIDO",
+                "mensaje": f"La operación no está en un estado válido para paloteo (Estado: {operacion_actual.estado_operacion}).",
+                "status_class": "status-warning-icon"
+            }
+        }
     )
     
 @app.post("/api/inventario/paloteo")

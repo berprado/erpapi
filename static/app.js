@@ -291,34 +291,37 @@ async function iniciarDashboard() {
             // Error 401: Token expirado
             if(responseOp.status === 401) return btnLogout.click();
 
-            // Caja en proceso u otro error
-            estadoIcon.textContent = "block";
-            estadoIcon.classList.remove('animate-pulse', 'text-primary-fixed', 'text-error', 'text-on-surface-variant', 'success-check-icon', 'status-checking-icon');
-            estadoIcon.classList.add('status-warning-icon');
+            // Procesar error: extraer icon y status_class del detalle
+            const detail = dataOp.detail && typeof dataOp.detail === 'object' ? dataOp.detail : {};
+            const iconoError = detail.icon || 'block';
+            const statusClass = detail.status_class || 'status-warning-icon';
+            
+            estadoIcon.textContent = iconoError;
+            estadoIcon.classList.remove('animate-pulse', 'text-primary-fixed', 'text-error', 'text-on-surface-variant', 'success-check-icon', 'status-checking-icon', 'status-warning-icon', 'status-info-icon');
+            estadoIcon.classList.add(statusClass);
+            
             const estadoTituloErr = document.getElementById('estado-titulo');
             if (estadoTituloErr) {
-                const idOperacion = dataOp.detail && typeof dataOp.detail === 'object' ? dataOp.detail.id_operacion : null;
-                estadoTituloErr.textContent = idOperacion ? `Operativa ${idOperacion} en proceso` : "Operativa en proceso";
+                estadoTituloErr.textContent = detail.titulo || "Operativa bloqueada";
             }
-            if (dataOp.detail && typeof dataOp.detail === 'object') {
-                estadoTexto.textContent = dataOp.detail.mensaje || "Debes iniciar el cierre de la operativa para realizar el paloteo";
-            } else {
-                estadoTexto.textContent = "Debes iniciar el cierre de la operativa para realizar el paloteo";
-            }
+            
+            estadoTexto.textContent = detail.mensaje || "Debes iniciar el cierre de la operativa para realizar el paloteo";
             return; // Bloqueamos la ejecución aquí
         }
 
-        // Luz Verde: Guardamos el ID de operación
+        // Luz Verde: Guardamos el ID de operación (estado 24)
         currentOperacionId = dataOp.id_operacion;
-        estadoIcon.textContent = "check_circle";
-        estadoIcon.classList.remove('animate-pulse', 'text-on-surface-variant', 'text-error', 'status-warning-icon', 'status-checking-icon');
+        const iconoExito = dataOp.icon || 'check_circle';
+        estadoIcon.textContent = iconoExito;
+        estadoIcon.classList.remove('animate-pulse', 'text-on-surface-variant', 'text-error', 'status-warning-icon', 'status-checking-icon', 'status-info-icon');
         estadoIcon.classList.add('success-check-icon');
+        
         // Actualizar título y mensaje según respuesta del servidor
         const estadoTitulo = document.getElementById('estado-titulo');
         if (estadoTitulo && dataOp.titulo) {
             estadoTitulo.textContent = dataOp.titulo;
         }
-        estadoTexto.textContent = dataOp.mensaje; // "Puedes registrar el Inventario Físico"
+        estadoTexto.textContent = dataOp.mensaje;
 
         // 2. Cargar Lista de Productos Pendientes
         cargarProductos();
