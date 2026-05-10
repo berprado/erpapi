@@ -668,7 +668,7 @@ function formatearDiferencia(diferencia, isOz = false) {
     }
 
     const val = isOz ? diferencia.toFixed(2) : Math.round(diferencia);
-    return `<span class="text-data-tabular font-semibold" style="color: var(--semantic-warning)">+${val} ${sufijo}</span>`;
+    return `<span class="text-data-tabular font-semibold" style="color: var(--semantic-danger)">+${val} ${sufijo}</span>`;
 }
 
 // Recalcula una tarjeta y actualiza PAQ/BARRA, DET/BARRA y sus diferencias contra el sistema
