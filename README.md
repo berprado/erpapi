@@ -151,6 +151,8 @@ La PWA estará disponible en `http://localhost:8000/` y la documentación intera
 |---|---|---|
 | `GET` | `/api/inventario/pendientes` | Lista de productos con movimiento en la operativa activa |
 | `POST` | `/api/inventario/paloteo` | Registra el inventario físico completo |
+| `GET` | `/api/inventario/paloteo/{id_operacion}` | Recupera el inventario ya registrado y si está habilitado para edición |
+| `PUT` | `/api/inventario/paloteo/{id_inventario_pos}` | Corrige un inventario físico existente |
 
 **Body de paloteo (ejemplo):**
 ```json
@@ -169,6 +171,13 @@ La PWA estará disponible en `http://localhost:8000/` y la documentación intera
   ]
 }
 ```
+
+**Reglas para corrección de inventario físico:**
+
+1. Solo se puede corregir un inventario ya registrado si su operativa sigue en estado `24` (INICIO CIERRE).
+2. El `id_operacion` y `id_barra` enviados en el `PUT` deben coincidir con el inventario físico original.
+3. La corrección reemplaza el detalle previo del inventario por el nuevo detalle enviado.
+4. Si la operativa cambió de estado, la API bloquea la corrección.
 
 ---
 

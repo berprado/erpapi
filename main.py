@@ -67,6 +67,98 @@ def hash_password(password: str) -> str:
     """Aplica SHA-256 puro para coincidir con el POS actual."""
     return hashlib.sha256(password.encode('utf-8')).hexdigest()
 
+
+def _validar_operacion_inicio_cierre(db: Session, id_operacion: int) -> models.Operacion:
+    operacion = db.query(models.Operacion).filter(models.Operacion.id == id_operacion).first()
+    if not operacion or operacion.estado_operacion != 24:
+        raise HTTPException(status_code=400, detail="Operación inválida o barra no está en INICIO CIERRE.")
+    return operacion
+
+
+def _procesar_items_paloteo(
+    db: Session,
+    payload: schemas.PaloteoRequest,
+    id_inventario_pos: int,
+    username_actual: str,
+    fecha_actual: datetime,
+):
+    resultados_procesados = []
+    productos_omitidos = []
+    margen_error_balanza = 10.0
+
+    for item in payload.items:
+        configs_producto = db.query(models.ProductoPesajeConfig).filter(
+            models.ProductoPesajeConfig.id_producto_almacen == item.id_producto
+        ).all()
+
+        # Registrar productos sin configuración en la lista de omitidos.
+        if not configs_producto:
+            logger.warning("Producto id=%s omitido: sin configuración de pesaje en app_producto_pesaje_config", item.id_producto)
+            productos_omitidos.append(item.id_producto)
+            continue
+
+        config_base = configs_producto[0]
+        perfiles = sorted([cfg for cfg in configs_producto if cfg.pesable == 1], key=lambda cfg: cfg.id or 0)
+
+        total_onzas = 0.0
+        if config_base.pesable == 1 and perfiles:
+            for abierta in item.pesos_abiertas:
+                perfil = None
+
+                if abierta.perfil_id is not None:
+                    perfil = next((pf for pf in perfiles if pf.id == abierta.perfil_id), None)
+
+                if perfil is None and abierta.perfil_index is not None:
+                    perfil_index = abierta.perfil_index
+                    if 0 <= perfil_index < len(perfiles):
+                        perfil = perfiles[perfil_index]
+
+                if perfil is None:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Perfil de botella inválido para producto {item.id_producto}."
+                    )
+
+                gr_oz = float(perfil.gramos_por_oz)
+                tara = float(perfil.tara)
+                peso_medido = float(abierta.peso)
+
+                if peso_medido >= (tara - margen_error_balanza):
+                    peso_liquido = max(0, peso_medido - tara)
+                    total_onzas += (peso_liquido / gr_oz)
+
+        onzas_redondeadas_pos = round(total_onzas * 2) / 2
+
+        nuevo_detalle_pos = models.DetalleFisicoPOS(
+            cantidad_unidad=item.botellas_cerradas,
+            cantidad_detalle=onzas_redondeadas_pos,
+            id_producto=item.id_producto,
+            id_inventario_fisico=id_inventario_pos,
+            usuario_reg=username_actual,
+            fecha_reg=fecha_actual.date(),
+            estado='HAB'
+        )
+        db.add(nuevo_detalle_pos)
+
+        registro_crudo = models.PaloteoRegistroCrudo(
+            id_operacion=payload.id_operacion,
+            id_producto=item.id_producto,
+            botellas_cerradas=item.botellas_cerradas,
+            pesos_abiertas=json.dumps([entrada.model_dump() for entrada in item.pesos_abiertas]),
+            onzas_calculadas=total_onzas,
+            usuario_reg=username_actual,
+            fecha_reg=fecha_actual
+        )
+        db.add(registro_crudo)
+
+        resultados_procesados.append({
+            "id_producto": item.id_producto,
+            "onzas_exactas": round(total_onzas, 2),
+            "onzas_pos": onzas_redondeadas_pos
+        })
+
+    return resultados_procesados, productos_omitidos
+
 # --- ENDPOINTS ---
 @app.get("/api")
 def read_root():
@@ -215,7 +307,7 @@ def verificar_operacion_activa(
         }
     )
     
-@app.post("/api/inventario/paloteo")
+@app.post("/api/inventario/paloteo", response_model=schemas.PaloteoOperacionResponse)
 def procesar_paloteo(
     payload: schemas.PaloteoRequest, 
     db: Session = Depends(get_db),
@@ -230,9 +322,7 @@ def procesar_paloteo(
     obs_final = payload.observaciones if payload.observaciones else "REGISTRADO VÍA API"
 
     # 1. Validar Operación
-    operacion = db.query(models.Operacion).filter(models.Operacion.id == payload.id_operacion).first()
-    if not operacion or operacion.estado_operacion != 24:
-        raise HTTPException(status_code=400, detail="Operación inválida o barra no está en INICIO CIERRE.")
+    _validar_operacion_inicio_cierre(db, payload.id_operacion)
 
     # Fix #5: Prevenir inventario duplicado por operación.
     # Si ya existe una cabecera HAB para este id_operacion, rechazamos el registro.
@@ -261,91 +351,15 @@ def procesar_paloteo(
     db.add(nueva_cabecera_pos)
     db.flush()
 
-    resultados_procesados = []
-    margen_error_balanza = 10.0
-
-    # 3. PROCESAR PRODUCTOS
-    for item in payload.items:
-        configs_producto = db.query(models.ProductoPesajeConfig).filter(
-            models.ProductoPesajeConfig.id_producto_almacen == item.id_producto
-        ).all()
-        
-        # Fix #6: Registrar productos sin configuración de pesaje en lugar de ignorarlos silenciosamente.
-        if not configs_producto:
-            logger.warning("Producto id=%s omitido: sin configuración de pesaje en app_producto_pesaje_config", item.id_producto)
-            continue
-
-        config_base = configs_producto[0]
-        perfiles = sorted([cfg for cfg in configs_producto if cfg.pesable == 1], key=lambda cfg: cfg.id or 0)
-
-        total_onzas = 0.0
-        if config_base.pesable == 1 and perfiles:
-            for abierta in item.pesos_abiertas:
-                perfil = None
-
-                if abierta.perfil_id is not None:
-                    perfil = next((pf for pf in perfiles if pf.id == abierta.perfil_id), None)
-
-                if perfil is None and abierta.perfil_index is not None:
-                    perfil_index = abierta.perfil_index
-                    if 0 <= perfil_index < len(perfiles):
-                        perfil = perfiles[perfil_index]
-
-                if perfil is None:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"Perfil de botella inválido para producto {item.id_producto}."
-                    )
-
-                gr_oz = float(perfil.gramos_por_oz)
-                tara = float(perfil.tara)
-                peso_medido = float(abierta.peso)
-
-                if peso_medido >= (tara - margen_error_balanza):
-                    peso_liquido = max(0, peso_medido - tara)
-                    total_onzas += (peso_liquido / gr_oz)
-
-        # --- NUEVO: Redondear a la media onza más cercana para el POS ---
-        # Ej: 11.92 * 2 = 23.84 -> round(23.84) = 24 -> 24 / 2 = 12.00
-        # Ej: 11.21 * 2 = 22.42 -> round(22.42) = 22 -> 22 / 2 = 11.00
-        # Ej: 11.26 * 2 = 22.52 -> round(22.52) = 23 -> 23 / 2 = 11.50
-        onzas_redondeadas_pos = round(total_onzas * 2) / 2
-
-        # 4. GUARDAR DETALLE EN EL POS (Con el valor redondeado)
-        nuevo_detalle_pos = models.DetalleFisicoPOS(
-            cantidad_unidad=item.botellas_cerradas,
-            cantidad_detalle=onzas_redondeadas_pos,
-            id_producto=item.id_producto,
-            id_inventario_fisico=nueva_cabecera_pos.id, 
-            usuario_reg=username_actual,
-            fecha_reg=fecha_actual.date(),
-            estado='HAB'
-        )
-        db.add(nuevo_detalle_pos)
-
-        # 5. GUARDAR AUDITORÍA CRUDA (Con el valor exacto)
-        registro_crudo = models.PaloteoRegistroCrudo(
-            id_operacion=payload.id_operacion,
-            id_producto=item.id_producto,
-            botellas_cerradas=item.botellas_cerradas,
-            pesos_abiertas=json.dumps([entrada.model_dump() for entrada in item.pesos_abiertas]),
-            onzas_calculadas=total_onzas, # Exacto: 11.92
-            usuario_reg=username_actual,
-            fecha_reg=fecha_actual
-        )
-        db.add(registro_crudo)
-        
-        resultados_procesados.append({
-            "id_producto": item.id_producto,
-            "onzas_exactas": round(total_onzas, 2),
-            "onzas_pos": onzas_redondeadas_pos
-        })
+    resultados_procesados, productos_omitidos = _procesar_items_paloteo(
+        db=db,
+        payload=payload,
+        id_inventario_pos=nueva_cabecera_pos.id,
+        username_actual=username_actual,
+        fecha_actual=fecha_actual,
+    )
 
     db.commit()
-
-    # Fix #6: Incluir en la respuesta los productos que fueron omitidos por falta de configuración.
-    ids_procesados = {r['id_producto'] for r in resultados_procesados}
-    productos_omitidos = [item.id_producto for item in payload.items if item.id_producto not in ids_procesados]
 
     return {
         "status": "success",
@@ -353,6 +367,109 @@ def procesar_paloteo(
         "mensaje": f"Se registraron {len(resultados_procesados)} productos en el POS exitosamente.",
         "detalles": resultados_procesados,
         "productos_omitidos": productos_omitidos
+    }
+
+
+@app.get("/api/inventario/paloteo/{id_operacion}", response_model=schemas.InventarioRegistradoResponse)
+def obtener_inventario_registrado(
+    id_operacion: int,
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_usuario_actual)
+):
+    inventario = db.query(models.InventarioFisicoPOS).filter(
+        models.InventarioFisicoPOS.id_operacion == id_operacion,
+        models.InventarioFisicoPOS.estado == 'HAB'
+    ).first()
+
+    if not inventario:
+        raise HTTPException(status_code=404, detail="No existe inventario físico registrado para esta operación.")
+
+    operacion = db.query(models.Operacion).filter(models.Operacion.id == id_operacion).first()
+    puede_editar = bool(operacion and operacion.estado_operacion == 24)
+
+    detalles_db = db.query(models.DetalleFisicoPOS).filter(
+        models.DetalleFisicoPOS.id_inventario_fisico == inventario.id,
+        models.DetalleFisicoPOS.estado == 'HAB'
+    ).all()
+
+    detalles = [
+        {
+            "id_producto": detalle.id_producto,
+            "botellas_cerradas": float(detalle.cantidad_unidad or 0),
+            "onzas_pos": float(detalle.cantidad_detalle or 0),
+        }
+        for detalle in detalles_db
+    ]
+
+    return {
+        "id_inventario_pos": inventario.id,
+        "id_operacion": inventario.id_operacion,
+        "id_barra": inventario.id_barra,
+        "observaciones": inventario.observaciones,
+        "puede_editar": puede_editar,
+        "detalles": detalles,
+    }
+
+
+@app.put("/api/inventario/paloteo/{id_inventario_pos}", response_model=schemas.PaloteoOperacionResponse)
+def corregir_paloteo(
+    id_inventario_pos: int,
+    payload: schemas.PaloteoRequest,
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_usuario_actual)
+):
+    username_actual = current_user.usuario
+    nombre_formateado = f"{current_user.paterno} {current_user.materno}, {current_user.nombres}".upper()
+    fecha_actual = datetime.now(timezone.utc)
+
+    inventario = db.query(models.InventarioFisicoPOS).filter(
+        models.InventarioFisicoPOS.id == id_inventario_pos,
+        models.InventarioFisicoPOS.estado == 'HAB'
+    ).first()
+    if not inventario:
+        raise HTTPException(status_code=404, detail="Inventario físico no encontrado o inactivo.")
+
+    if payload.id_operacion != inventario.id_operacion:
+        raise HTTPException(
+            status_code=400,
+            detail="El id_operacion del payload no coincide con el inventario físico a corregir."
+        )
+
+    if payload.id_barra != inventario.id_barra:
+        raise HTTPException(
+            status_code=400,
+            detail="El id_barra del payload no coincide con el inventario físico a corregir."
+        )
+
+    # La corrección solo se permite mientras la operación siga en INICIO CIERRE (24).
+    _validar_operacion_inicio_cierre(db, inventario.id_operacion)
+
+    inventario.observaciones = payload.observaciones if payload.observaciones else inventario.observaciones
+    inventario.procesado_por = nombre_formateado
+    inventario.usuario_reg = username_actual
+    inventario.fecha_reg = fecha_actual.date()
+
+    db.query(models.DetalleFisicoPOS).filter(
+        models.DetalleFisicoPOS.id_inventario_fisico == inventario.id,
+        models.DetalleFisicoPOS.estado == 'HAB'
+    ).delete(synchronize_session=False)
+
+    resultados_procesados, productos_omitidos = _procesar_items_paloteo(
+        db=db,
+        payload=payload,
+        id_inventario_pos=inventario.id,
+        username_actual=username_actual,
+        fecha_actual=fecha_actual,
+    )
+
+    db.commit()
+
+    return {
+        "status": "success",
+        "id_inventario_pos": inventario.id,
+        "mensaje": f"Inventario físico corregido. Se registraron {len(resultados_procesados)} productos en el POS.",
+        "detalles": resultados_procesados,
+        "productos_omitidos": productos_omitidos,
     }
 
 @app.post("/api/pesaje/perfiles", response_model=schemas.PerfilPesaje)
