@@ -5,6 +5,7 @@
 const API_BASE = `${window.location.origin}/api`;
 let currentToken = localStorage.getItem('token') || null;
 let currentOperacionId = null;
+let currentIdInventarioPOS = null; // Guardamos el ID del inventario ya registrado para correcciones
 const ID_BARRA_ACTUAL = 1; // Podemos hacerlo dinámico después
 
 // Elementos del DOM
@@ -311,6 +312,7 @@ async function iniciarDashboard() {
 
         // Luz Verde: Guardamos el ID de operación (estado 24)
         currentOperacionId = dataOp.id_operacion;
+        currentIdInventarioPOS = null; // Resetear el ID de inventario previo para nueva operativa
         const iconoExito = dataOp.icon || 'check_circle';
         estadoIcon.textContent = iconoExito;
         estadoIcon.classList.remove('animate-pulse', 'text-on-surface-variant', 'text-error', 'status-warning-icon', 'status-checking-icon', 'status-info-icon');
@@ -598,8 +600,15 @@ async function enviarInventario(payload) {
         btnGuardar.innerHTML = `<span class="material-symbols-outlined animate-spin">refresh</span> Procesando...`;
         btnEnviarInventario.innerHTML = `<span class="material-symbols-outlined animate-spin">refresh</span> Enviando...`;
 
-        const response = await fetch(`${API_BASE}/inventario/paloteo`, {
-            method: 'POST',
+        // Decidir si hacer POST (crear) o PUT (corregir)
+        const esCorreccion = currentIdInventarioPOS !== null;
+        const metodo = esCorreccion ? 'PUT' : 'POST';
+        const url = esCorreccion 
+            ? `${API_BASE}/inventario/paloteo/${currentIdInventarioPOS}`
+            : `${API_BASE}/inventario/paloteo`;
+
+        const response = await fetch(url, {
+            method: metodo,
             headers: { 
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${currentToken}` 
@@ -610,10 +619,16 @@ async function enviarInventario(payload) {
         const result = await response.json();
 
         if (response.ok) {
-            alert(`✅ ¡Inventario Guardado!\n${result.mensaje}`);
+            // Guardar el ID del inventario registrado para futuras correcciones
+            if (!esCorreccion) {
+                currentIdInventarioPOS = result.id_inventario_pos;
+            }
+            
+            const accion = esCorreccion ? '¡Inventario Corregido!' : '¡Inventario Guardado!';
+            alert(`✅ ${accion}\n${result.mensaje}`);
             inputObservaciones.value = '';
             cerrarDialogoObservaciones();
-            iniciarDashboard(); // Recargar para mostrar que ya no hay pendientes
+            // NO recargar dashboard para mantener los datos en pantalla permitiendo más correcciones
         } else {
             alert(`❌ Error del servidor: ${result.detail || "Error desconocido"}`);
         }
