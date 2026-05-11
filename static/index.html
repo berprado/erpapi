@@ -177,15 +177,6 @@
 
         /* Ajustes móviles para CTA y dialogo */
         @media (max-width: 640px) {
-            #submit-section {
-                position: sticky;
-                bottom: 92px;
-                z-index: 15;
-                background: linear-gradient(to top, rgba(13, 21, 21, 0.96), rgba(13, 21, 21, 0.82));
-                padding-top: var(--space-sm);
-                backdrop-filter: blur(6px);
-            }
-
             #observaciones-dialog .max-w-lg {
                 max-width: 100%;
             }
@@ -528,7 +519,7 @@
         </nav>
 
         <!-- Área de Contenido -->
-        <main class="flex-1 p-md pb-28 max-w-2xl mx-auto w-full" id="main-content">
+        <main class="flex-1 p-md pb-44 max-w-2xl mx-auto w-full" id="main-content">
             
             <!-- Status de la Operación -->
             <div id="estado-operacion" class="bg-surface-container border border-outline-variant rounded-md p-md mb-lg shadow-lg flex items-center gap-md">
@@ -569,13 +560,6 @@
                 <span id="banner-correccion-texto"></span>
             </div>
 
-            <!-- Acción principal: debajo de la última tarjeta -->
-            <div id="submit-section" class="hidden mt-lg">
-                <button id="btn-guardar" class="w-full bg-primary-container text-on-primary-fixed font-headline-md text-body-base py-md px-lg rounded-sharp flex items-center justify-center gap-sm hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest">
-                    <span class="material-symbols-outlined">save</span>
-                    Confirmar Inventario
-                </button>
-            </div>
         </main>
 
         <!-- Diálogo opcional de observaciones previo al envío -->
@@ -602,35 +586,46 @@
             </div>
         </div>
 
-        <!-- Bottom Navigation (4 Tabs) -->
-        <nav class="fixed bottom-0 w-full bg-surface-container border-t border-outline-variant px-0 py-0 flex justify-around items-stretch z-30 h-20">
-            <!-- Tab 1: STOCK -->
-            <button class="flex-1 flex flex-col items-center justify-center gap-xs text-on-surface-variant hover:text-primary-fixed-dim transition-colors border-b-2 border-outline-variant hover:border-primary-fixed-dim group active-tab" data-tab="stock">
-                <span class="material-symbols-outlined text-md group-hover:glow-cyan-intense">inventory_2</span>
-                <span class="text-[10px] font-label-mono tracking-widest uppercase font-semibold">Stock</span>
-            </button>
-            
-            <!-- Tab 2: SCAN -->
-            <button class="flex-1 flex flex-col items-center justify-center gap-xs text-on-surface-variant hover:text-primary-fixed-dim transition-colors border-b-2 border-outline-variant hover:border-primary-fixed-dim group" data-tab="scan">
-                <span class="material-symbols-outlined text-md">qr_code_scanner</span>
-                <span class="text-[10px] font-label-mono tracking-widest uppercase font-semibold">Scan</span>
-            </button>
-            
-            <!-- Tab 3: ALERTS -->
-            <button class="flex-1 flex flex-col items-center justify-center gap-xs text-on-surface-variant hover:text-primary-fixed-dim transition-colors border-b-2 border-outline-variant hover:border-primary-fixed-dim group" data-tab="alerts">
-                <span class="material-symbols-outlined text-md">notifications_active</span>
-                <span class="text-[10px] font-label-mono tracking-widest uppercase font-semibold">Alerts</span>
-            </button>
-            
-            <!-- Tab 4: LOGS -->
-            <button class="flex-1 flex flex-col items-center justify-center gap-xs text-on-surface-variant hover:text-primary-fixed-dim transition-colors border-b-2 border-outline-variant hover:border-primary-fixed-dim group" data-tab="logs">
-                <span class="material-symbols-outlined text-md">history</span>
-                <span class="text-[10px] font-label-mono tracking-widest uppercase font-semibold">Logs</span>
-            </button>
+        <!-- Bottom Navigation + Action CTA -->
+        <nav class="fixed bottom-0 left-0 w-full bg-surface-container border-t border-outline-variant z-30 flex flex-col">
+            <div id="submit-section" class="hidden w-full border-b border-outline-variant bg-surface-container/95 backdrop-blur-sm">
+                <div class="max-w-2xl mx-auto w-full px-md py-sm">
+                    <button id="btn-guardar" class="w-full bg-primary-container text-on-primary-fixed font-headline-md text-body-base py-md px-lg rounded-sharp flex items-center justify-center gap-sm hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest">
+                        <span class="material-symbols-outlined">save</span>
+                        Confirmar Inventario
+                    </button>
+                </div>
+            </div>
+
+            <div class="h-20 flex justify-around items-stretch">
+                <!-- Tab 1: STOCK -->
+                <button class="flex-1 flex flex-col items-center justify-center gap-xs text-on-surface-variant hover:text-primary-fixed-dim transition-colors border-b-2 border-outline-variant hover:border-primary-fixed-dim group active-tab" data-tab="stock">
+                    <span class="material-symbols-outlined text-md group-hover:glow-cyan-intense">inventory_2</span>
+                    <span class="text-[10px] font-label-mono tracking-widest uppercase font-semibold">Stock</span>
+                </button>
+                
+                <!-- Tab 2: SCAN -->
+                <button class="flex-1 flex flex-col items-center justify-center gap-xs text-on-surface-variant hover:text-primary-fixed-dim transition-colors border-b-2 border-outline-variant hover:border-primary-fixed-dim group" data-tab="scan">
+                    <span class="material-symbols-outlined text-md">qr_code_scanner</span>
+                    <span class="text-[10px] font-label-mono tracking-widest uppercase font-semibold">Scan</span>
+                </button>
+                
+                <!-- Tab 3: ALERTS -->
+                <button class="flex-1 flex flex-col items-center justify-center gap-xs text-on-surface-variant hover:text-primary-fixed-dim transition-colors border-b-2 border-outline-variant hover:border-primary-fixed-dim group" data-tab="alerts">
+                    <span class="material-symbols-outlined text-md">notifications_active</span>
+                    <span class="text-[10px] font-label-mono tracking-widest uppercase font-semibold">Alerts</span>
+                </button>
+                
+                <!-- Tab 4: LOGS -->
+                <button class="flex-1 flex flex-col items-center justify-center gap-xs text-on-surface-variant hover:text-primary-fixed-dim transition-colors border-b-2 border-outline-variant hover:border-primary-fixed-dim group" data-tab="logs">
+                    <span class="material-symbols-outlined text-md">history</span>
+                    <span class="text-[10px] font-label-mono tracking-widest uppercase font-semibold">Logs</span>
+                </button>
+            </div>
         </nav>
     </div>
 
-    <script src="/assets/app.js?v=9.10"></script>
+    <script src="/assets/app.js?v=9.11"></script>
 
     <script>
         (function () {
