@@ -578,7 +578,7 @@ function renderizarProductos(productos) {
                         <button type="button" data-id-producto="${p.id_producto}" class="btn-add-peso btn-action text-label-mono font-semibold flex items-center gap-xs transition-colors uppercase tracking-widest rounded-sharp border px-sm py-xs">
                             <span class="material-symbols-outlined text-sm">add_circle</span> + Botella
                         </button>
-                        <button type="button" data-id-producto="${p.id_producto}" class="btn-add-modelo btn-highlight text-label-mono font-semibold flex items-center gap-xs transition-colors uppercase tracking-widest rounded-sharp border px-sm py-xs">
+                        <button type="button" data-id-producto="${p.id_producto}" class="btn-add-modelo btn-info text-label-mono font-semibold flex items-center gap-xs transition-colors uppercase tracking-widest rounded-sharp border px-sm py-xs">
                             <span class="material-symbols-outlined text-sm">labs</span> + Modelo
                         </button>
                     </div>
