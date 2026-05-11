@@ -85,7 +85,20 @@ def _procesar_items_paloteo(
 ):
     resultados_procesados = []
     productos_omitidos = []
+    productos_corregidos = []
     margen_error_balanza = 10.0
+
+    # En modo corrección, usamos actualización selectiva por producto para
+    # conservar fecha_mod en los ítems no modificados.
+    detalles_existentes_por_producto = {}
+    if es_correccion:
+        detalles_existentes = db.query(models.DetalleFisicoPOS).filter(
+            models.DetalleFisicoPOS.id_inventario_fisico == id_inventario_pos,
+            models.DetalleFisicoPOS.estado == 'HAB'
+        ).all()
+        detalles_existentes_por_producto = {
+            detalle.id_producto: detalle for detalle in detalles_existentes
+        }
 
     for item in payload.items:
         configs_producto = db.query(models.ProductoPesajeConfig).filter(
@@ -130,17 +143,36 @@ def _procesar_items_paloteo(
 
         onzas_redondeadas_pos = round(total_onzas * 2) / 2
 
-        nuevo_detalle_pos = models.DetalleFisicoPOS(
-            cantidad_unidad=item.botellas_cerradas,
-            cantidad_detalle=onzas_redondeadas_pos,
-            id_producto=item.id_producto,
-            id_inventario_fisico=id_inventario_pos,
-            usuario_reg=username_actual,
-            fecha_reg=fecha_actual.date(),
-            fecha_mod=fecha_actual.date() if es_correccion else None,  # Registrar fecha de corrección solo si es edición
-            estado='HAB'
-        )
-        db.add(nuevo_detalle_pos)
+        if es_correccion and item.id_producto in detalles_existentes_por_producto:
+            detalle_existente = detalles_existentes_por_producto[item.id_producto]
+            cantidad_unidad_actual = float(detalle_existente.cantidad_unidad or 0)
+            cantidad_detalle_actual = float(detalle_existente.cantidad_detalle or 0)
+
+            hubo_cambio = (
+                cantidad_unidad_actual != float(item.botellas_cerradas)
+                or cantidad_detalle_actual != float(onzas_redondeadas_pos)
+            )
+
+            if hubo_cambio:
+                detalle_existente.cantidad_unidad = item.botellas_cerradas
+                detalle_existente.cantidad_detalle = onzas_redondeadas_pos
+                detalle_existente.usuario_reg = username_actual
+                detalle_existente.fecha_mod = fecha_actual.date()
+                productos_corregidos.append(item.id_producto)
+        else:
+            nuevo_detalle_pos = models.DetalleFisicoPOS(
+                cantidad_unidad=item.botellas_cerradas,
+                cantidad_detalle=onzas_redondeadas_pos,
+                id_producto=item.id_producto,
+                id_inventario_fisico=id_inventario_pos,
+                usuario_reg=username_actual,
+                fecha_reg=fecha_actual.date(),
+                fecha_mod=fecha_actual.date() if es_correccion else None,
+                estado='HAB'
+            )
+            db.add(nuevo_detalle_pos)
+            if es_correccion:
+                productos_corregidos.append(item.id_producto)
 
         registro_crudo = models.PaloteoRegistroCrudo(
             id_operacion=payload.id_operacion,
@@ -159,7 +191,7 @@ def _procesar_items_paloteo(
             "onzas_pos": onzas_redondeadas_pos
         })
 
-    return resultados_procesados, productos_omitidos
+    return resultados_procesados, productos_omitidos, productos_corregidos
 
 # --- ENDPOINTS ---
 @app.get("/api")
@@ -353,7 +385,7 @@ def procesar_paloteo(
     db.add(nueva_cabecera_pos)
     db.flush()
 
-    resultados_procesados, productos_omitidos = _procesar_items_paloteo(
+    resultados_procesados, productos_omitidos, _ = _procesar_items_paloteo(
         db=db,
         payload=payload,
         id_inventario_pos=nueva_cabecera_pos.id,
@@ -451,14 +483,8 @@ def corregir_paloteo(
     inventario.procesado_por = nombre_formateado
     inventario.usuario_reg = username_actual
     inventario.fecha_reg = fecha_actual.date()
-    inventario.fecha_mod = fecha_actual.date()  # Registrar fecha de corrección en cabecera
 
-    db.query(models.DetalleFisicoPOS).filter(
-        models.DetalleFisicoPOS.id_inventario_fisico == inventario.id,
-        models.DetalleFisicoPOS.estado == 'HAB'
-    ).delete(synchronize_session=False)
-
-    resultados_procesados, productos_omitidos = _procesar_items_paloteo(
+    resultados_procesados, productos_omitidos, productos_corregidos = _procesar_items_paloteo(
         db=db,
         payload=payload,
         id_inventario_pos=inventario.id,
@@ -466,6 +492,10 @@ def corregir_paloteo(
         fecha_actual=fecha_actual,
         es_correccion=True,
     )
+
+    # La cabecera se marca como modificada solo si hubo al menos un detalle corregido.
+    if productos_corregidos:
+        inventario.fecha_mod = fecha_actual.date()
 
     db.commit()
 
