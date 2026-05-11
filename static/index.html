@@ -562,6 +562,13 @@
                 <!-- JS inyectará las "tarjetas" aquí -->
             </div>
 
+            <!-- Banner: modo corrección (se muestra cuando hay inventario previo cargado) -->
+            <div id="banner-correccion" class="hidden mt-md p-sm rounded-md border flex items-center gap-sm text-label-mono uppercase tracking-widest" style="background: color-mix(in srgb, var(--semantic-warning) 10%, transparent); border-color: var(--semantic-warning); color: var(--semantic-warning);">
+                <span class="material-symbols-outlined" style="font-size: 1.1rem;">edit_note</span>
+                <span>Modo Corrección ·</span>
+                <span id="banner-correccion-texto"></span>
+            </div>
+
             <!-- Acción principal: debajo de la última tarjeta -->
             <div id="submit-section" class="hidden mt-lg">
                 <button id="btn-guardar" class="w-full bg-primary-container text-on-primary-fixed font-headline-md text-body-base py-md px-lg rounded-sharp flex items-center justify-center gap-sm hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest">
@@ -623,7 +630,7 @@
         </nav>
     </div>
 
-    <script src="/assets/app.js?v=9.7"></script>
+    <script src="/assets/app.js?v=9.8"></script>
 
     <script>
         (function () {

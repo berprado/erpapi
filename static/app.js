@@ -313,6 +313,7 @@ async function iniciarDashboard() {
         // Luz Verde: Guardamos el ID de operación (estado 24)
         currentOperacionId = dataOp.id_operacion;
         currentIdInventarioPOS = null; // Resetear el ID de inventario previo para nueva operativa
+        ocultarBannerCorreccion(); // Ocultar banner de corrección hasta confirmar si hay inventario
         const iconoExito = dataOp.icon || 'check_circle';
         estadoIcon.textContent = iconoExito;
         estadoIcon.classList.remove('animate-pulse', 'text-on-surface-variant', 'text-error', 'status-warning-icon', 'status-checking-icon', 'status-info-icon');
@@ -350,6 +351,9 @@ async function cargarProductos() {
             
             // NUEVO: Mostrar resumen de productos (total, pesables, no pesables)
             actualizarResumenProductos(productos);
+
+            // NUEVO: Verificar si ya existe inventario registrado y pre-cargar valores
+            await cargarInventarioExistente();
         } else {
             listaProductos.innerHTML = `<div class="text-center text-on-surface-variant py-lg font-body-base">No hay productos consumidos para auditar hoy.</div>`;
             ocultarResumenProductos();
@@ -376,6 +380,100 @@ function actualizarResumenProductos(productos) {
 // NUEVO: Ocultar resumen de productos
 function ocultarResumenProductos() {
     document.getElementById('estado-resumen').classList.add('hidden');
+}
+
+// ==========================================
+// CARGA DE INVENTARIO EXISTENTE (MODO CORRECCIÓN)
+// ==========================================
+
+/**
+ * Consulta el backend para verificar si ya existe un inventario físico registrado
+ * para la operativa actual. Si existe, setea currentIdInventarioPOS y pre-llena
+ * los inputs de las tarjetas con los valores guardados.
+ */
+async function cargarInventarioExistente() {
+    if (!currentOperacionId) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/inventario/paloteo/${currentOperacionId}`, {
+            headers: { 'Authorization': `Bearer ${currentToken}` }
+        });
+
+        if (response.status === 401) return btnLogout.click();
+        if (response.status === 404) return; // Sin inventario previo, flujo normal de creación
+        if (!response.ok) return; // Otro error, ignorar silenciosamente
+
+        const data = await response.json();
+        currentIdInventarioPOS = data.id_inventario_pos;
+
+        if (data.detalles && data.detalles.length > 0) {
+            preLlenarInventario(data.detalles);
+        }
+
+        // Mostrar banner de modo corrección si la operativa aún admite edición
+        if (data.puede_editar) {
+            mostrarBannerCorreccion(data.observaciones);
+        }
+
+    } catch (error) {
+        console.error("Error verificando inventario existente:", error);
+    }
+}
+
+/**
+ * Pre-llena los inputs de cada tarjeta con los valores ya almacenados en la BD.
+ * Para productos pesables, recalcula el peso estimado en gramos usando la inversa
+ * de la fórmula: peso_estimado = onzas_pos * gramos_por_oz + tara
+ */
+function preLlenarInventario(detalles) {
+    detalles.forEach(detalle => {
+        const card = document.querySelector(`.product-card[data-id="${detalle.id_producto}"]`);
+        if (!card) return;
+
+        // Pre-llenar botellas cerradas
+        const inputCerradas = card.querySelector('.input-cerradas');
+        if (inputCerradas) {
+            inputCerradas.value = detalle.botellas_cerradas || 0;
+        }
+
+        // Pre-llenar peso para productos pesables
+        if (parseInt(card.dataset.pesable) === 1 && detalle.onzas_pos > 0) {
+            const perfiles = JSON.parse(card.dataset.perfiles || '[]');
+            if (perfiles.length > 0) {
+                const perfil = perfiles[0];
+                const tara = parseFloat(perfil.tara) || 0;
+                const gramsPorOz = parseFloat(perfil.gramos_por_oz) || 0;
+                if (gramsPorOz > 0) {
+                    // Inversa: onzas guardadas → gramos estimados para el input de báscula
+                    const pesoEstimado = (detalle.onzas_pos * gramsPorOz) + tara;
+                    const primerInput = card.querySelector('.input-peso');
+                    if (primerInput) {
+                        primerInput.value = pesoEstimado.toFixed(1);
+                    }
+                }
+            }
+        }
+
+        // Recalcular deltas visibles con los valores cargados
+        recalcularTarjeta(card);
+    });
+}
+
+function mostrarBannerCorreccion(observaciones) {
+    const banner = document.getElementById('banner-correccion');
+    if (!banner) return;
+    const textoSpan = document.getElementById('banner-correccion-texto');
+    if (textoSpan) {
+        textoSpan.textContent = observaciones
+            ? `Datos previos cargados · Obs: ${observaciones}`
+            : 'Datos previos cargados';
+    }
+    banner.classList.remove('hidden');
+}
+
+function ocultarBannerCorreccion() {
+    const banner = document.getElementById('banner-correccion');
+    if (banner) banner.classList.add('hidden');
 }
 
 // ==========================================
