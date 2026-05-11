@@ -384,6 +384,29 @@
             box-shadow: 0 0 8px rgba(224, 0, 120, 0.2);
             }
         
+            /* Logo Wrapper compacto para Navbar */
+            .logo-wrapper-nav {
+                position: relative;
+                display: inline-block;
+                height: 1.75rem;
+            }
+
+            @media (min-width: 640px) {
+                .logo-wrapper-nav {
+                    height: 2.25rem;
+                }
+            }
+
+            .logo-wrapper-nav .logo-main {
+                height: 100%;
+                width: auto;
+            }
+
+            .logo-wrapper-nav .glitch-layer {
+                width: auto;
+                height: 100%;
+            }
+
             /* Success Check Icon */
             .success-check-icon {
                 color: var(--semantic-action) !important;
@@ -507,8 +530,13 @@
         
         <!-- Navbar Superior -->
         <nav class="bg-surface-container border-b border-outline-variant px-lg py-sm sm:py-md flex justify-between items-center sticky top-0 z-20 shadow-lg">
-            <!-- Logo -->
-            <img alt="BackStage" class="h-7 sm:h-9 w-auto" src="/assets/imgs/logo_banner.png" aria-label="BackStage" title="BackStage">
+            <!-- Logo con Glitch -->
+            <div class="logo-wrapper-nav">
+                <img alt="BackStage" class="logo-main" src="/assets/imgs/logo_banner.png">
+                <img alt="" class="glitch-layer glitch-red" src="/assets/imgs/logo_banner.png" aria-hidden="true">
+                <img alt="" class="glitch-layer glitch-cyan" src="/assets/imgs/logo_banner.png" aria-hidden="true">
+                <div class="scanlines"></div>
+            </div>
             
             <div class="flex items-center gap-md">
                 <span id="user-display" class="text-label-mono text-on-surface-variant font-semibold tracking-widest hidden sm:inline uppercase"></span>
@@ -625,7 +653,7 @@
         </nav>
     </div>
 
-    <script src="/assets/app.js?v=9.5"></script>
+    <script src="/assets/app.js?v=9.6"></script>
 
     <script>
         (function () {
