@@ -74,3 +74,26 @@ class ProductoPendiente(BaseModel):
     pesable: Optional[int] = None
     perfiles: List[PerfilPesaje] = Field(default_factory=list)
     onzas_por_botella_llena: float
+
+
+class InventarioDetalleRegistrado(BaseModel):
+    id_producto: int
+    botellas_cerradas: float
+    onzas_pos: float
+
+
+class InventarioRegistradoResponse(BaseModel):
+    id_inventario_pos: int
+    id_operacion: int
+    id_barra: int
+    observaciones: Optional[str] = None
+    puede_editar: bool
+    detalles: List[InventarioDetalleRegistrado]
+
+
+class PaloteoOperacionResponse(BaseModel):
+    status: str
+    id_inventario_pos: int
+    mensaje: str
+    detalles: List[dict]
+    productos_omitidos: List[int]
