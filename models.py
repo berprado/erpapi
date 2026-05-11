@@ -74,6 +74,7 @@ class InventarioFisicoPOS(Base):
     id_operacion = Column(Integer)
     usuario_reg = Column(String(255))
     fecha_reg = Column(Date)
+    fecha_mod = Column(Date) # Fecha de última corrección
     estado = Column(String(3), default='HAB')
 
 class DetalleFisicoPOS(Base):
@@ -86,4 +87,5 @@ class DetalleFisicoPOS(Base):
     id_inventario_fisico = Column(Integer)
     usuario_reg = Column(String(255))
     fecha_reg = Column(Date)
+    fecha_mod = Column(Date) # Fecha de última corrección
     estado = Column(String(3), default='HAB')

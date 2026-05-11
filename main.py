@@ -81,6 +81,7 @@ def _procesar_items_paloteo(
     id_inventario_pos: int,
     username_actual: str,
     fecha_actual: datetime,
+    es_correccion: bool = False,
 ):
     resultados_procesados = []
     productos_omitidos = []
@@ -136,6 +137,7 @@ def _procesar_items_paloteo(
             id_inventario_fisico=id_inventario_pos,
             usuario_reg=username_actual,
             fecha_reg=fecha_actual.date(),
+            fecha_mod=fecha_actual.date() if es_correccion else None,  # Registrar fecha de corrección solo si es edición
             estado='HAB'
         )
         db.add(nuevo_detalle_pos)
@@ -357,6 +359,7 @@ def procesar_paloteo(
         id_inventario_pos=nueva_cabecera_pos.id,
         username_actual=username_actual,
         fecha_actual=fecha_actual,
+        es_correccion=False,
     )
 
     db.commit()
@@ -448,6 +451,7 @@ def corregir_paloteo(
     inventario.procesado_por = nombre_formateado
     inventario.usuario_reg = username_actual
     inventario.fecha_reg = fecha_actual.date()
+    inventario.fecha_mod = fecha_actual.date()  # Registrar fecha de corrección en cabecera
 
     db.query(models.DetalleFisicoPOS).filter(
         models.DetalleFisicoPOS.id_inventario_fisico == inventario.id,
@@ -460,6 +464,7 @@ def corregir_paloteo(
         id_inventario_pos=inventario.id,
         username_actual=username_actual,
         fecha_actual=fecha_actual,
+        es_correccion=True,
     )
 
     db.commit()
