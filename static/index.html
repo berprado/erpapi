@@ -583,11 +583,11 @@
             <div id="observaciones-overlay" class="absolute inset-0 bg-black/70"></div>
             <div class="relative z-10 min-h-screen flex items-center justify-center p-md">
                 <div class="w-full max-w-lg bg-surface-container border border-outline-variant rounded-md p-md shadow-lg">
-                    <h3 class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase mb-sm flex items-center gap-sm">
+                    <h3 id="observaciones-dialog-titulo" class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase mb-sm flex items-center gap-sm">
                         <span class="material-symbols-outlined text-sm">edit_note</span>
                         Observaciones del cierre (opcional)
                     </h3>
-                    <p class="text-sm text-on-surface-variant mb-md">Puedes dejar este campo en blanco y enviar de todas formas.</p>
+                    <p id="observaciones-dialog-ayuda" class="text-sm text-on-surface-variant mb-md">Puedes dejar este campo en blanco y enviar de todas formas.</p>
                     <textarea id="observaciones-paloteo" rows="3" placeholder="Ej: Faltó reportar la merma de una copa" class="w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface mb-md focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-body-base resize-none"></textarea>
                     <div class="flex flex-col sm:flex-row gap-sm">
                         <button id="btn-cancelar-observaciones" class="w-full sm:w-auto bg-surface text-on-surface border border-outline-variant py-sm px-md rounded-sharp uppercase tracking-widest text-label-mono hover:border-primary-fixed-dim transition-colors">
@@ -630,7 +630,7 @@
         </nav>
     </div>
 
-    <script src="/assets/app.js?v=9.9"></script>
+    <script src="/assets/app.js?v=9.10"></script>
 
     <script>
         (function () {

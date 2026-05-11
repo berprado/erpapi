@@ -17,6 +17,8 @@ const listaProductos = document.getElementById('lista-productos');
 const submitSection = document.getElementById('submit-section');
 const btnGuardar = document.getElementById('btn-guardar');
 const observacionesDialog = document.getElementById('observaciones-dialog');
+const observacionesDialogTitulo = document.getElementById('observaciones-dialog-titulo');
+const observacionesDialogAyuda = document.getElementById('observaciones-dialog-ayuda');
 const observacionesOverlay = document.getElementById('observaciones-overlay');
 const inputObservaciones = document.getElementById('observaciones-paloteo');
 const btnEnviarInventario = document.getElementById('btn-enviar-inventario');
@@ -605,6 +607,18 @@ window.agregarInputPeso = function(idProducto, perfilesJson) {
 // ENVÍO AL SERVIDOR Y VALIDACIONES
 // ==========================================
 function abrirDialogoObservaciones() {
+    const esCorreccion = currentIdInventarioPOS !== null;
+
+    if (observacionesDialogTitulo) {
+        observacionesDialogTitulo.innerHTML = esCorreccion
+            ? '<span class="material-symbols-outlined text-sm">edit_note</span> Observaciones de la corrección (opcional)'
+            : '<span class="material-symbols-outlined text-sm">edit_note</span> Observaciones del cierre (opcional)';
+    }
+
+    if (observacionesDialogAyuda) {
+        observacionesDialogAyuda.textContent = 'Puedes dejar este campo en blanco y enviar de todas formas.';
+    }
+
     observacionesDialog.classList.remove('hidden');
     inputObservaciones.focus();
 }
