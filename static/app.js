@@ -24,6 +24,52 @@ const inputObservaciones = document.getElementById('observaciones-paloteo');
 const btnEnviarInventario = document.getElementById('btn-enviar-inventario');
 const btnCancelarObservaciones = document.getElementById('btn-cancelar-observaciones');
 
+function renderCriticalIcon(iconName, className = 'ui-icon') {
+    const iconPaths = {
+        close: [
+            '<path d="M18 6L6 18"></path>',
+            '<path d="M6 6l12 12"></path>'
+        ],
+        refresh: [
+            '<path d="M21 12a9 9 0 0 1-15.5 6.36"></path>',
+            '<path d="M3 12a9 9 0 0 1 15.5-6.36"></path>',
+            '<path d="M3 4v5h5"></path>',
+            '<path d="M21 20v-5h-5"></path>'
+        ],
+        check_circle: [
+            '<circle cx="12" cy="12" r="9"></circle>',
+            '<path d="M8.5 12.5l2.5 2.5 4.5-5"></path>'
+        ],
+        hourglass_empty: [
+            '<path d="M7 3h10"></path>',
+            '<path d="M7 21h10"></path>',
+            '<path d="M8 3c0 4 4 4.5 4 9s-4 5-4 9"></path>',
+            '<path d="M16 3c0 4-4 4.5-4 9s4 5 4 9"></path>'
+        ],
+        block: [
+            '<circle cx="12" cy="12" r="9"></circle>',
+            '<path d="M8.5 15.5l7-7"></path>'
+        ],
+        visibility: [
+            '<path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z"></path>',
+            '<circle cx="12" cy="12" r="2.5"></circle>'
+        ],
+        visibility_off: [
+            '<path d="M3 3l18 18"></path>',
+            '<path d="M10.6 6.2A10.53 10.53 0 0 1 12 6c6 0 9.5 6 9.5 6a17.7 17.7 0 0 1-4.02 4.4"></path>',
+            '<path d="M6.3 6.7A17.36 17.36 0 0 0 2.5 12s3.5 6 9.5 6a9.8 9.8 0 0 0 4-.83"></path>',
+            '<path d="M10.9 10.9a2.99 2.99 0 0 0 4.2 4.2"></path>'
+        ]
+    };
+
+    const paths = iconPaths[iconName];
+    if (!paths) {
+        return `<span class="material-symbols-outlined ${className}">${escapeHtml(iconName)}</span>`;
+    }
+
+    return `<svg class="${className}" viewBox="0 0 24 24" aria-hidden="true">${paths.join('')}</svg>`;
+}
+
 // ==========================================
 // INICIALIZACIÓN
 // ==========================================
@@ -56,8 +102,8 @@ function crearInputPeso(perfilesJson, removable = true) {
     }
 
     const removeButtonHtml = removable
-        ? `<button type="button" onclick="this.parentElement.parentElement.remove()" class="absolute right-sm top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-error transition-colors" aria-label="Eliminar campo de peso">
-                    <span class="material-symbols-outlined text-sm">close</span>
+        ? `<button type="button" onclick="this.parentElement.parentElement.remove()" class="btn-remove-peso absolute right-sm top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-error transition-colors" aria-label="Eliminar campo de peso">
+                    ${renderCriticalIcon('close', 'ui-icon ui-icon-sm')}
                 </button>`
         : '';
 
@@ -197,12 +243,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Configurar Password Toggle (El ojito)
-    const togglePassword = document.querySelector('button[type="button"]');
+    const togglePassword = document.getElementById('toggle-password');
     const passwordInput = document.getElementById('password');
     togglePassword.addEventListener('click', () => {
         const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
         passwordInput.setAttribute('type', type);
-        togglePassword.querySelector('span').textContent = type === 'password' ? 'visibility' : 'visibility_off';
+        togglePassword.querySelector('[data-password-icon]').innerHTML = renderCriticalIcon(
+            type === 'password' ? 'visibility' : 'visibility_off',
+            'ui-icon ui-icon-sm'
+        );
     });
 });
 
@@ -272,10 +321,10 @@ async function iniciarDashboard() {
     const estadoTexto = document.getElementById('estado-texto');
     
     // Fix #28: Resetear clases del icóno antes de cada verificación para evitar acumulación de estilos.
-    estadoIcon.className = 'material-symbols-outlined text-4xl text-on-surface-variant';
+    estadoIcon.className = 'inline-flex text-4xl text-on-surface-variant';
     estadoIcon.style.color = '';
     estadoIcon.style.filter = '';
-    estadoIcon.textContent = "hourglass_empty";
+    estadoIcon.innerHTML = renderCriticalIcon('hourglass_empty');
     estadoIcon.classList.add('animate-pulse');
     estadoIcon.classList.add('status-checking-icon');
     estadoTexto.textContent = "Verificando estado de la caja...";
@@ -299,7 +348,7 @@ async function iniciarDashboard() {
             const iconoError = detail.icon || 'block';
             const statusClass = detail.status_class || 'status-warning-icon';
             
-            estadoIcon.textContent = iconoError;
+            estadoIcon.innerHTML = renderCriticalIcon(iconoError);
             estadoIcon.classList.remove('animate-pulse', 'text-primary-fixed', 'text-error', 'text-on-surface-variant', 'success-check-icon', 'status-checking-icon', 'status-warning-icon', 'status-info-icon');
             estadoIcon.classList.add(statusClass);
             
@@ -317,7 +366,7 @@ async function iniciarDashboard() {
         currentIdInventarioPOS = null; // Resetear el ID de inventario previo para nueva operativa
         ocultarBannerCorreccion(); // Ocultar banner de corrección hasta confirmar si hay inventario
         const iconoExito = dataOp.icon || 'check_circle';
-        estadoIcon.textContent = iconoExito;
+        estadoIcon.innerHTML = renderCriticalIcon(iconoExito);
         estadoIcon.classList.remove('animate-pulse', 'text-on-surface-variant', 'text-error', 'status-warning-icon', 'status-checking-icon', 'status-info-icon');
         estadoIcon.classList.add('success-check-icon');
         
@@ -709,8 +758,8 @@ async function enviarInventario(payload) {
     try {
         btnGuardar.disabled = true;
         btnEnviarInventario.disabled = true;
-        btnGuardar.innerHTML = `<span class="material-symbols-outlined animate-spin">refresh</span> Procesando...`;
-        btnEnviarInventario.innerHTML = `<span class="material-symbols-outlined animate-spin">refresh</span> Enviando...`;
+        btnGuardar.innerHTML = `${renderCriticalIcon('refresh', 'ui-icon animate-spin')} Procesando...`;
+        btnEnviarInventario.innerHTML = `${renderCriticalIcon('refresh', 'ui-icon animate-spin')} Enviando...`;
 
         // Decidir si hacer POST (crear) o PUT (corregir)
         const esCorreccion = currentIdInventarioPOS !== null;
@@ -789,7 +838,7 @@ function formatearDiferencia(diferencia, isOz = false) {
 
     // Tolerancia para decimales (evitar ruido por redondeos)
     if (Math.abs(diferencia) < 0.01) {
-        return '<span class="text-data-tabular font-semibold" style="color: var(--semantic-action)"><span class="material-symbols-outlined text-sm align-middle">check_circle</span></span>';
+        return `<span class="text-data-tabular font-semibold" style="color: var(--semantic-action)">${renderCriticalIcon('check_circle', 'ui-icon ui-icon-sm')}</span>`;
     }
 
     if (diferencia < 0) {
@@ -889,7 +938,7 @@ listaProductos.addEventListener('click', (e) => {
 });
 
 listaProductos.addEventListener('click', (e) => {
-    if (e.target.closest('button') && e.target.closest('button').querySelector('.material-symbols-outlined')?.textContent === 'close') {
+    if (e.target.closest('.btn-remove-peso')) {
         const card = e.target.closest('.product-card');
         setTimeout(() => recalcularTarjeta(card), 50);
     }

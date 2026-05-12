@@ -144,6 +144,24 @@
     </script>
 
     <style>
+        .ui-icon {
+            display: inline-block;
+            width: 1em;
+            height: 1em;
+            flex-shrink: 0;
+            vertical-align: middle;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .ui-icon-sm {
+            width: 0.95rem;
+            height: 0.95rem;
+        }
+
         /* Alinear iconos verticalmente */
         .material-symbols-outlined { vertical-align: middle; }
 
@@ -477,7 +495,11 @@
                     <!-- Campo Usuario -->
                     <div>
                         <label class="block text-label-mono font-label-mono text-on-surface-variant tracking-widest mb-sm uppercase flex items-center gap-sm">
-                            <span class="material-symbols-outlined text-sm">badge</span>
+                            <svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M12 3l2.2 2.2 3.1-.4.4 3.1L20 10l-2.2 2  .4 3.1-3.1.4L12 18l-3.1-2.5-3.1-.4.4-3.1L4 10l2.2-2 .4-3.1 3.1.4z"></path>
+                                <path d="M12 9.25a1.75 1.75 0 1 1 0 3.5 1.75 1.75 0 0 1 0-3.5z"></path>
+                                <path d="M8.8 16c.9-1.45 2.02-2.18 3.2-2.18S14.3 14.55 15.2 16"></path>
+                            </svg>
                             Usuario POS
                         </label>
                         <input type="text" id="username" placeholder="usuario.pos" 
@@ -487,14 +509,22 @@
                     <!-- Campo Contraseña -->
                     <div>
                         <label class="block text-label-mono font-label-mono text-on-surface-variant tracking-widest mb-sm uppercase flex items-center gap-sm">
-                            <span class="material-symbols-outlined text-sm">lock</span>
+                            <svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" aria-hidden="true">
+                                <rect x="5" y="11" width="14" height="10" rx="2"></rect>
+                                <path d="M8 11V8a4 4 0 1 1 8 0v3"></path>
+                            </svg>
                             Contraseña
                         </label>
                         <div class="relative">
                             <input type="password" id="password" placeholder="••••••••" 
                                 class="w-full bg-surface-container-highest border-b-2 border-outline-variant px-sm py-sm text-primary placeholder-outline/50 focus:outline-none focus:border-b-2 focus:border-primary-fixed-dim focus:shadow-cyan-glow-focus transition-all font-data-tabular" required>
-                            <button type="button" class="absolute right-sm top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-primary-fixed-dim transition-colors">
-                                <span class="material-symbols-outlined text-sm">visibility</span>
+                            <button type="button" id="toggle-password" class="absolute right-sm top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-primary-fixed-dim transition-colors" aria-label="Mostrar u ocultar contraseña">
+                                <span data-password-icon>
+                                    <svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z"></path>
+                                        <circle cx="12" cy="12" r="2.5"></circle>
+                                    </svg>
+                                </span>
                             </button>
                         </div>
                     </div>
@@ -502,7 +532,11 @@
                     <!-- Botón Ingresar -->
                     <button type="submit" 
                         class="w-full bg-primary-container text-on-primary-fixed font-headline-md text-body-base py-md px-lg rounded-sharp flex items-center justify-center gap-sm mt-lg hover:brightness-110 active:scale-95 border border-[#ff008c] shadow-[0_0_12px_rgba(255,0,140,0.45),0_0_20px_rgba(0,240,255,0.35)] transition-all uppercase tracking-widest">
-                        <span class="material-symbols-outlined">login</span>
+                        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M10 17l5-5-5-5"></path>
+                            <path d="M15 12H4"></path>
+                            <path d="M20 4v16"></path>
+                        </svg>
                         Iniciar Sesión
                     </button>
                 </div>
@@ -546,7 +580,11 @@
             <div class="flex items-center gap-md shrink-0">
                 <span id="user-display" class="text-label-mono text-on-surface-variant font-semibold tracking-widest hidden sm:inline uppercase"></span>
                 <button id="btn-logout" class="flex items-center text-on-surface-variant hover:text-primary-fixed-dim transition-colors">
-                    <span class="material-symbols-outlined">logout</span>
+                    <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M14 7l5 5-5 5"></path>
+                        <path d="M19 12H8"></path>
+                        <path d="M4 4v16"></path>
+                    </svg>
                 </button>
             </div>
         </nav>
@@ -557,7 +595,14 @@
             <!-- Status de la Operación -->
             <div id="estado-operacion" class="bg-surface-container border border-outline-variant rounded-md p-md mb-lg shadow-lg flex items-center gap-md">
                 <div class="bg-surface-container-low p-sm rounded-sharp border border-outline-variant">
-                    <span class="material-symbols-outlined text-primary-fixed animate-pulse" id="estado-icon">hourglass_empty</span>
+                    <span class="inline-flex text-4xl text-primary-fixed animate-pulse status-checking-icon" id="estado-icon" aria-hidden="true">
+                        <svg class="ui-icon" viewBox="0 0 24 24">
+                            <path d="M7 3h10"></path>
+                            <path d="M7 21h10"></path>
+                            <path d="M8 3c0 4 4 4.5 4 9s-4 5-4 9"></path>
+                            <path d="M16 3c0 4-4 4.5-4 9s4 5 4 9"></path>
+                        </svg>
+                    </span>
                 </div>
                 <div class="flex-1">
                     <h3 id="estado-titulo" class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase">Verificando operativa...</h3>
@@ -611,7 +656,10 @@
                             Volver
                         </button>
                         <button id="btn-enviar-inventario" class="w-full bg-primary-container text-on-primary-fixed font-headline-md text-body-base py-sm px-md rounded-sharp flex items-center justify-center gap-sm hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest">
-                            <span class="material-symbols-outlined">send</span>
+                            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M22 2L11 13"></path>
+                                <path d="M22 2L15 22l-4-9-9-4z"></path>
+                            </svg>
                             Enviar inventario
                         </button>
                     </div>
@@ -624,7 +672,11 @@
             <div id="submit-section" class="hidden w-full border-b border-outline-variant bg-surface-container/95 backdrop-blur-sm">
                 <div class="max-w-2xl mx-auto w-full px-md py-sm">
                     <button id="btn-guardar" class="w-full bg-primary-container text-on-primary-fixed font-headline-md text-body-base py-md px-lg rounded-sharp flex items-center justify-center gap-sm hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest">
-                        <span class="material-symbols-outlined">save</span>
+                        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M5 4h11l3 3v13H5z"></path>
+                            <path d="M8 4v6h8V4"></path>
+                            <path d="M8 20v-6h8v6"></path>
+                        </svg>
                         Confirmar Inventario
                     </button>
                 </div>
@@ -658,7 +710,7 @@
         </nav>
     </div>
 
-    <script src="/assets/app.js?v=9.18"></script>
+    <script src="/assets/app.js?v=9.19"></script>
 
     <script>
         (function () {
