@@ -313,7 +313,7 @@ function mostrarPantallaApp() {
 // ==========================================
 async function iniciarDashboard() {
     listaProductos.innerHTML = ''; // Limpiar lista
-    submitSection.classList.add('hidden');
+    _deshabilitarBtnEnvio();
     observacionesDialog.classList.add('hidden');
     inputObservaciones.value = '';
     
@@ -398,7 +398,7 @@ async function cargarProductos() {
 
         if (response.ok && productos.length > 0) {
             renderizarProductos(productos);
-            submitSection.classList.remove('hidden'); // Mostrar botón de guardado bajo las tarjetas
+            _habilitarBtnEnvio();
             
             // NUEVO: Mostrar resumen de productos (total, pesables, no pesables)
             actualizarResumenProductos(productos);
@@ -431,6 +431,18 @@ function actualizarResumenProductos(productos) {
 // NUEVO: Ocultar resumen de productos
 function ocultarResumenProductos() {
     document.getElementById('estado-resumen').classList.add('hidden');
+}
+
+function _habilitarBtnEnvio() {
+    btnGuardar.disabled = false;
+    btnGuardar.classList.remove('opacity-40', 'cursor-not-allowed', 'text-on-surface-variant');
+    btnGuardar.classList.add('text-primary-fixed', 'hover:text-primary-fixed-dim', 'border-primary-fixed-dim', 'glow-cyan-intense');
+}
+
+function _deshabilitarBtnEnvio() {
+    btnGuardar.disabled = true;
+    btnGuardar.classList.remove('text-primary-fixed', 'hover:text-primary-fixed-dim', 'border-primary-fixed-dim', 'glow-cyan-intense');
+    btnGuardar.classList.add('opacity-40', 'cursor-not-allowed', 'text-on-surface-variant');
 }
 
 // ==========================================
