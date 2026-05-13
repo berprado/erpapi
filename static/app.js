@@ -170,6 +170,76 @@ function refrescarSelectoresPerfil(card) {
     });
 }
 
+// ==========================================
+// MODAL: CREAR MODELO DE BOTELLA
+// ==========================================
+
+const modeloBotellaDialog  = document.getElementById('modelo-botella-dialog');
+const modeloBotellaOverlay = document.getElementById('modelo-botella-overlay');
+const modeloBotellaSubtit  = document.getElementById('modelo-botella-subtitulo');
+const mbNombre     = document.getElementById('mb-nombre');
+const mbPesoBruto  = document.getElementById('mb-peso-bruto');
+const mbTara       = document.getElementById('mb-tara');
+const mbGramosOz   = document.getElementById('mb-gramos-oz');
+const mbTolerancia = document.getElementById('mb-tolerancia');
+const mbError      = document.getElementById('mb-error');
+const btnCancelarModelo  = document.getElementById('btn-cancelar-modelo');
+const btnConfirmarModelo = document.getElementById('btn-confirmar-modelo');
+
+/** Muestra el modal de nuevo modelo y resuelve con los datos cuando el usuario confirma, o null si cancela. */
+function abrirModalModelo(nombreProducto, perfilBase) {
+    return new Promise((resolve) => {
+        // Subtítulo con nombre del producto
+        modeloBotellaSubtit.textContent = nombreProducto;
+
+        // Pre-llenar con valores del perfil base si existe
+        mbNombre.value     = '';
+        mbPesoBruto.value  = perfilBase ? perfilBase.peso_bruto  : '';
+        mbTara.value       = perfilBase ? perfilBase.tara        : '';
+        mbGramosOz.value   = perfilBase ? perfilBase.gramos_por_oz : '29.5735';
+        mbTolerancia.value = perfilBase ? perfilBase.tolerancia_oz : '0';
+        mbError.classList.add('hidden');
+        mbError.textContent = '';
+
+        modeloBotellaDialog.classList.remove('hidden');
+        mbNombre.focus();
+
+        function mostrarError(msg) {
+            mbError.textContent = msg;
+            mbError.classList.remove('hidden');
+        }
+
+        function cerrar(resultado) {
+            modeloBotellaDialog.classList.add('hidden');
+            btnConfirmarModelo.removeEventListener('click', onConfirmar);
+            btnCancelarModelo.removeEventListener('click', onCancelar);
+            modeloBotellaOverlay.removeEventListener('click', onCancelar);
+            resolve(resultado);
+        }
+
+        function onConfirmar() {
+            const nombre    = mbNombre.value.trim().toUpperCase();
+            const pesoBruto = parseFloat(mbPesoBruto.value);
+            const tara      = parseFloat(mbTara.value);
+            const gramosOz  = parseFloat(mbGramosOz.value);
+            const tolerancia = parseFloat(mbTolerancia.value);
+
+            if (!nombre) return mostrarError('El nombre del modelo es obligatorio.');
+            if ([pesoBruto, tara, gramosOz, tolerancia].some(Number.isNaN)) {
+                return mostrarError('Todos los valores numéricos deben ser válidos.');
+            }
+
+            cerrar({ nombre, pesoBruto, tara, gramosOz, tolerancia });
+        }
+
+        function onCancelar() { cerrar(null); }
+
+        btnConfirmarModelo.addEventListener('click', onConfirmar);
+        btnCancelarModelo.addEventListener('click', onCancelar);
+        modeloBotellaOverlay.addEventListener('click', onCancelar);
+    });
+}
+
 async function crearModeloBotella(idProducto) {
     const card = document.querySelector(`.product-card[data-id="${idProducto}"]`);
     if (!card) return;
@@ -178,27 +248,8 @@ async function crearModeloBotella(idProducto) {
     const perfiles = JSON.parse(card.dataset.perfiles || '[]');
     const perfilBase = perfiles[0] || null;
 
-    const nombrePerfil = prompt(`Nuevo modelo para ${nombreProducto}\nNombre del perfil (ej: BOTELLA ALTA):`, '');
-    if (nombrePerfil === null) return;
-    if (!nombrePerfil.trim()) return alert('Debes ingresar un nombre de perfil.');
-
-    const pesoBrutoTxt = prompt('Peso bruto (gramos):', perfilBase ? String(perfilBase.peso_bruto) : '');
-    if (pesoBrutoTxt === null) return;
-    const taraTxt = prompt('Tara (gramos):', perfilBase ? String(perfilBase.tara) : '');
-    if (taraTxt === null) return;
-    const gramosPorOzTxt = prompt('Gramos por onza:', perfilBase ? String(perfilBase.gramos_por_oz) : '29.5735');
-    if (gramosPorOzTxt === null) return;
-    const toleranciaTxt = prompt('Tolerancia (oz):', perfilBase ? String(perfilBase.tolerancia_oz) : '0');
-    if (toleranciaTxt === null) return;
-
-    const pesoBruto = parseFloat(pesoBrutoTxt);
-    const tara = parseFloat(taraTxt);
-    const gramosPorOz = parseFloat(gramosPorOzTxt);
-    const toleranciaOz = parseFloat(toleranciaTxt);
-
-    if ([pesoBruto, tara, gramosPorOz, toleranciaOz].some(Number.isNaN)) {
-        return alert('Todos los valores numéricos del modelo deben ser válidos.');
-    }
+    const datos = await abrirModalModelo(nombreProducto, perfilBase);
+    if (!datos) return; // usuario canceló
 
     try {
         const response = await fetch(`${API_BASE}/pesaje/perfiles`, {
@@ -209,11 +260,11 @@ async function crearModeloBotella(idProducto) {
             },
             body: JSON.stringify({
                 id_producto: idProducto,
-                nombre_perfil: nombrePerfil.trim(),
-                peso_bruto: pesoBruto,
-                tara: tara,
-                gramos_por_oz: gramosPorOz,
-                tolerancia_oz: toleranciaOz
+                nombre_perfil: datos.nombre,
+                peso_bruto: datos.pesoBruto,
+                tara: datos.tara,
+                gramos_por_oz: datos.gramosOz,
+                tolerancia_oz: datos.tolerancia
             })
         });
 
@@ -221,7 +272,11 @@ async function crearModeloBotella(idProducto) {
 
         const data = await response.json();
         if (!response.ok) {
-            return alert(`No se pudo crear el modelo: ${data.detail || 'Error desconocido'}`);
+            // Re-abrimos el modal con el error visible en lugar de alert()
+            mbError.textContent = `No se pudo crear el modelo: ${data.detail || 'Error desconocido'}`;
+            mbError.classList.remove('hidden');
+            modeloBotellaDialog.classList.remove('hidden');
+            return;
         }
 
         const perfilesActuales = JSON.parse(card.dataset.perfiles || '[]');
@@ -229,9 +284,11 @@ async function crearModeloBotella(idProducto) {
         card.dataset.perfiles = JSON.stringify(perfilesActuales);
         refrescarSelectoresPerfil(card);
         recalcularTarjeta(card);
-        alert('Modelo de botella agregado correctamente.');
+        // El modal ya se cerró al confirmar — no usamos alert()
     } catch (error) {
-        alert('Error de red al crear el modelo de botella.');
+        mbError.textContent = 'Error de red al crear el modelo de botella.';
+        mbError.classList.remove('hidden');
+        modeloBotellaDialog.classList.remove('hidden');
     }
 }
 

@@ -792,6 +792,69 @@
             </div>
         </div>
 
+        <!-- Modal: Crear Modelo de Botella -->
+        <div id="modelo-botella-dialog" class="fixed inset-0 hidden z-40">
+            <div id="modelo-botella-overlay" class="absolute inset-0 bg-black/70"></div>
+            <div class="relative z-10 min-h-screen flex items-center justify-center p-md">
+                <div class="w-full max-w-lg bg-surface-container border border-outline-variant rounded-md p-md shadow-lg">
+                    <h3 class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase mb-xs flex items-center gap-sm">
+                        <span class="material-symbols-outlined text-sm">liquor</span>
+                        Nuevo modelo de botella
+                    </h3>
+                    <p id="modelo-botella-subtitulo" class="text-xs text-on-surface-variant mb-md"></p>
+
+                    <div class="space-y-sm mb-md">
+                        <!-- Nombre del perfil -->
+                        <div>
+                            <label class="text-[10px] font-label-mono tracking-widest uppercase text-on-surface-variant block mb-xs">Nombre del modelo</label>
+                            <input id="mb-nombre" type="text" placeholder="Ej: BOTELLA ALTA"
+                                class="w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-body-base uppercase">
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-sm">
+                            <!-- Peso bruto -->
+                            <div>
+                                <label class="text-[10px] font-label-mono tracking-widest uppercase text-on-surface-variant block mb-xs">Peso bruto (g)</label>
+                                <input id="mb-peso-bruto" type="number" min="0" step="0.01" placeholder="Ej: 1200"
+                                    class="w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-data-tabular">
+                            </div>
+                            <!-- Tara -->
+                            <div>
+                                <label class="text-[10px] font-label-mono tracking-widest uppercase text-on-surface-variant block mb-xs">Tara (g)</label>
+                                <input id="mb-tara" type="number" min="0" step="0.01" placeholder="Ej: 420"
+                                    class="w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-data-tabular">
+                            </div>
+                            <!-- Gramos por onza -->
+                            <div>
+                                <label class="text-[10px] font-label-mono tracking-widest uppercase text-on-surface-variant block mb-xs">g / oz</label>
+                                <input id="mb-gramos-oz" type="number" min="0" step="0.0001" placeholder="29.5735"
+                                    class="w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-data-tabular">
+                            </div>
+                            <!-- Tolerancia -->
+                            <div>
+                                <label class="text-[10px] font-label-mono tracking-widest uppercase text-on-surface-variant block mb-xs">Tolerancia (oz)</label>
+                                <input id="mb-tolerancia" type="number" min="0" step="0.01" placeholder="0"
+                                    class="w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-data-tabular">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Error inline -->
+                    <p id="mb-error" class="hidden text-xs text-error mb-sm font-semibold"></p>
+
+                    <div class="flex flex-col sm:flex-row gap-sm">
+                        <button id="btn-cancelar-modelo" class="w-full sm:w-auto bg-surface text-on-surface border border-outline-variant py-sm px-md rounded-sharp uppercase tracking-widest text-label-mono hover:border-primary-fixed-dim transition-colors">
+                            Cancelar
+                        </button>
+                        <button id="btn-confirmar-modelo" class="w-full bg-primary-container text-on-primary-fixed font-headline-md text-body-base py-sm px-md rounded-sharp flex items-center justify-center gap-sm hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest">
+                            <span class="material-symbols-outlined text-sm">save</span>
+                            Guardar modelo
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Bottom Navigation -->
         <nav class="fixed bottom-0 left-0 w-full bg-surface-container border-t border-outline-variant z-30">
             <div id="submit-section" class="h-20 flex justify-around items-stretch">
@@ -822,7 +885,7 @@
         </nav>
     </div>
 
-    <script src="/assets/app.js?v=9.14"></script>
+    <script src="/assets/app.js?v=9.15"></script>
 
     <script>
         (function () {
