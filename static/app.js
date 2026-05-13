@@ -7,6 +7,17 @@ let currentToken = localStorage.getItem('token') || null;
 let currentOperacionId = null;
 let currentIdInventarioPOS = null; // Guardamos el ID del inventario ya registrado para correcciones
 const ID_BARRA_ACTUAL = 1; // Podemos hacerlo dinámico después
+let productosInventario = [];
+let excluirIdsEnvio = new Set();
+let modoEnvioOrigen = 'inventario';
+
+const capturaEstado = {
+    inicializado: false,
+    indice: 0,
+    idsOrdenados: [],
+    pendientes: new Set(),
+    completos: new Set(),
+};
 
 // Elementos del DOM
 const loginScreen = document.getElementById('login-screen');
@@ -23,6 +34,18 @@ const observacionesOverlay = document.getElementById('observaciones-overlay');
 const inputObservaciones = document.getElementById('observaciones-paloteo');
 const btnEnviarInventario = document.getElementById('btn-enviar-inventario');
 const btnCancelarObservaciones = document.getElementById('btn-cancelar-observaciones');
+const capturaCardContainer = document.getElementById('captura-card-container');
+const capturaIndiceActual = document.getElementById('captura-indice-actual');
+const capturaIndiceTotal = document.getElementById('captura-indice-total');
+const capturaTotalCapturadas = document.getElementById('captura-total-capturadas');
+const capturaTotalPendientes = document.getElementById('captura-total-pendientes');
+const capturaPorcentaje = document.getElementById('captura-porcentaje');
+const capturaBtnAnterior = document.getElementById('captura-btn-anterior');
+const capturaBtnPendiente = document.getElementById('captura-btn-pendiente');
+const capturaBtnSiguiente = document.getElementById('captura-btn-siguiente');
+const capturaBtnFinalizar = document.getElementById('captura-btn-finalizar');
+const capturaResumenPendientes = document.getElementById('captura-resumen-pendientes');
+const capturaListaPendientes = document.getElementById('captura-lista-pendientes');
 
 function renderCriticalIcon(iconName, className = 'ui-icon') {
     const iconPaths = {
@@ -241,7 +264,7 @@ function abrirModalModelo(nombreProducto, perfilBase) {
 }
 
 async function crearModeloBotella(idProducto) {
-    const card = document.querySelector(`.product-card[data-id="${idProducto}"]`);
+    const card = document.querySelector(`#lista-productos .product-card[data-id="${idProducto}"]`);
     if (!card) return;
 
     const nombreProducto = card.dataset.nombre || `ID ${idProducto}`;
@@ -373,6 +396,10 @@ function mostrarPantallaApp() {
 // ==========================================
 async function iniciarDashboard() {
     listaProductos.innerHTML = ''; // Limpiar lista
+    productosInventario = [];
+    resetModoCaptura();
+    excluirIdsEnvio = new Set();
+    modoEnvioOrigen = 'inventario';
     _deshabilitarBtnEnvio();
     observacionesDialog.classList.add('hidden');
     inputObservaciones.value = '';
@@ -457,6 +484,7 @@ async function cargarProductos() {
         const productos = await response.json();
 
         if (response.ok && productos.length > 0) {
+            productosInventario = productos;
             renderizarProductos(productos);
             _habilitarBtnEnvio();
             
@@ -466,6 +494,7 @@ async function cargarProductos() {
             // NUEVO: Verificar si ya existe inventario registrado y pre-cargar valores
             await cargarInventarioExistente();
         } else {
+            productosInventario = [];
             listaProductos.innerHTML = `<div class="text-center text-on-surface-variant py-lg font-body-base">No hay productos consumidos para auditar hoy.</div>`;
             ocultarResumenProductos();
         }
@@ -550,7 +579,7 @@ async function cargarInventarioExistente() {
  */
 function preLlenarInventario(detalles) {
     detalles.forEach(detalle => {
-        const card = document.querySelector(`.product-card[data-id="${detalle.id_producto}"]`);
+        const card = document.querySelector(`#lista-productos .product-card[data-id="${detalle.id_producto}"]`);
         if (!card) return;
 
         // Pre-llenar botellas cerradas
@@ -602,120 +631,127 @@ function ocultarBannerCorreccion() {
 // ==========================================
 // RENDERIZADO Y DINAMISMO UI
 // ==========================================
+function crearTarjetaProductoElement(p, scope = 'inv') {
+    const esCaptura = scope === 'captura';
+    const sufijoScope = esCaptura ? `cap-${p.id_producto}` : `${p.id_producto}`;
+    const pesosContainerId = esCaptura ? `pesos-cap-${p.id_producto}` : `pesos-${p.id_producto}`;
+    const btnAddPesoClass = esCaptura ? 'btn-add-peso-captura' : 'btn-add-peso';
+    const btnAddModeloClass = esCaptura ? 'btn-add-modelo-captura' : 'btn-add-modelo';
+
+    const div = document.createElement('div');
+    div.className = "bg-surface-container border border-outline-variant rounded-md p-md shadow-lg product-card transition-colors focus-within:border-primary-fixed-dim chassis-panel";
+    div.dataset.scope = scope;
+    div.dataset.id = p.id_producto;
+    div.dataset.pesable = p.pesable || 0;
+    div.dataset.nombre = p.nombre;
+    const perfilesJson = JSON.stringify(p.perfiles || []);
+    div.dataset.perfiles = perfilesJson;
+    div.dataset.tolerancia = (p.perfiles && p.perfiles.length > 0) ? p.perfiles[0].tolerancia_oz : 0;
+    div.dataset.paqsist = parseFloat(p.stock_ideal_unidades) || 0;
+    div.dataset.detsist = parseFloat(p.stock_ideal_onzas) || 0;
+
+    let html = `
+        ${p.categoria_nombre ? `<span class="text-label-mono font-label-mono tracking-widest uppercase text-on-surface-variant mb-xs block">${escapeHtml(p.categoria_nombre)}</span>` : ''}
+        <h4 class="text-primary-fixed font-headline-md text-lg mb-xs neon-text-primary">${escapeHtml(p.nombre)}</h4>
+        <div class="text-data-tabular text-on-surface-variant mb-md flex gap-md">
+            <span>ID: ${p.id_producto}</span>
+            <span class="border-l border-outline-variant pl-sm">Cód: ${escapeHtml(p.codigo)}</span>
+        </div>
+
+        <div class="space-y-sm mb-lg text-data-tabular font-semibold">
+            <div class="flex items-center card-row-system border px-sm py-sm rounded-md gap-sm">
+                <div class="w-10 flex items-center justify-center text-on-surface-variant">
+                    <span class="material-symbols-outlined">computer</span>
+                </div>
+                <div class="flex-1 flex items-center justify-between gap-sm border-l border-outline-variant pl-md min-w-0">
+                    <span class="text-label-mono uppercase tracking-widest text-on-surface-variant leading-tight">
+                        <span class="block sm:inline">Sistema</span>
+                        <span class="block sm:inline">(Ideal)</span>
+                    </span>
+                    <div class="flex items-center gap-sm sm:gap-md text-on-surface min-w-0">
+                        <span class="w-16 text-right">${parseFloat(p.stock_ideal_unidades).toFixed(0)} bot</span>
+                        <span class="text-outline-variant">|</span>
+                        <span class="w-20 text-right">${parseFloat(p.stock_ideal_onzas).toFixed(2)} oz</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center card-row-bar border px-sm py-sm rounded-md gap-sm">
+                <div class="w-10 flex items-center justify-center" style="color: var(--semantic-action)">
+                    <span class="material-symbols-outlined">local_bar</span>
+                </div>
+                <div class="flex-1 flex items-center justify-between gap-sm border-l border-outline-variant pl-md min-w-0">
+                    <span class="text-label-mono uppercase tracking-widest leading-tight" style="color: var(--semantic-action)">
+                        <span class="block sm:inline">Barra</span>
+                        <span class="block sm:inline">(Real)</span>
+                    </span>
+                    <div class="flex items-center gap-sm sm:gap-md" style="color: var(--semantic-action)">
+                        <span class="w-16 text-right"><span id="val-paq-${sufijoScope}">0</span> bot</span>
+                        <span class="text-outline-variant">|</span>
+                        <span class="w-20 text-right"><span id="val-det-${sufijoScope}">0.00</span> oz</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center card-row-delta border px-sm py-sm rounded-md gap-sm">
+                <div class="w-10 flex items-center justify-center" style="color: var(--semantic-info)">
+                    <span class="material-symbols-outlined">stacked_line_chart</span>
+                </div>
+                <div class="flex-1 flex items-center justify-between gap-sm border-l pl-md min-w-0" style="border-color: var(--semantic-info)">
+                    <span class="text-label-mono uppercase tracking-widest leading-tight" style="color: var(--semantic-info)">
+                        <span class="block sm:inline">Delta</span>
+                        <span class="block sm:inline">(R-I)</span>
+                    </span>
+                    <div class="flex items-center gap-sm sm:gap-md min-w-0">
+                        <div id="dif-paq-${sufijoScope}" class="w-16 text-right"></div>
+                        <span style="color: var(--semantic-info); opacity: 0.5">|</span>
+                        <div id="dif-det-${sufijoScope}" class="w-20 text-right"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid ${p.pesable === 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'} gap-md items-start">
+            <div>
+                <label class="block text-label-mono font-label-mono text-on-surface-variant mb-xs tracking-widest uppercase">Unidades</label>
+                <input type="number" min="0" class="w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-on-surface input-cerradas focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus font-data-tabular" placeholder="0">
+            </div>
+
+            ${p.pesable === 1 ? `
+            <div class="border-t border-outline-variant pt-md sm:border-t-0 sm:border-l sm:pt-0 sm:pl-md">
+                <label class="block text-label-mono font-label-mono text-on-surface-variant mb-xs tracking-widest uppercase">Peso</label>
+                <div class="pesos-container grid grid-cols-1 gap-sm" id="${pesosContainerId}">
+                    ${crearInputPeso(perfilesJson, false)}
+                </div>
+                <div class="mt-sm flex flex-wrap gap-sm">
+                    <button type="button" data-id-producto="${p.id_producto}" class="${btnAddPesoClass} btn-action w-full sm:w-auto text-label-mono font-semibold flex items-center justify-center sm:justify-start gap-xs transition-colors uppercase tracking-widest rounded-sharp border px-sm py-xs">
+                        <span class="material-symbols-outlined text-sm">add_circle</span> + Botella
+                    </button>
+                    <button type="button" data-id-producto="${p.id_producto}" class="${btnAddModeloClass} btn-info w-full sm:w-auto text-label-mono font-semibold flex items-center justify-center sm:justify-start gap-xs transition-colors uppercase tracking-widest rounded-sharp border px-sm py-xs">
+                        <span class="material-symbols-outlined text-sm">labs</span> + Modelo
+                    </button>
+                </div>
+            </div>` : ''}
+        </div>
+    `;
+
+    div.innerHTML = html;
+    return div;
+}
+
 function renderizarProductos(productos) {
     listaProductos.innerHTML = '';
 
     productos.forEach(p => {
-        // Crear la tarjeta (card)
-        const div = document.createElement('div');
-        div.className = "bg-surface-container border border-outline-variant rounded-md p-md shadow-lg product-card transition-colors focus-within:border-primary-fixed-dim chassis-panel";
-        div.dataset.id = p.id_producto;
-        div.dataset.pesable = p.pesable || 0;
-        div.dataset.nombre = p.nombre;
-        const perfilesJson = JSON.stringify(p.perfiles || []);
-        div.dataset.perfiles = perfilesJson;
-        
-        // NUEVO: Guardar los datos matemáticos en el DOM para usarlos en vivo
-        div.dataset.tolerancia = (p.perfiles && p.perfiles.length > 0) ? p.perfiles[0].tolerancia_oz : 0;
-        div.dataset.paqsist = parseFloat(p.stock_ideal_unidades) || 0;
-        div.dataset.detsist = parseFloat(p.stock_ideal_onzas) || 0;
-
-        // Info básica
-        let html = `
-            ${p.categoria_nombre ? `<span class="text-label-mono font-label-mono tracking-widest uppercase text-on-surface-variant mb-xs block">${escapeHtml(p.categoria_nombre)}</span>` : ''}
-            <h4 class="text-primary-fixed font-headline-md text-lg mb-xs neon-text-primary">${escapeHtml(p.nombre)}</h4>
-            <div class="text-data-tabular text-on-surface-variant mb-md flex gap-md">
-                <span>ID: ${p.id_producto}</span>
-                <span class="border-l border-outline-variant pl-sm">Cód: ${escapeHtml(p.codigo)}</span>
-            </div>
-            
-            <!-- Resumen superior: SISTEMA / BARRA / DELTA (Semantic Brand Tokens) -->
-            <div class="space-y-sm mb-lg text-data-tabular font-semibold">
-                <div class="flex items-center card-row-system border px-sm py-sm rounded-md gap-sm">
-                    <div class="w-10 flex items-center justify-center text-on-surface-variant">
-                        <span class="material-symbols-outlined">computer</span>
-                    </div>
-                    <div class="flex-1 flex items-center justify-between gap-sm border-l border-outline-variant pl-md min-w-0">
-                        <span class="text-label-mono uppercase tracking-widest text-on-surface-variant leading-tight">
-                            <span class="block sm:inline">Sistema</span>
-                            <span class="block sm:inline">(Ideal)</span>
-                        </span>
-                        <div class="flex items-center gap-sm sm:gap-md text-on-surface min-w-0">
-                            <span class="w-16 text-right">${parseFloat(p.stock_ideal_unidades).toFixed(0)} bot</span>
-                            <span class="text-outline-variant">|</span>
-                            <span class="w-20 text-right">${parseFloat(p.stock_ideal_onzas).toFixed(2)} oz</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="flex items-center card-row-bar border px-sm py-sm rounded-md gap-sm">
-                    <div class="w-10 flex items-center justify-center" style="color: var(--semantic-action)">
-                        <span class="material-symbols-outlined">local_bar</span>
-                    </div>
-                    <div class="flex-1 flex items-center justify-between gap-sm border-l border-outline-variant pl-md min-w-0">
-                        <span class="text-label-mono uppercase tracking-widest leading-tight" style="color: var(--semantic-action)">
-                            <span class="block sm:inline">Barra</span>
-                            <span class="block sm:inline">(Real)</span>
-                        </span>
-                        <div class="flex items-center gap-sm sm:gap-md" style="color: var(--semantic-action)">
-                            <span class="w-16 text-right"><span id="val-paq-${p.id_producto}">0</span> bot</span>
-                            <span class="text-outline-variant">|</span>
-                            <span class="w-20 text-right"><span id="val-det-${p.id_producto}">0.00</span> oz</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="flex items-center card-row-delta border px-sm py-sm rounded-md gap-sm">
-                    <div class="w-10 flex items-center justify-center" style="color: var(--semantic-info)">
-                        <span class="material-symbols-outlined">stacked_line_chart</span>
-                    </div>
-                    <div class="flex-1 flex items-center justify-between gap-sm border-l pl-md min-w-0" style="border-color: var(--semantic-info)">
-                        <span class="text-label-mono uppercase tracking-widest leading-tight" style="color: var(--semantic-info)">
-                            <span class="block sm:inline">Delta</span>
-                            <span class="block sm:inline">(R-I)</span>
-                        </span>
-                        <div class="flex items-center gap-sm sm:gap-md min-w-0">
-                            <div id="dif-paq-${p.id_producto}" class="w-16 text-right"></div>
-                            <span style="color: var(--semantic-info); opacity: 0.5">|</span>
-                            <div id="dif-det-${p.id_producto}" class="w-20 text-right"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="grid ${p.pesable === 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'} gap-md items-start">
-                <div>
-                    <label class="block text-label-mono font-label-mono text-on-surface-variant mb-xs tracking-widest uppercase">Unidades</label>
-                    <input type="number" min="0" class="w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-on-surface input-cerradas focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus font-data-tabular" placeholder="0">
-                </div>
-
-                ${p.pesable === 1 ? `
-                <div class="border-t border-outline-variant pt-md sm:border-t-0 sm:border-l sm:pt-0 sm:pl-md">
-                    <label class="block text-label-mono font-label-mono text-on-surface-variant mb-xs tracking-widest uppercase">Peso</label>
-                    <div class="pesos-container grid grid-cols-1 gap-sm" id="pesos-${p.id_producto}">
-                        ${crearInputPeso(perfilesJson, false)}
-                    </div>
-                    <div class="mt-sm flex flex-wrap gap-sm">
-                        <button type="button" data-id-producto="${p.id_producto}" class="btn-add-peso btn-action w-full sm:w-auto text-label-mono font-semibold flex items-center justify-center sm:justify-start gap-xs transition-colors uppercase tracking-widest rounded-sharp border px-sm py-xs">
-                            <span class="material-symbols-outlined text-sm">add_circle</span> + Botella
-                        </button>
-                        <button type="button" data-id-producto="${p.id_producto}" class="btn-add-modelo btn-info w-full sm:w-auto text-label-mono font-semibold flex items-center justify-center sm:justify-start gap-xs transition-colors uppercase tracking-widest rounded-sharp border px-sm py-xs">
-                            <span class="material-symbols-outlined text-sm">labs</span> + Modelo
-                        </button>
-                    </div>
-                </div>` : ''}
-            </div>
-        `;
-
-        div.innerHTML = html;
-        listaProductos.appendChild(div);
+        const card = crearTarjetaProductoElement(p, 'inv');
+        listaProductos.appendChild(card);
     });
 
-    inicializarCalculos();
+    inicializarCalculos(listaProductos);
 }
 // Fix #27: Ahora usa crearInputPeso() en lugar de duplicar el HTML del input.
 window.agregarInputPeso = function(idProducto, perfilesJson) {
-    const card = document.querySelector(`.product-card[data-id="${idProducto}"]`);
+    const card = document.querySelector(`#lista-productos .product-card[data-id="${idProducto}"]`);
     const perfiles = perfilesJson || (card ? card.dataset.perfiles : '[]');
     const container = document.getElementById(`pesos-${idProducto}`);
     if (!container) return;
@@ -724,13 +760,31 @@ window.agregarInputPeso = function(idProducto, perfilesJson) {
     container.appendChild(inputWrapper.firstElementChild);
 }
 
+function agregarInputPesoEnCard(card) {
+    if (!card) return;
+    const idProducto = parseInt(card.dataset.id, 10);
+    const esCaptura = card.dataset.scope === 'captura';
+    const containerId = esCaptura ? `pesos-cap-${idProducto}` : `pesos-${idProducto}`;
+    const container = card.querySelector(`#${containerId}`) || document.getElementById(containerId);
+    if (!container) return;
+
+    const inputWrapper = document.createElement('div');
+    inputWrapper.innerHTML = crearInputPeso(card.dataset.perfiles || '[]', true);
+    container.appendChild(inputWrapper.firstElementChild);
+}
+
 // ==========================================
 // ENVÍO AL SERVIDOR Y VALIDACIONES
 // ==========================================
-function abrirDialogoObservaciones() {
-    // Asegurar que el panel de inventario sea visible detrás del modal
+function abrirDialogoObservaciones(origen = 'inventario') {
+    modoEnvioOrigen = origen;
+    // Asegurar que el panel correcto sea visible detrás del modal
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
-    document.getElementById('panel-inventario').classList.remove('hidden');
+    if (origen === 'captura') {
+        document.getElementById('panel-logs').classList.remove('hidden');
+    } else {
+        document.getElementById('panel-inventario').classList.remove('hidden');
+    }
 
     const esCorreccion = currentIdInventarioPOS !== null;
 
@@ -750,12 +804,16 @@ function abrirDialogoObservaciones() {
 
 function cerrarDialogoObservaciones() {
     observacionesDialog.classList.add('hidden');
-    // Volver siempre al panel de inventario con las tarjetas
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
-    document.getElementById('panel-inventario').classList.remove('hidden');
+    if (modoEnvioOrigen === 'captura') {
+        document.getElementById('panel-logs').classList.remove('hidden');
+    } else {
+        document.getElementById('panel-inventario').classList.remove('hidden');
+    }
 }
 
-function construirPayloadInventario(observaciones = null) {
+function construirPayloadInventario(observaciones = null, opciones = {}) {
+    const excluirIds = opciones.excluirIds || new Set();
     const payload = {
         id_operacion: currentOperacionId,
         id_barra: ID_BARRA_ACTUAL,
@@ -763,13 +821,15 @@ function construirPayloadInventario(observaciones = null) {
         items: []
     };
 
-    const cards = document.querySelectorAll('.product-card');
+    const cards = document.querySelectorAll('#lista-productos .product-card');
     let validacionExitosa = true;
     let advertenciaFatFinger = false;
     let mensajeFatFinger = "";
 
     cards.forEach(card => {
         const idProducto = parseInt(card.dataset.id);
+        if (excluirIds.has(idProducto)) return;
+
         const pesable = parseInt(card.dataset.pesable);
         const nombreProducto = card.dataset.nombre;
         
@@ -883,7 +943,8 @@ async function enviarInventario(payload) {
 }
 
 btnGuardar.addEventListener('click', () => {
-    abrirDialogoObservaciones();
+    excluirIdsEnvio = new Set();
+    abrirDialogoObservaciones('inventario');
 });
 
 btnCancelarObservaciones.addEventListener('click', () => {
@@ -921,6 +982,10 @@ function navegarATab(tabName) {
     const panelDestino = document.getElementById(panelId);
     if (panelDestino) panelDestino.classList.remove('hidden');
 
+    if (tabName === 'logs') {
+        inicializarModoCaptura();
+    }
+
     // Actualizar estado visual de tabs (excepto btn-guardar que tiene su propio estado)
     document.querySelectorAll('[data-tab]').forEach(btn => {
         const esActivo = btn.dataset.tab === tabName;
@@ -930,6 +995,222 @@ function navegarATab(tabName) {
         btn.classList.toggle('text-on-surface-variant', !esActivo);
         btn.classList.toggle('border-outline-variant', !esActivo);
     });
+}
+
+function resetModoCaptura() {
+    capturaEstado.inicializado = false;
+    capturaEstado.indice = 0;
+    capturaEstado.idsOrdenados = [];
+    capturaEstado.pendientes = new Set();
+    capturaEstado.completos = new Set();
+
+    if (capturaCardContainer) capturaCardContainer.innerHTML = '';
+    if (capturaIndiceActual) capturaIndiceActual.textContent = '0';
+    if (capturaIndiceTotal) capturaIndiceTotal.textContent = '0';
+    if (capturaTotalCapturadas) capturaTotalCapturadas.textContent = '0';
+    if (capturaTotalPendientes) capturaTotalPendientes.textContent = '0';
+    if (capturaPorcentaje) capturaPorcentaje.textContent = '0%';
+    if (capturaResumenPendientes) capturaResumenPendientes.classList.add('hidden');
+    if (capturaListaPendientes) capturaListaPendientes.innerHTML = '';
+}
+
+function esDesktopParaCaptura() {
+    return !(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+}
+
+function getCardInventarioById(idProducto) {
+    return document.querySelector(`#lista-productos .product-card[data-id="${idProducto}"]`);
+}
+
+function leerValoresCard(card) {
+    if (!card) return { cerradas: '', pesos: [] };
+    const cerradasInput = card.querySelector('.input-cerradas');
+    const cerradas = cerradasInput ? cerradasInput.value : '';
+
+    const pesos = [];
+    card.querySelectorAll('.item-peso-wrapper').forEach(wrapper => {
+        const input = wrapper.querySelector('.input-peso');
+        const select = wrapper.querySelector('.select-perfil');
+        pesos.push({
+            peso: input ? input.value : '',
+            perfilValue: select ? select.value : null,
+        });
+    });
+
+    return { cerradas, pesos };
+}
+
+function aplicarValoresCard(card, valores) {
+    if (!card || !valores) return;
+
+    const cerradasInput = card.querySelector('.input-cerradas');
+    if (cerradasInput) cerradasInput.value = valores.cerradas ?? '';
+
+    const perfilesJson = card.dataset.perfiles || '[]';
+    const pesosContainer = card.querySelector('.pesos-container');
+    if (!pesosContainer) {
+        recalcularTarjeta(card);
+        return;
+    }
+
+    const objetivo = Math.max(1, (valores.pesos || []).length || 1);
+    while (pesosContainer.querySelectorAll('.item-peso-wrapper').length < objetivo) {
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = crearInputPeso(perfilesJson, true);
+        pesosContainer.appendChild(wrapper.firstElementChild);
+    }
+    while (pesosContainer.querySelectorAll('.item-peso-wrapper').length > objetivo) {
+        const wrappers = pesosContainer.querySelectorAll('.item-peso-wrapper');
+        if (wrappers.length <= 1) break;
+        wrappers[wrappers.length - 1].remove();
+    }
+
+    const wrappers = card.querySelectorAll('.item-peso-wrapper');
+    wrappers.forEach((wrapper, idx) => {
+        const input = wrapper.querySelector('.input-peso');
+        const select = wrapper.querySelector('.select-perfil');
+        const valor = valores.pesos && valores.pesos[idx] ? valores.pesos[idx] : { peso: '', perfilValue: null };
+        if (input) input.value = valor.peso ?? '';
+        if (select && valor.perfilValue != null) select.value = valor.perfilValue;
+    });
+
+    recalcularTarjeta(card);
+}
+
+function tarjetaCompleta(card) {
+    if (!card) return false;
+    const pesable = parseInt(card.dataset.pesable, 10) === 1;
+    const cerradasValor = card.querySelector('.input-cerradas')?.value;
+
+    if (cerradasValor == null || cerradasValor === '') return false;
+    if (!pesable) return true;
+
+    let tienePesoValido = false;
+    card.querySelectorAll('.input-peso').forEach(input => {
+        const val = parseFloat(input.value);
+        if (!Number.isNaN(val) && val >= 0) {
+            tienePesoValido = true;
+        }
+    });
+    return tienePesoValido;
+}
+
+function syncCapturaConInventario() {
+    if (!capturaEstado.inicializado || capturaEstado.idsOrdenados.length === 0) return;
+    const idProducto = capturaEstado.idsOrdenados[capturaEstado.indice];
+    const cardCaptura = capturaCardContainer.querySelector('.product-card[data-scope="captura"]');
+    const cardInventario = getCardInventarioById(idProducto);
+    if (!cardCaptura || !cardInventario) return;
+
+    const valores = leerValoresCard(cardCaptura);
+    aplicarValoresCard(cardInventario, valores);
+
+    if (tarjetaCompleta(cardCaptura)) {
+        capturaEstado.completos.add(idProducto);
+    } else {
+        capturaEstado.completos.delete(idProducto);
+    }
+}
+
+function actualizarResumenCaptura() {
+    const total = capturaEstado.idsOrdenados.length;
+    const completas = capturaEstado.completos.size;
+    const pendientes = capturaEstado.pendientes.size;
+    const pct = total > 0 ? Math.round((completas / total) * 100) : 0;
+
+    capturaIndiceTotal.textContent = String(total);
+    capturaIndiceActual.textContent = total > 0 ? String(capturaEstado.indice + 1) : '0';
+    capturaTotalCapturadas.textContent = String(completas);
+    capturaTotalPendientes.textContent = String(pendientes);
+    capturaPorcentaje.textContent = `${pct}%`;
+
+    if (capturaBtnAnterior) capturaBtnAnterior.disabled = capturaEstado.indice <= 0;
+    if (capturaBtnAnterior) capturaBtnAnterior.classList.toggle('opacity-40', capturaEstado.indice <= 0);
+
+    const idActual = capturaEstado.idsOrdenados[capturaEstado.indice];
+    const esPendiente = capturaEstado.pendientes.has(idActual);
+    if (capturaBtnPendiente) {
+        capturaBtnPendiente.classList.toggle('border-primary-fixed-dim', esPendiente);
+        capturaBtnPendiente.classList.toggle('text-primary-fixed', esPendiente);
+    }
+}
+
+function renderTarjetaCaptura(indice) {
+    if (!capturaEstado.inicializado || capturaEstado.idsOrdenados.length === 0) {
+        capturaCardContainer.innerHTML = `<div class="text-center text-on-surface-variant py-lg font-body-base">No hay productos disponibles para captura.</div>`;
+        actualizarResumenCaptura();
+        return;
+    }
+
+    const idProducto = capturaEstado.idsOrdenados[indice];
+    const producto = productosInventario.find(p => p.id_producto === idProducto);
+    if (!producto) return;
+
+    capturaCardContainer.innerHTML = '';
+    const card = crearTarjetaProductoElement(producto, 'captura');
+    capturaCardContainer.appendChild(card);
+
+    const cardInventario = getCardInventarioById(idProducto);
+    if (cardInventario) {
+        aplicarValoresCard(card, leerValoresCard(cardInventario));
+    } else {
+        recalcularTarjeta(card);
+    }
+
+    actualizarResumenCaptura();
+}
+
+function navegarCaptura(delta = 1) {
+    if (!capturaEstado.inicializado || capturaEstado.idsOrdenados.length === 0) return;
+    syncCapturaConInventario();
+    const siguienteIndice = Math.max(0, Math.min(capturaEstado.idsOrdenados.length - 1, capturaEstado.indice + delta));
+    capturaEstado.indice = siguienteIndice;
+    renderTarjetaCaptura(capturaEstado.indice);
+}
+
+function inicializarModoCaptura() {
+    if (!productosInventario || productosInventario.length === 0) {
+        resetModoCaptura();
+        return;
+    }
+
+    if (!capturaEstado.inicializado) {
+        capturaEstado.idsOrdenados = productosInventario.map(p => p.id_producto);
+        capturaEstado.indice = 0;
+        capturaEstado.pendientes = new Set();
+        capturaEstado.completos = new Set();
+        capturaEstado.inicializado = true;
+    }
+
+    renderTarjetaCaptura(capturaEstado.indice);
+}
+
+function marcarPendienteActual() {
+    if (!capturaEstado.inicializado || capturaEstado.idsOrdenados.length === 0) return;
+    syncCapturaConInventario();
+    const idActual = capturaEstado.idsOrdenados[capturaEstado.indice];
+    capturaEstado.pendientes.add(idActual);
+    actualizarResumenCaptura();
+
+    if (capturaEstado.indice < capturaEstado.idsOrdenados.length - 1) {
+        navegarCaptura(1);
+    }
+}
+
+function mostrarResumenPendientes() {
+    capturaListaPendientes.innerHTML = '';
+    if (capturaEstado.pendientes.size === 0) {
+        capturaListaPendientes.innerHTML = '<li>Sin productos pendientes.</li>';
+    } else {
+        capturaEstado.idsOrdenados.forEach(id => {
+            if (!capturaEstado.pendientes.has(id)) return;
+            const producto = productosInventario.find(p => p.id_producto === id);
+            const item = document.createElement('li');
+            item.textContent = `- ${producto ? producto.nombre : `Producto ${id}`}`;
+            capturaListaPendientes.appendChild(item);
+        });
+    }
+    capturaResumenPendientes.classList.remove('hidden');
 }
 
 // Listener para todos los botones de tab con data-tab
@@ -951,17 +1232,124 @@ if (stockSearchInput) {
     });
 }
 
+if (capturaBtnAnterior) {
+    capturaBtnAnterior.addEventListener('click', () => navegarCaptura(-1));
+}
+
+if (capturaBtnSiguiente) {
+    capturaBtnSiguiente.addEventListener('click', () => navegarCaptura(1));
+}
+
+if (capturaBtnPendiente) {
+    capturaBtnPendiente.addEventListener('click', () => marcarPendienteActual());
+}
+
+if (capturaBtnFinalizar) {
+    capturaBtnFinalizar.addEventListener('click', () => {
+        if (!capturaEstado.inicializado || capturaEstado.idsOrdenados.length === 0) return;
+
+        syncCapturaConInventario();
+        mostrarResumenPendientes();
+        excluirIdsEnvio = new Set(capturaEstado.pendientes);
+        abrirDialogoObservaciones('captura');
+    });
+}
+
+if (capturaCardContainer) {
+    capturaCardContainer.addEventListener('input', (e) => {
+        if (e.target.classList.contains('input-cerradas') || e.target.classList.contains('input-peso')) {
+            const card = e.target.closest('.product-card');
+            recalcularTarjeta(card);
+            const idActual = capturaEstado.idsOrdenados[capturaEstado.indice];
+            if (tarjetaCompleta(card)) {
+                capturaEstado.completos.add(idActual);
+            } else {
+                capturaEstado.completos.delete(idActual);
+            }
+            actualizarResumenCaptura();
+        }
+    });
+
+    capturaCardContainer.addEventListener('change', (e) => {
+        if (e.target.classList.contains('select-perfil')) {
+            const card = e.target.closest('.product-card');
+            recalcularTarjeta(card);
+            syncCapturaConInventario();
+            actualizarResumenCaptura();
+        }
+    });
+
+    capturaCardContainer.addEventListener('click', async (e) => {
+        const btnAdd = e.target.closest('.btn-add-peso-captura');
+        if (btnAdd) {
+            const card = capturaCardContainer.querySelector('.product-card[data-scope="captura"]');
+            agregarInputPesoEnCard(card);
+            recalcularTarjeta(card);
+            syncCapturaConInventario();
+            return;
+        }
+
+        const btnModelo = e.target.closest('.btn-add-modelo-captura');
+        if (btnModelo) {
+            const idProducto = parseInt(btnModelo.dataset.idProducto, 10);
+            if (!isNaN(idProducto)) {
+                await crearModeloBotella(idProducto);
+                renderTarjetaCaptura(capturaEstado.indice);
+            }
+            return;
+        }
+
+        if (e.target.closest('.btn-remove-peso')) {
+            const card = capturaCardContainer.querySelector('.product-card[data-scope="captura"]');
+            setTimeout(() => {
+                recalcularTarjeta(card);
+                syncCapturaConInventario();
+                actualizarResumenCaptura();
+            }, 20);
+        }
+    });
+
+    capturaCardContainer.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        if (!esDesktopParaCaptura()) return;
+        if (!(e.target.classList.contains('input-cerradas') || e.target.classList.contains('input-peso'))) return;
+
+        const card = capturaCardContainer.querySelector('.product-card[data-scope="captura"]');
+        if (!card) return;
+        e.preventDefault();
+
+        if (tarjetaCompleta(card)) {
+            navegarCaptura(1);
+        }
+    });
+}
+
 document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && !observacionesDialog.classList.contains('hidden')) {
         cerrarDialogoObservaciones();
+        return;
+    }
+
+    const panelLogsVisible = !document.getElementById('panel-logs').classList.contains('hidden');
+    if (!panelLogsVisible) return;
+
+    if (event.ctrlKey && event.key === 'ArrowRight') {
+        event.preventDefault();
+        navegarCaptura(1);
+    }
+
+    if (event.ctrlKey && event.key === 'ArrowLeft') {
+        event.preventDefault();
+        navegarCaptura(-1);
     }
 });
 
 btnEnviarInventario.addEventListener('click', async () => {
     const observaciones = inputObservaciones.value.trim() || null;
-    const payload = construirPayloadInventario(observaciones);
+    const payload = construirPayloadInventario(observaciones, { excluirIds: excluirIdsEnvio });
     if (!payload) return;
     await enviarInventario(payload);
+    excluirIdsEnvio = new Set();
 });
 
 // ==========================================
@@ -991,6 +1379,7 @@ function recalcularTarjeta(card) {
     if (!card) return;
 
     const idProducto = card.dataset.id;
+    const scope = card.dataset.scope === 'captura' ? `cap-${idProducto}` : `${idProducto}`;
     const pesable = parseInt(card.dataset.pesable);
 
     // Variables del sistema
@@ -1000,8 +1389,8 @@ function recalcularTarjeta(card) {
     // 1. PAQ/BARRA
     const inputCerradas = card.querySelector('.input-cerradas');
     const paqBarra = parseInt(inputCerradas.value) || 0;
-    const spanPaq = document.getElementById(`val-paq-${idProducto}`);
-    const difPaqSpan = document.getElementById(`dif-paq-${idProducto}`);
+    const spanPaq = card.querySelector(`#val-paq-${scope}`) || document.getElementById(`val-paq-${scope}`);
+    const difPaqSpan = card.querySelector(`#dif-paq-${scope}`) || document.getElementById(`dif-paq-${scope}`);
 
     if (spanPaq) spanPaq.textContent = paqBarra;
     if (difPaqSpan) difPaqSpan.innerHTML = formatearDiferencia(paqBarra - paqSist, false);
@@ -1011,8 +1400,8 @@ function recalcularTarjeta(card) {
         const perfiles = JSON.parse(card.dataset.perfiles || '[]');
         const tolerancia = parseFloat(card.dataset.tolerancia) || 0;
         const inputsPeso = card.querySelectorAll('.input-peso');
-        const spanDet = document.getElementById(`val-det-${idProducto}`);
-        const difDetSpan = document.getElementById(`dif-det-${idProducto}`);
+        const spanDet = card.querySelector(`#val-det-${scope}`) || document.getElementById(`val-det-${scope}`);
+        const difDetSpan = card.querySelector(`#dif-det-${scope}`) || document.getElementById(`dif-det-${scope}`);
 
         let detBarra = 0;
         const margenError = 10.0;
@@ -1081,7 +1470,7 @@ listaProductos.addEventListener('click', (e) => {
 });
 
 function inicializarCalculos() {
-    document.querySelectorAll('.product-card').forEach(card => {
+    document.querySelectorAll('#lista-productos .product-card').forEach(card => {
         recalcularTarjeta(card);
     });
 }
