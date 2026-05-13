@@ -671,6 +671,10 @@ window.agregarInputPeso = function(idProducto, perfilesJson) {
 // ENVÍO AL SERVIDOR Y VALIDACIONES
 // ==========================================
 function abrirDialogoObservaciones() {
+    // Asegurar que el panel de inventario sea visible detrás del modal
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+    document.getElementById('panel-inventario').classList.remove('hidden');
+
     const esCorreccion = currentIdInventarioPOS !== null;
 
     if (observacionesDialogTitulo) {
@@ -689,6 +693,9 @@ function abrirDialogoObservaciones() {
 
 function cerrarDialogoObservaciones() {
     observacionesDialog.classList.add('hidden');
+    // Volver siempre al panel de inventario con las tarjetas
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+    document.getElementById('panel-inventario').classList.remove('hidden');
 }
 
 function construirPayloadInventario(observaciones = null) {
