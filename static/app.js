@@ -209,6 +209,95 @@ const mbError      = document.getElementById('mb-error');
 const btnCancelarModelo  = document.getElementById('btn-cancelar-modelo');
 const btnConfirmarModelo = document.getElementById('btn-confirmar-modelo');
 
+// ==========================================
+// DIÁLOGOS ESTILIZADOS: RESULTADO Y CONFIRMACIÓN
+// ==========================================
+const resultadoDialog        = document.getElementById('resultado-dialog');
+const resultadoOverlay       = document.getElementById('resultado-overlay');
+const resultadoIcono         = document.getElementById('resultado-icono');
+const resultadoTituloTexto   = document.getElementById('resultado-titulo-texto');
+const resultadoMensaje       = document.getElementById('resultado-mensaje');
+const resultadoBtnsOk        = document.getElementById('resultado-btns-ok');
+const resultadoBtnsConfirm   = document.getElementById('resultado-btns-confirm');
+const btnResultadoOk         = document.getElementById('btn-resultado-ok');
+const btnResultadoCancelar   = document.getElementById('btn-resultado-cancelar');
+const btnResultadoConfirmar  = document.getElementById('btn-resultado-confirmar');
+
+/**
+ * Muestra un modal de resultado (éxito o error) y resuelve cuando el usuario lo cierra.
+ * @param {Object} opts - { tipo: 'success'|'error', titulo: string, mensaje: string }
+ * @returns {Promise<void>}
+ */
+function mostrarDialogoResultado({ tipo = 'success', titulo, mensaje }) {
+    return new Promise((resolve) => {
+        // Configurar icono y color según tipo
+        if (tipo === 'success') {
+            resultadoIcono.textContent = 'check_circle';
+            resultadoIcono.style.color = 'var(--color-primary-fixed-dim)';
+            resultadoTituloTexto.style.color = '';
+        } else {
+            resultadoIcono.textContent = 'error';
+            resultadoIcono.style.color = 'var(--semantic-danger, #f87171)';
+            resultadoTituloTexto.style.color = 'var(--semantic-danger, #f87171)';
+        }
+
+        resultadoTituloTexto.textContent = titulo;
+        resultadoMensaje.textContent = mensaje || '';
+
+        // Modo resultado: un solo botón "Aceptar"
+        resultadoBtnsOk.classList.remove('hidden');
+        resultadoBtnsConfirm.classList.add('hidden');
+
+        resultadoDialog.classList.remove('hidden');
+
+        function cerrar() {
+            resultadoDialog.classList.add('hidden');
+            btnResultadoOk.removeEventListener('click', cerrar);
+            resultadoOverlay.removeEventListener('click', cerrar);
+            resolve();
+        }
+
+        btnResultadoOk.addEventListener('click', cerrar);
+        resultadoOverlay.addEventListener('click', cerrar);
+    });
+}
+
+/**
+ * Muestra un modal de confirmación (sí/no) y resuelve con true/false.
+ * @param {Object} opts - { titulo: string, mensaje: string }
+ * @returns {Promise<boolean>}
+ */
+function mostrarDialogoConfirmacion({ titulo, mensaje }) {
+    return new Promise((resolve) => {
+        resultadoIcono.textContent = 'warning';
+        resultadoIcono.style.color = 'var(--semantic-warning, #facc15)';
+        resultadoTituloTexto.style.color = 'var(--semantic-warning, #facc15)';
+        resultadoTituloTexto.textContent = titulo;
+        resultadoMensaje.textContent = mensaje || '';
+
+        // Modo confirmación: dos botones
+        resultadoBtnsOk.classList.add('hidden');
+        resultadoBtnsConfirm.classList.remove('hidden');
+
+        resultadoDialog.classList.remove('hidden');
+
+        function onConfirmar() { cleanup(); resolve(true); }
+        function onCancelar()  { cleanup(); resolve(false); }
+        function onOverlay()   { cleanup(); resolve(false); }
+
+        function cleanup() {
+            resultadoDialog.classList.add('hidden');
+            btnResultadoConfirmar.removeEventListener('click', onConfirmar);
+            btnResultadoCancelar.removeEventListener('click', onCancelar);
+            resultadoOverlay.removeEventListener('click', onOverlay);
+        }
+
+        btnResultadoConfirmar.addEventListener('click', onConfirmar);
+        btnResultadoCancelar.addEventListener('click', onCancelar);
+        resultadoOverlay.addEventListener('click', onOverlay);
+    });
+}
+
 /** Muestra el modal de nuevo modelo y resuelve con los datos cuando el usuario confirma, o null si cancela. */
 function abrirModalModelo(nombreProducto, perfilBase) {
     return new Promise((resolve) => {
@@ -812,7 +901,7 @@ function cerrarDialogoObservaciones() {
     }
 }
 
-function construirPayloadInventario(observaciones = null, opciones = {}) {
+async function construirPayloadInventario(observaciones = null, opciones = {}) {
     const excluirIds = opciones.excluirIds || new Set();
     const payload = {
         id_operacion: currentOperacionId,
@@ -878,12 +967,19 @@ function construirPayloadInventario(observaciones = null, opciones = {}) {
     });
 
     if (!validacionExitosa) {
-        alert("Error: No puedes ingresar números negativos en el inventario.");
+        await mostrarDialogoResultado({
+            tipo: 'error',
+            titulo: 'Datos inválidos',
+            mensaje: 'No puedes ingresar números negativos en el inventario.'
+        });
         return null;
     }
 
     if (advertenciaFatFinger) {
-        const confirmar = confirm(`⚠️ ADVERTENCIA (Revisa tus datos):\n${mensajeFatFinger}\n¿Estás completamente seguro de que estos datos son correctos?`);
+        const confirmar = await mostrarDialogoConfirmacion({
+            titulo: 'Advertencia — Revisa tus datos',
+            mensaje: `Los siguientes productos tienen una cantidad inusualmente alta de botellas abiertas:\n\n${mensajeFatFinger}\n¿Estás completamente seguro de que estos datos son correctos?`
+        });
         if (!confirmar) return null;
     }
 
@@ -925,15 +1021,27 @@ async function enviarInventario(payload) {
             }
             
             const accion = esCorreccion ? '¡Inventario Corregido!' : '¡Inventario Guardado!';
-            alert(`✅ ${accion}\n${result.mensaje}`);
             inputObservaciones.value = '';
             cerrarDialogoObservaciones();
             // NO recargar dashboard para mantener los datos en pantalla permitiendo más correcciones
+            await mostrarDialogoResultado({
+                tipo: 'success',
+                titulo: accion,
+                mensaje: result.mensaje
+            });
         } else {
-            alert(`❌ Error del servidor: ${result.detail || "Error desconocido"}`);
+            await mostrarDialogoResultado({
+                tipo: 'error',
+                titulo: 'Error del servidor',
+                mensaje: result.detail || 'Error desconocido'
+            });
         }
     } catch (error) {
-        alert("❌ Error de red al intentar guardar.");
+        await mostrarDialogoResultado({
+            tipo: 'error',
+            titulo: 'Error de red',
+            mensaje: 'No se pudo conectar con el servidor. Revisa tu conexión e intenta de nuevo.'
+        });
     } finally {
         btnGuardar.disabled = false;
         btnEnviarInventario.disabled = false;
@@ -1346,7 +1454,7 @@ document.addEventListener('keydown', (event) => {
 
 btnEnviarInventario.addEventListener('click', async () => {
     const observaciones = inputObservaciones.value.trim() || null;
-    const payload = construirPayloadInventario(observaciones, { excluirIds: excluirIdsEnvio });
+    const payload = await construirPayloadInventario(observaciones, { excluirIds: excluirIdsEnvio });
     if (!payload) return;
     await enviarInventario(payload);
     excluirIdsEnvio = new Set();
