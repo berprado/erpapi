@@ -590,7 +590,10 @@
         </nav>
 
         <!-- Área de Contenido -->
-        <main class="flex-1 p-md pb-28 max-w-2xl mx-auto w-full" id="main-content">
+        <main class="flex-1 pb-28 overflow-y-auto" id="main-content">
+
+        <!-- ========== PANEL INVENTARIO (default) ========== -->
+        <div id="panel-inventario" class="tab-panel p-md max-w-2xl mx-auto w-full">
             
             <!-- Status de la Operación -->
             <div id="estado-operacion" class="bg-surface-container border border-outline-variant rounded-md p-md mb-lg shadow-lg flex items-center gap-md">
@@ -637,6 +640,128 @@
                 <span>Modo Corrección ·</span>
                 <span id="banner-correccion-texto"></span>
             </div>
+
+        </div><!-- /panel-inventario -->
+
+
+        <!-- ========== PANEL STOCK (dummy) ========== -->
+        <div id="panel-stock" class="tab-panel hidden p-md max-w-2xl mx-auto w-full">
+
+            <!-- Header -->
+            <div class="flex items-center justify-between mb-lg">
+                <div>
+                    <h2 class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase flex items-center gap-sm">
+                        <span class="material-symbols-outlined text-primary-fixed" style="font-size:1.1rem;">inventory_2</span>
+                        Inventario de Stock
+                    </h2>
+                    <p class="text-xs text-on-surface-variant mt-xs">Niveles actuales por producto · Solo lectura</p>
+                </div>
+                <span class="text-[10px] font-label-mono tracking-widest text-outline/50 uppercase border border-outline/20 rounded px-sm py-xs">DUMMY</span>
+            </div>
+
+            <!-- Buscador -->
+            <div class="relative mb-md">
+                <span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-outline-variant" style="font-size:1rem;">search</span>
+                <input type="text" id="stock-search" placeholder="Buscar producto..." class="w-full bg-surface-container border border-outline-variant rounded-md pl-10 pr-md py-sm text-sm text-on-surface placeholder-outline/40 focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-body-base">
+            </div>
+
+            <!-- Tabla de stock (dummy data) -->
+            <div class="bg-surface-container border border-outline-variant rounded-md overflow-hidden shadow-lg">
+
+                <!-- Header tabla -->
+                <div class="grid grid-cols-[1fr_auto_auto] gap-md px-md py-sm border-b border-outline-variant bg-surface-container-low">
+                    <span class="text-[10px] font-label-mono tracking-widest uppercase text-on-surface-variant">Producto</span>
+                    <span class="text-[10px] font-label-mono tracking-widest uppercase text-on-surface-variant text-right">Unidad</span>
+                    <span class="text-[10px] font-label-mono tracking-widest uppercase text-on-surface-variant text-right w-20">Stock</span>
+                </div>
+
+                <!-- Filas dummy -->
+                <div id="stock-list" class="divide-y divide-outline-variant">
+
+                    <div class="stock-row grid grid-cols-[1fr_auto_auto] gap-md px-md py-sm items-center hover:bg-surface-container-highest transition-colors">
+                        <span class="text-sm text-on-surface font-semibold">Ron Bacardí Añejo</span>
+                        <span class="text-xs text-on-surface-variant text-right">btl 750ml</span>
+                        <span class="text-data-tabular font-semibold text-right w-20" style="color: var(--semantic-action)">2.4</span>
+                    </div>
+
+                    <div class="stock-row grid grid-cols-[1fr_auto_auto] gap-md px-md py-sm items-center hover:bg-surface-container-highest transition-colors">
+                        <span class="text-sm text-on-surface font-semibold">Vodka Absolut</span>
+                        <span class="text-xs text-on-surface-variant text-right">btl 750ml</span>
+                        <span class="text-data-tabular font-semibold text-right w-20" style="color: var(--semantic-action)">1.1</span>
+                    </div>
+
+                    <div class="stock-row grid grid-cols-[1fr_auto_auto] gap-md px-md py-sm items-center hover:bg-surface-container-highest transition-colors">
+                        <span class="text-sm text-on-surface font-semibold">Ginebra Tanqueray</span>
+                        <span class="text-xs text-on-surface-variant text-right">btl 750ml</span>
+                        <span class="text-data-tabular font-semibold text-right w-20 text-on-surface-variant">0.0</span>
+                    </div>
+
+                    <div class="stock-row grid grid-cols-[1fr_auto_auto] gap-md px-md py-sm items-center hover:bg-surface-container-highest transition-colors">
+                        <span class="text-sm text-on-surface font-semibold">Tequila Patron Silver</span>
+                        <span class="text-xs text-on-surface-variant text-right">btl 750ml</span>
+                        <span class="text-data-tabular font-semibold text-right w-20" style="color: var(--semantic-warning)">0.3</span>
+                    </div>
+
+                    <div class="stock-row grid grid-cols-[1fr_auto_auto] gap-md px-md py-sm items-center hover:bg-surface-container-highest transition-colors">
+                        <span class="text-sm text-on-surface font-semibold">Whisky Jack Daniels</span>
+                        <span class="text-xs text-on-surface-variant text-right">btl 750ml</span>
+                        <span class="text-data-tabular font-semibold text-right w-20" style="color: var(--semantic-action)">3.0</span>
+                    </div>
+
+                    <div class="stock-row grid grid-cols-[1fr_auto_auto] gap-md px-md py-sm items-center hover:bg-surface-container-highest transition-colors">
+                        <span class="text-sm text-on-surface font-semibold">Champagne Moët</span>
+                        <span class="text-xs text-on-surface-variant text-right">btl 750ml</span>
+                        <span class="text-data-tabular font-semibold text-right w-20" style="color: var(--semantic-danger)">0.0</span>
+                    </div>
+
+                    <div class="stock-row grid grid-cols-[1fr_auto_auto] gap-md px-md py-sm items-center hover:bg-surface-container-highest transition-colors">
+                        <span class="text-sm text-on-surface font-semibold">Cognac Hennessy VS</span>
+                        <span class="text-xs text-on-surface-variant text-right">btl 750ml</span>
+                        <span class="text-data-tabular font-semibold text-right w-20" style="color: var(--semantic-action)">1.8</span>
+                    </div>
+
+                    <div class="stock-row grid grid-cols-[1fr_auto_auto] gap-md px-md py-sm items-center hover:bg-surface-container-highest transition-colors">
+                        <span class="text-sm text-on-surface font-semibold">Cerveza Corona</span>
+                        <span class="text-xs text-on-surface-variant text-right">unidad</span>
+                        <span class="text-data-tabular font-semibold text-right w-20" style="color: var(--semantic-action)">24</span>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Leyenda -->
+            <div class="flex flex-wrap gap-md mt-md text-[10px] font-label-mono tracking-widest uppercase text-on-surface-variant">
+                <span class="flex items-center gap-xs"><span class="w-2 h-2 rounded-full inline-block" style="background: var(--semantic-action)"></span>Disponible</span>
+                <span class="flex items-center gap-xs"><span class="w-2 h-2 rounded-full inline-block" style="background: var(--semantic-warning)"></span>Stock bajo</span>
+                <span class="flex items-center gap-xs"><span class="w-2 h-2 rounded-full inline-block" style="background: var(--semantic-danger)"></span>Agotado</span>
+            </div>
+
+        </div><!-- /panel-stock -->
+
+
+        <!-- ========== PANEL SCAN (placeholder) ========== -->
+        <div id="panel-scan" class="tab-panel hidden p-md max-w-2xl mx-auto w-full">
+            <div class="flex flex-col items-center justify-center py-20 text-center gap-lg">
+                <span class="material-symbols-outlined text-outline-variant" style="font-size:4rem;">qr_code_scanner</span>
+                <div>
+                    <p class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase">Escáner QR / Barras</p>
+                    <p class="text-xs text-on-surface-variant mt-xs">Próximamente disponible</p>
+                </div>
+            </div>
+        </div><!-- /panel-scan -->
+
+
+        <!-- ========== PANEL LOGS (placeholder) ========== -->
+        <div id="panel-logs" class="tab-panel hidden p-md max-w-2xl mx-auto w-full">
+            <div class="flex flex-col items-center justify-center py-20 text-center gap-lg">
+                <span class="material-symbols-outlined text-outline-variant" style="font-size:4rem;">history</span>
+                <div>
+                    <p class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase">Historial de Actividad</p>
+                    <p class="text-xs text-on-surface-variant mt-xs">Próximamente disponible</p>
+                </div>
+            </div>
+        </div><!-- /panel-logs -->
+
 
         </main>
 
@@ -697,7 +822,7 @@
         </nav>
     </div>
 
-    <script src="/assets/app.js?v=9.12"></script>
+    <script src="/assets/app.js?v=9.13"></script>
 
     <script>
         (function () {

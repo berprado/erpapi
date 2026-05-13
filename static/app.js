@@ -305,6 +305,9 @@ function mostrarPantallaApp() {
     loginScreen.classList.add('hidden');
     appScreen.classList.remove('hidden');
     document.getElementById('user-display').textContent = localStorage.getItem('nombres');
+    // Asegurar que el panel de inventario sea el visible al entrar a la app
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+    document.getElementById('panel-inventario').classList.remove('hidden');
     iniciarDashboard();
 }
 
@@ -826,6 +829,63 @@ btnCancelarObservaciones.addEventListener('click', () => {
 observacionesOverlay.addEventListener('click', () => {
     cerrarDialogoObservaciones();
 });
+
+// ==========================================
+// NAVEGACIÓN POR TABS (BOTTOM NAV)
+// ==========================================
+
+/** Mapeo tab → panel. El panel de inventario es el panel "home" sin tab propio. */
+const TAB_PANEL_MAP = {
+    stock: 'panel-stock',
+    scan:  'panel-scan',
+    logs:  'panel-logs',
+};
+
+/**
+ * Muestra el panel correspondiente al tab y marca el tab como activo.
+ * Si el tab no tiene panel asignado (ej. ENVIO), no cambia el panel visible.
+ * @param {string} tabName
+ */
+function navegarATab(tabName) {
+    const panelId = TAB_PANEL_MAP[tabName];
+    if (!panelId) return; // ENVIO no navega a ningún panel
+
+    // Ocultar todos los paneles
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+
+    // Mostrar el panel destino
+    const panelDestino = document.getElementById(panelId);
+    if (panelDestino) panelDestino.classList.remove('hidden');
+
+    // Actualizar estado visual de tabs (excepto btn-guardar que tiene su propio estado)
+    document.querySelectorAll('[data-tab]').forEach(btn => {
+        const esActivo = btn.dataset.tab === tabName;
+        btn.classList.toggle('active-tab', esActivo);
+        btn.classList.toggle('text-primary-fixed', esActivo);
+        btn.classList.toggle('border-primary-fixed', esActivo);
+        btn.classList.toggle('text-on-surface-variant', !esActivo);
+        btn.classList.toggle('border-outline-variant', !esActivo);
+    });
+}
+
+// Listener para todos los botones de tab con data-tab
+document.querySelectorAll('[data-tab]').forEach(btn => {
+    btn.addEventListener('click', () => {
+        navegarATab(btn.dataset.tab);
+    });
+});
+
+// Buscador en panel Stock
+const stockSearchInput = document.getElementById('stock-search');
+if (stockSearchInput) {
+    stockSearchInput.addEventListener('input', () => {
+        const query = stockSearchInput.value.toLowerCase().trim();
+        document.querySelectorAll('#stock-list .stock-row').forEach(row => {
+            const nombre = row.querySelector('span')?.textContent.toLowerCase() || '';
+            row.classList.toggle('hidden', query.length > 0 && !nombre.includes(query));
+        });
+    });
+}
 
 document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && !observacionesDialog.classList.contains('hidden')) {
