@@ -766,14 +766,10 @@
                 </div>
             </div>
 
-            <div class="grid grid-cols-3 gap-sm mb-md text-center">
+            <div class="grid grid-cols-2 gap-sm mb-md text-center">
                 <div class="bg-surface-container-low border border-outline-variant rounded-md p-sm">
                     <p class="text-[10px] text-on-surface-variant uppercase tracking-widest font-label-mono">Capturadas</p>
                     <p id="captura-total-capturadas" class="text-lg font-semibold" style="color: var(--semantic-action)">0</p>
-                </div>
-                <div class="bg-surface-container-low border border-outline-variant rounded-md p-sm">
-                    <p class="text-[10px] text-on-surface-variant uppercase tracking-widest font-label-mono">Pendientes</p>
-                    <p id="captura-total-pendientes" class="text-lg font-semibold" style="color: var(--semantic-warning)">0</p>
                 </div>
                 <div class="bg-surface-container-low border border-outline-variant rounded-md p-sm">
                     <p class="text-[10px] text-on-surface-variant uppercase tracking-widest font-label-mono">Completado</p>
@@ -783,14 +779,10 @@
 
             <div id="captura-card-container" class="space-y-4"></div>
 
-            <div class="mt-md grid grid-cols-3 gap-sm">
+            <div class="mt-md grid grid-cols-2 gap-sm">
                 <button id="captura-btn-anterior" type="button" class="bg-surface border border-outline-variant text-on-surface rounded-sharp px-md py-sm uppercase tracking-widest text-label-mono flex items-center justify-center gap-xs hover:border-primary-fixed-dim transition-colors">
                     <span class="material-symbols-outlined text-sm">arrow_back</span>
                     Anterior
-                </button>
-                <button id="captura-btn-pendiente" type="button" class="bg-surface border border-outline-variant text-on-surface rounded-sharp px-md py-sm uppercase tracking-widest text-label-mono flex items-center justify-center gap-xs hover:border-primary-fixed-dim transition-colors">
-                    <span class="material-symbols-outlined text-sm">flag</span>
-                    Pendiente
                 </button>
                 <button id="captura-btn-siguiente" type="button" class="bg-primary-container text-on-primary-fixed rounded-sharp px-md py-sm uppercase tracking-widest text-label-mono flex items-center justify-center gap-xs hover:brightness-110 transition-all">
                     Siguiente
@@ -802,10 +794,7 @@
                 Desktop: Enter avanza cuando la tarjeta está completa. Móvil: usa el botón Siguiente.
             </div>
 
-            <div id="captura-resumen-pendientes" class="hidden mt-md bg-surface-container-low border border-outline-variant rounded-md p-md">
-                <p class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase mb-sm">Resumen de Pendientes</p>
-                <ul id="captura-lista-pendientes" class="text-sm text-on-surface-variant space-y-xs"></ul>
-            </div>
+
 
             <div class="mt-md">
                 <button id="captura-btn-finalizar" type="button" class="w-full bg-primary-container text-on-primary-fixed font-headline-md text-body-base py-sm px-md rounded-sharp flex items-center justify-center gap-sm hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest">
@@ -969,7 +958,7 @@
         </nav>
     </div>
 
-    <script src="/assets/app.js?v=9.18"></script>
+    <script src="/assets/app.js?v=9.19"></script>
 
     <script>
         (function () {

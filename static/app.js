@@ -8,14 +8,12 @@ let currentOperacionId = null;
 let currentIdInventarioPOS = null; // Guardamos el ID del inventario ya registrado para correcciones
 const ID_BARRA_ACTUAL = 1; // Podemos hacerlo dinámico después
 let productosInventario = [];
-let excluirIdsEnvio = new Set();
 let modoEnvioOrigen = 'inventario';
 
 const capturaEstado = {
     inicializado: false,
     indice: 0,
     idsOrdenados: [],
-    pendientes: new Set(),
     completos: new Set(),
 };
 
@@ -38,14 +36,10 @@ const capturaCardContainer = document.getElementById('captura-card-container');
 const capturaIndiceActual = document.getElementById('captura-indice-actual');
 const capturaIndiceTotal = document.getElementById('captura-indice-total');
 const capturaTotalCapturadas = document.getElementById('captura-total-capturadas');
-const capturaTotalPendientes = document.getElementById('captura-total-pendientes');
 const capturaPorcentaje = document.getElementById('captura-porcentaje');
 const capturaBtnAnterior = document.getElementById('captura-btn-anterior');
-const capturaBtnPendiente = document.getElementById('captura-btn-pendiente');
 const capturaBtnSiguiente = document.getElementById('captura-btn-siguiente');
 const capturaBtnFinalizar = document.getElementById('captura-btn-finalizar');
-const capturaResumenPendientes = document.getElementById('captura-resumen-pendientes');
-const capturaListaPendientes = document.getElementById('captura-lista-pendientes');
 
 function renderCriticalIcon(iconName, className = 'ui-icon') {
     const iconPaths = {
@@ -487,7 +481,6 @@ async function iniciarDashboard() {
     listaProductos.innerHTML = ''; // Limpiar lista
     productosInventario = [];
     resetModoCaptura();
-    excluirIdsEnvio = new Set();
     modoEnvioOrigen = 'inventario';
     _deshabilitarBtnEnvio();
     observacionesDialog.classList.add('hidden');
@@ -738,6 +731,7 @@ function crearTarjetaProductoElement(p, scope = 'inv') {
     div.dataset.tolerancia = (p.perfiles && p.perfiles.length > 0) ? p.perfiles[0].tolerancia_oz : 0;
     div.dataset.paqsist = parseFloat(p.stock_ideal_unidades) || 0;
     div.dataset.detsist = parseFloat(p.stock_ideal_onzas) || 0;
+    div.dataset.onzasMax = parseFloat(p.onzas_por_botella_llena) || 0;
 
     let html = `
         ${p.categoria_nombre ? `<span class="text-label-mono font-label-mono tracking-widest uppercase text-on-surface-variant mb-xs block">${escapeHtml(p.categoria_nombre)}</span>` : ''}
@@ -901,8 +895,164 @@ function cerrarDialogoObservaciones() {
     }
 }
 
-async function construirPayloadInventario(observaciones = null, opciones = {}) {
-    const excluirIds = opciones.excluirIds || new Set();
+// ==========================================
+// VALIDACIONES DE INVENTARIO
+// ==========================================
+
+/**
+ * Valida los campos de una tarjeta de producto.
+ * Retorna: { camposVacios: [], erroresPeso: [], advertenciasOnzas: [] }
+ */
+function validarTarjeta(card) {
+    const resultado = {
+        camposVacios: [],
+        erroresPeso: [],
+        advertenciasOnzas: [],
+    };
+
+    const pesable = parseInt(card.dataset.pesable, 10) === 1;
+    const perfiles = JSON.parse(card.dataset.perfiles || '[]');
+    const onzasMax = parseFloat(card.dataset.onzasMax) || 0;
+
+    const inputCerradas = card.querySelector('.input-cerradas');
+    if (!inputCerradas || inputCerradas.value.trim() === '') {
+        resultado.camposVacios.push('unidades');
+    }
+
+    if (pesable) {
+        const wrappers = card.querySelectorAll('.item-peso-wrapper');
+        wrappers.forEach((wrapper, idx) => {
+            const inp = wrapper.querySelector('.input-peso');
+            if (!inp) return;
+
+            if (inp.value.trim() === '') {
+                resultado.camposVacios.push(`peso_${idx + 1}`);
+                return;
+            }
+
+            const pesoIngresado = parseFloat(inp.value);
+            if (isNaN(pesoIngresado)) {
+                resultado.camposVacios.push(`peso_${idx + 1}`);
+                return;
+            }
+
+            const select = wrapper.querySelector('.select-perfil');
+            const { perfil } = resolverPerfilSeleccionado(perfiles, select);
+            if (!perfil) return;
+
+            const pesoBruto = parseFloat(perfil.peso_bruto);
+            const tara = parseFloat(perfil.tara);
+            const gramsPorOz = parseFloat(perfil.gramos_por_oz);
+            const nombrePerfil = perfil.nombre_perfil || `Botella ${idx + 1}`;
+
+            // Error duro: peso supera el peso bruto de la botella
+            if (!isNaN(pesoBruto) && pesoBruto > 0 && pesoIngresado > pesoBruto) {
+                resultado.erroresPeso.push({ pesoIngresado, pesoBruto, nombrePerfil });
+            }
+
+            // Advertencia: onzas calculadas superan la capacidad de la botella
+            if (onzasMax > 0 && !isNaN(tara) && !isNaN(gramsPorOz) && gramsPorOz > 0) {
+                const margenError = 10.0;
+                if (pesoIngresado >= (tara - margenError)) {
+                    const pesoLiquido = Math.max(0, pesoIngresado - tara);
+                    const onzasCalculadas = pesoLiquido / gramsPorOz;
+                    if (onzasCalculadas > onzasMax) {
+                        resultado.advertenciasOnzas.push({ onzasCalculadas, onzasMaximas: onzasMax, nombrePerfil });
+                    }
+                }
+            }
+        });
+    }
+
+    return resultado;
+}
+
+/**
+ * Ejecuta validaciones sobre un conjunto de tarjetas.
+ * Orden: errores de peso (bloqueo duro) → onzas excedidas (advertencia) → campos vacíos (advertencia con relleno a 0).
+ * Retorna true si se puede continuar, false si el usuario cancela o hay error bloqueante.
+ */
+async function ejecutarValidacionesGlobales(cards) {
+    const erroresPeso = [];
+    const advertenciasOnzas = [];
+    const camposVaciosPorCard = [];
+
+    cards.forEach(card => {
+        const nombre = card.dataset.nombre;
+        const res = validarTarjeta(card);
+        if (res.erroresPeso.length > 0) erroresPeso.push({ nombre, detalles: res.erroresPeso });
+        if (res.advertenciasOnzas.length > 0) advertenciasOnzas.push({ nombre, detalles: res.advertenciasOnzas });
+        if (res.camposVacios.length > 0) camposVaciosPorCard.push({ card, nombre, campos: res.camposVacios });
+    });
+
+    // 1. Bloqueo duro: peso > peso_bruto
+    if (erroresPeso.length > 0) {
+        const lista = erroresPeso.map(e => {
+            const detalles = e.detalles.map(d =>
+                `  • ${d.nombrePerfil}: ingresado ${d.pesoIngresado.toFixed(1)} g, máximo ${d.pesoBruto.toFixed(1)} g`
+            ).join('\n');
+            return `${e.nombre}:\n${detalles}`;
+        }).join('\n\n');
+        await mostrarDialogoResultado({
+            tipo: 'error',
+            titulo: 'Peso inválido',
+            mensaje: `El peso ingresado supera el peso bruto de la botella. Corrige los valores antes de continuar:\n\n${lista}`,
+        });
+        return false;
+    }
+
+    // 2. Advertencia confirmable: onzas > capacidad por botella
+    if (advertenciasOnzas.length > 0) {
+        const lista = advertenciasOnzas.map(e => {
+            const detalles = e.detalles.map(d =>
+                `  • ${d.nombrePerfil}: ${d.onzasCalculadas.toFixed(2)} oz (máx. ${d.onzasMaximas.toFixed(2)} oz)`
+            ).join('\n');
+            return `${e.nombre}:\n${detalles}`;
+        }).join('\n\n');
+        const confirmar = await mostrarDialogoConfirmacion({
+            titulo: 'Capacidad de botella excedida',
+            mensaje: `El peso ingresado equivale a más onzas de las que cabe en la botella. ¿Confirmas que el valor es correcto?\n\n${lista}`,
+        });
+        if (!confirmar) return false;
+    }
+
+    // 3. Advertencia confirmable: campos vacíos (se rellenan con 0 al confirmar)
+    if (camposVaciosPorCard.length > 0) {
+        const lista = camposVaciosPorCard.map(p => {
+            const campos = p.campos.map(c =>
+                c === 'unidades' ? 'unidades cerradas' : `peso botella ${c.replace('peso_', '')}`
+            ).join(', ');
+            return `• ${p.nombre}: ${campos}`;
+        }).join('\n');
+        const confirmar = await mostrarDialogoConfirmacion({
+            titulo: 'Campos sin completar',
+            mensaje: `Los siguientes campos están vacíos y se registrarán como 0. ¿Confirmas que representan cero?\n\n${lista}\n\nPresiona Volver para completarlos.`,
+        });
+        if (!confirmar) return false;
+
+        // Rellenar vacíos con 0
+        camposVaciosPorCard.forEach(({ card, campos }) => {
+            campos.forEach(campo => {
+                if (campo === 'unidades') {
+                    const inp = card.querySelector('.input-cerradas');
+                    if (inp) inp.value = '0';
+                } else {
+                    const idx = parseInt(campo.replace('peso_', ''), 10) - 1;
+                    const wrappers = card.querySelectorAll('.item-peso-wrapper');
+                    if (wrappers[idx]) {
+                        const inp = wrappers[idx].querySelector('.input-peso');
+                        if (inp) inp.value = '0';
+                    }
+                }
+            });
+            recalcularTarjeta(card);
+        });
+    }
+
+    return true;
+}
+
+async function construirPayloadInventario(observaciones = null) {
     const payload = {
         id_operacion: currentOperacionId,
         id_barra: ID_BARRA_ACTUAL,
@@ -911,17 +1061,12 @@ async function construirPayloadInventario(observaciones = null, opciones = {}) {
     };
 
     const cards = document.querySelectorAll('#lista-productos .product-card');
-    let validacionExitosa = true;
-    let advertenciaFatFinger = false;
-    let mensajeFatFinger = "";
+    let valido = true;
 
     cards.forEach(card => {
         const idProducto = parseInt(card.dataset.id);
-        if (excluirIds.has(idProducto)) return;
-
         const pesable = parseInt(card.dataset.pesable);
-        const nombreProducto = card.dataset.nombre;
-        
+
         const inputCerradas = card.querySelector('.input-cerradas');
         const cerradas = parseInt(inputCerradas.value) || 0;
 
@@ -946,17 +1091,11 @@ async function construirPayloadInventario(observaciones = null, opciones = {}) {
                     perfil_index: index >= 0 ? index : 0
                 });
             });
-
-            // VALIDACIÓN FAT FINGER: ¿Demasiadas botellas abiertas?
-            if (pesosAbiertas.length > 3) {
-                advertenciaFatFinger = true;
-                mensajeFatFinger += `- Registraste ${pesosAbiertas.length} botellas abiertas de ${nombreProducto}.\n`;
-            }
         }
 
-        // VALIDACIÓN MATEMÁTICA: Números negativos (por si saltan el HTML)
+        // Seguridad: rechazar números negativos
         if (cerradas < 0 || pesosAbiertas.some(p => p.peso < 0)) {
-            validacionExitosa = false;
+            valido = false;
         }
 
         payload.items.push({
@@ -966,21 +1105,13 @@ async function construirPayloadInventario(observaciones = null, opciones = {}) {
         });
     });
 
-    if (!validacionExitosa) {
+    if (!valido) {
         await mostrarDialogoResultado({
             tipo: 'error',
             titulo: 'Datos inválidos',
             mensaje: 'No puedes ingresar números negativos en el inventario.'
         });
         return null;
-    }
-
-    if (advertenciaFatFinger) {
-        const confirmar = await mostrarDialogoConfirmacion({
-            titulo: 'Advertencia — Revisa tus datos',
-            mensaje: `Los siguientes productos tienen una cantidad inusualmente alta de botellas abiertas:\n\n${mensajeFatFinger}\n¿Estás completamente seguro de que estos datos son correctos?`
-        });
-        if (!confirmar) return null;
     }
 
     return payload;
@@ -1050,8 +1181,10 @@ async function enviarInventario(payload) {
     }
 }
 
-btnGuardar.addEventListener('click', () => {
-    excluirIdsEnvio = new Set();
+btnGuardar.addEventListener('click', async () => {
+    const todasLasCards = Array.from(document.querySelectorAll('#lista-productos .product-card'));
+    const valido = await ejecutarValidacionesGlobales(todasLasCards);
+    if (!valido) return;
     abrirDialogoObservaciones('inventario');
 });
 
@@ -1109,17 +1242,13 @@ function resetModoCaptura() {
     capturaEstado.inicializado = false;
     capturaEstado.indice = 0;
     capturaEstado.idsOrdenados = [];
-    capturaEstado.pendientes = new Set();
     capturaEstado.completos = new Set();
 
     if (capturaCardContainer) capturaCardContainer.innerHTML = '';
     if (capturaIndiceActual) capturaIndiceActual.textContent = '0';
     if (capturaIndiceTotal) capturaIndiceTotal.textContent = '0';
     if (capturaTotalCapturadas) capturaTotalCapturadas.textContent = '0';
-    if (capturaTotalPendientes) capturaTotalPendientes.textContent = '0';
     if (capturaPorcentaje) capturaPorcentaje.textContent = '0%';
-    if (capturaResumenPendientes) capturaResumenPendientes.classList.add('hidden');
-    if (capturaListaPendientes) capturaListaPendientes.innerHTML = '';
 }
 
 function esDesktopParaCaptura() {
@@ -1223,24 +1352,15 @@ function syncCapturaConInventario() {
 function actualizarResumenCaptura() {
     const total = capturaEstado.idsOrdenados.length;
     const completas = capturaEstado.completos.size;
-    const pendientes = capturaEstado.pendientes.size;
     const pct = total > 0 ? Math.round((completas / total) * 100) : 0;
 
     capturaIndiceTotal.textContent = String(total);
     capturaIndiceActual.textContent = total > 0 ? String(capturaEstado.indice + 1) : '0';
     capturaTotalCapturadas.textContent = String(completas);
-    capturaTotalPendientes.textContent = String(pendientes);
     capturaPorcentaje.textContent = `${pct}%`;
 
     if (capturaBtnAnterior) capturaBtnAnterior.disabled = capturaEstado.indice <= 0;
     if (capturaBtnAnterior) capturaBtnAnterior.classList.toggle('opacity-40', capturaEstado.indice <= 0);
-
-    const idActual = capturaEstado.idsOrdenados[capturaEstado.indice];
-    const esPendiente = capturaEstado.pendientes.has(idActual);
-    if (capturaBtnPendiente) {
-        capturaBtnPendiente.classList.toggle('border-primary-fixed-dim', esPendiente);
-        capturaBtnPendiente.classList.toggle('text-primary-fixed', esPendiente);
-    }
 }
 
 function renderTarjetaCaptura(indice) {
@@ -1268,9 +1388,19 @@ function renderTarjetaCaptura(indice) {
     actualizarResumenCaptura();
 }
 
-function navegarCaptura(delta = 1) {
+async function navegarCaptura(delta = 1) {
     if (!capturaEstado.inicializado || capturaEstado.idsOrdenados.length === 0) return;
     syncCapturaConInventario();
+
+    // Al avanzar, validar la tarjeta actual antes de navegar
+    if (delta > 0) {
+        const cardCaptura = capturaCardContainer.querySelector('.product-card[data-scope="captura"]');
+        if (cardCaptura) {
+            const valido = await ejecutarValidacionesGlobales([cardCaptura]);
+            if (!valido) return;
+        }
+    }
+
     const siguienteIndice = Math.max(0, Math.min(capturaEstado.idsOrdenados.length - 1, capturaEstado.indice + delta));
     capturaEstado.indice = siguienteIndice;
     renderTarjetaCaptura(capturaEstado.indice);
@@ -1285,40 +1415,11 @@ function inicializarModoCaptura() {
     if (!capturaEstado.inicializado) {
         capturaEstado.idsOrdenados = productosInventario.map(p => p.id_producto);
         capturaEstado.indice = 0;
-        capturaEstado.pendientes = new Set();
         capturaEstado.completos = new Set();
         capturaEstado.inicializado = true;
     }
 
     renderTarjetaCaptura(capturaEstado.indice);
-}
-
-function marcarPendienteActual() {
-    if (!capturaEstado.inicializado || capturaEstado.idsOrdenados.length === 0) return;
-    syncCapturaConInventario();
-    const idActual = capturaEstado.idsOrdenados[capturaEstado.indice];
-    capturaEstado.pendientes.add(idActual);
-    actualizarResumenCaptura();
-
-    if (capturaEstado.indice < capturaEstado.idsOrdenados.length - 1) {
-        navegarCaptura(1);
-    }
-}
-
-function mostrarResumenPendientes() {
-    capturaListaPendientes.innerHTML = '';
-    if (capturaEstado.pendientes.size === 0) {
-        capturaListaPendientes.innerHTML = '<li>Sin productos pendientes.</li>';
-    } else {
-        capturaEstado.idsOrdenados.forEach(id => {
-            if (!capturaEstado.pendientes.has(id)) return;
-            const producto = productosInventario.find(p => p.id_producto === id);
-            const item = document.createElement('li');
-            item.textContent = `- ${producto ? producto.nombre : `Producto ${id}`}`;
-            capturaListaPendientes.appendChild(item);
-        });
-    }
-    capturaResumenPendientes.classList.remove('hidden');
 }
 
 // Listener para todos los botones de tab con data-tab
@@ -1348,17 +1449,15 @@ if (capturaBtnSiguiente) {
     capturaBtnSiguiente.addEventListener('click', () => navegarCaptura(1));
 }
 
-if (capturaBtnPendiente) {
-    capturaBtnPendiente.addEventListener('click', () => marcarPendienteActual());
-}
-
 if (capturaBtnFinalizar) {
-    capturaBtnFinalizar.addEventListener('click', () => {
+    capturaBtnFinalizar.addEventListener('click', async () => {
         if (!capturaEstado.inicializado || capturaEstado.idsOrdenados.length === 0) return;
 
         syncCapturaConInventario();
-        mostrarResumenPendientes();
-        excluirIdsEnvio = new Set(capturaEstado.pendientes);
+        const todasLasCards = Array.from(document.querySelectorAll('#lista-productos .product-card'));
+        const valido = await ejecutarValidacionesGlobales(todasLasCards);
+        if (!valido) return;
+
         abrirDialogoObservaciones('captura');
     });
 }
@@ -1426,9 +1525,7 @@ if (capturaCardContainer) {
         if (!card) return;
         e.preventDefault();
 
-        if (tarjetaCompleta(card)) {
-            navegarCaptura(1);
-        }
+        navegarCaptura(1);
     });
 }
 
@@ -1454,10 +1551,9 @@ document.addEventListener('keydown', (event) => {
 
 btnEnviarInventario.addEventListener('click', async () => {
     const observaciones = inputObservaciones.value.trim() || null;
-    const payload = await construirPayloadInventario(observaciones, { excluirIds: excluirIdsEnvio });
+    const payload = await construirPayloadInventario(observaciones);
     if (!payload) return;
     await enviarInventario(payload);
-    excluirIdsEnvio = new Set();
 });
 
 // ==========================================
