@@ -38,6 +38,7 @@ const capturaPorcentaje = document.getElementById('captura-porcentaje');
 const capturaBtnAnterior = document.getElementById('captura-btn-anterior');
 const capturaBtnSiguiente = document.getElementById('captura-btn-siguiente');
 const capturaBtnFinalizar = document.getElementById('captura-btn-finalizar');
+const stockBtnGuardar = document.getElementById('stock-btn-guardar');
 
 function renderCriticalIcon(iconName, className = 'ui-icon') {
     const iconPaths = {
@@ -859,7 +860,7 @@ function obtenerValoresCapturadosPaloteo3(idProducto) {
 function crearFilaPaloteo3(producto) {
     const row = document.createElement('div');
     row.className = 'stock-row grid gap-xs px-sm py-xs items-center hover:bg-surface-container-highest transition-colors';
-    row.style.gridTemplateColumns = '5rem 1fr 5rem 6rem';
+    row.style.gridTemplateColumns = '3.25rem minmax(0, 1fr) 4rem 5.25rem';
     row.dataset.idProducto = String(producto.id_producto || '');
     row.dataset.search = `${producto.id_producto || ''} ${producto.codigo || ''} ${producto.nombre || ''}`.toLowerCase();
     row.dataset.codigo = String(producto.codigo || '—');
@@ -878,10 +879,10 @@ function crearFilaPaloteo3(producto) {
     row.dataset.gramosOz = String(gramosPorOz);
 
     row.innerHTML = `
-        <span class="text-data-tabular text-on-surface text-right text-xs truncate" title="${escapeHtml(String(producto.codigo ?? ''))}">${escapeHtml(String(producto.codigo ?? '—'))}</span>
+        <span class="text-data-tabular text-on-surface text-right text-xs truncate pr-[2px]" title="${escapeHtml(String(producto.codigo ?? ''))}">${escapeHtml(String(producto.codigo ?? '—'))}</span>
         <span class="text-xs text-on-surface truncate" title="${escapeHtml(producto.nombre || '')}">${escapeHtml(producto.nombre || '')}</span>
-        <input type="number" min="0" step="1" value="${escapeHtml(capturado.unidades)}" class="stock-input-unidades w-full text-right text-xs bg-surface border border-outline-variant rounded px-xs py-xs text-data-tabular text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors" data-ideal-unidades="${idealUnidades}" placeholder="0">
-        <input type="number" min="0" step="0.1" value="${escapeHtml(capturado.peso)}" class="stock-input-peso w-full text-right text-xs bg-surface border border-outline-variant rounded px-xs py-xs text-data-tabular text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors" data-tara="${tara}" data-gramos-oz="${gramosPorOz}" data-ideal-onzas="${idealOnzas}" placeholder="0">
+        <input type="number" min="0" step="1" value="${escapeHtml(capturado.unidades)}" class="stock-input-unidades w-full text-right text-xs bg-surface border border-outline-variant rounded px-[6px] py-xs text-data-tabular text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors" data-ideal-unidades="${idealUnidades}" placeholder="0">
+        <input type="number" min="0" step="0.1" value="${escapeHtml(capturado.peso)}" class="stock-input-peso w-full text-right text-xs bg-surface border border-outline-variant rounded px-[6px] py-xs text-data-tabular text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors" data-tara="${tara}" data-gramos-oz="${gramosPorOz}" data-ideal-onzas="${idealOnzas}" placeholder="0">
     `;
     return row;
 }
@@ -972,9 +973,9 @@ function renderizarReportePaloteo3() {
 
         const row = document.createElement('div');
         row.className = 'grid gap-xs px-sm py-xs items-center hover:bg-surface-container-highest transition-colors';
-        row.style.gridTemplateColumns = '5rem 1fr 5.5rem 7rem';
+        row.style.gridTemplateColumns = '3.25rem minmax(0, 1fr) 4.5rem 5.25rem';
         row.innerHTML = `
-            <span class="text-data-tabular text-on-surface text-right text-xs truncate" title="${escapeHtml(fila.codigo)}">${escapeHtml(fila.codigo)}</span>
+            <span class="text-data-tabular text-on-surface text-right text-xs truncate pr-[2px]" title="${escapeHtml(fila.codigo)}">${escapeHtml(fila.codigo)}</span>
             <span class="text-xs text-on-surface truncate" title="${escapeHtml(fila.nombre)}">${escapeHtml(fila.nombre)}</span>
             <span class="text-right text-xs font-semibold" style="color: ${colorUnid}">${textoUnid}</span>
             <span class="text-right text-xs font-semibold" style="color: ${colorOz}">${textoOz}</span>
@@ -1008,6 +1009,12 @@ function syncFilaPaloteo3ConInventario(row) {
     }
 
     recalcularTarjeta(card);
+}
+
+function syncTodasFilasPaloteo3ConInventario() {
+    document.querySelectorAll('#stock-list .stock-row').forEach(row => {
+        syncFilaPaloteo3ConInventario(row);
+    });
 }
 
 // Fix #27: Ahora usa crearInputPeso() en lugar de duplicar el HTML del input.
@@ -1641,6 +1648,19 @@ if (stockList) {
             syncFilaPaloteo3ConInventario(row);
             renderizarReportePaloteo3();
         }
+    });
+}
+
+if (stockBtnGuardar) {
+    stockBtnGuardar.addEventListener('click', async () => {
+        // Sincroniza la captura de PALOTEO 3 con el origen único de datos antes de validar/enviar.
+        syncTodasFilasPaloteo3ConInventario();
+
+        const todasLasCards = Array.from(document.querySelectorAll('#lista-productos .product-card'));
+        const valido = await ejecutarValidacionesGlobales(todasLasCards);
+        if (!valido) return;
+
+        abrirDialogoObservaciones('inventario');
     });
 }
 

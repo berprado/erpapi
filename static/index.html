@@ -648,27 +648,27 @@
         <div id="panel-stock" class="tab-panel hidden p-md max-w-2xl mx-auto w-full">
 
             <!-- Header -->
-            <div class="flex items-center justify-between mb-md">
+            <div class="flex items-start justify-between mb-sm">
                 <div>
-                    <h2 class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase flex items-center gap-sm">
-                        <span class="material-symbols-outlined text-primary-fixed" style="font-size:1.1rem;">inventory_2</span>
+                    <h2 class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase flex items-center gap-xs leading-none">
+                        <span class="material-symbols-outlined text-primary-fixed" style="font-size:1rem;">inventory_2</span>
                         Paloteo 3
                     </h2>
-                    <p class="text-xs text-on-surface-variant mt-xs">Productos pendientes con captura rápida de unidades y peso</p>
+                    <p class="text-[11px] text-on-surface-variant mt-[2px] leading-tight">Captura rápida de unidades y peso</p>
                 </div>
             </div>
 
             <!-- Buscador -->
-            <div class="relative mb-md">
+            <div class="relative mb-sm">
                 <span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-outline-variant" style="font-size:1rem;">search</span>
                 <input type="text" id="stock-search" placeholder="Buscar por ID, código o nombre..." class="w-full bg-surface-container border border-outline-variant rounded-md pl-10 pr-md py-sm text-sm text-on-surface placeholder-outline/40 focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-body-base">
             </div>
 
             <!-- Tabla PALOTEO 3 -->
-            <div class="bg-surface-container border border-outline-variant rounded-md overflow-x-auto shadow-lg">
+            <div class="bg-surface-container border border-outline-variant rounded-md overflow-hidden shadow-lg">
 
                 <!-- Header tabla -->
-                <div class="grid gap-xs px-sm py-sm border-b border-outline-variant bg-surface-container-low text-[10px] font-label-mono tracking-widest uppercase text-on-surface-variant" style="grid-template-columns: 5rem 1fr 5rem 6rem; min-width: 430px;">
+                <div class="grid gap-xs px-sm py-sm border-b border-outline-variant bg-surface-container-low text-[10px] font-label-mono tracking-widest uppercase text-on-surface-variant" style="grid-template-columns: 3.25rem minmax(0, 1fr) 4rem 5.25rem;">
                     <span class="text-right">Cód</span>
                     <span>Nombre</span>
                     <span class="text-right">Unid</span>
@@ -676,13 +676,20 @@
                 </div>
 
                 <!-- Filas generadas por JS -->
-                <div id="stock-list" class="divide-y divide-outline-variant" style="min-width: 430px;">
+                <div id="stock-list" class="divide-y divide-outline-variant">
                 </div>
             </div>
 
             <!-- Estado vacío -->
-            <div id="stock-empty-state" class="hidden text-center text-on-surface-variant py-lg font-body-base text-sm">
+            <div id="stock-empty-state" class="hidden text-center text-on-surface-variant py-md font-body-base text-sm">
                 No hay productos consumidos para auditar hoy.
+            </div>
+
+            <div class="mt-sm">
+                <button id="stock-btn-guardar" type="button" class="w-full bg-primary-container text-on-primary-fixed py-sm px-sm rounded-sharp flex items-center justify-center gap-xs hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest text-[11px] font-label-mono font-semibold">
+                    <span class="material-symbols-outlined text-sm">save</span>
+                    Guardar Paloteo 3
+                </button>
             </div>
 
         </div><!-- /panel-stock -->
@@ -690,27 +697,27 @@
 
         <!-- ========== PANEL REPORTE ========== -->
         <div id="panel-scan" class="tab-panel hidden p-md max-w-2xl mx-auto w-full">
-            <div class="flex items-center justify-between mb-md">
+            <div class="flex items-start justify-between mb-sm">
                 <div>
-                    <h2 class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase flex items-center gap-sm">
-                        <span class="material-symbols-outlined text-primary-fixed" style="font-size:1.1rem;">summarize</span>
+                    <h2 class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase flex items-center gap-xs leading-none">
+                        <span class="material-symbols-outlined text-primary-fixed" style="font-size:1rem;">summarize</span>
                         Reporte
                     </h2>
-                    <p class="text-xs text-on-surface-variant mt-xs">Diferencias calculadas con base en lo capturado en Paloteo 3</p>
+                    <p class="text-[11px] text-on-surface-variant mt-[2px] leading-tight">Variaciones contra ideal</p>
                 </div>
             </div>
 
-            <div class="bg-surface-container border border-outline-variant rounded-md overflow-x-auto shadow-lg">
-                <div class="grid gap-xs px-sm py-sm border-b border-outline-variant bg-surface-container-low text-[10px] font-label-mono tracking-widest uppercase text-on-surface-variant" style="grid-template-columns: 5rem 1fr 5.5rem 7rem; min-width: 460px;">
+            <div class="bg-surface-container border border-outline-variant rounded-md overflow-hidden shadow-lg">
+                <div class="grid gap-xs px-sm py-sm border-b border-outline-variant bg-surface-container-low text-[10px] font-label-mono tracking-widest uppercase text-on-surface-variant" style="grid-template-columns: 3.25rem minmax(0, 1fr) 4.5rem 5.25rem;">
                     <span class="text-right">Cód</span>
                     <span>Nombre</span>
                     <span class="text-right">Δ Unid</span>
                     <span class="text-right">Δ Oz</span>
                 </div>
-                <div id="reporte-list" class="divide-y divide-outline-variant" style="min-width: 460px;"></div>
+                <div id="reporte-list" class="divide-y divide-outline-variant"></div>
             </div>
 
-            <div id="reporte-empty-state" class="hidden text-center text-on-surface-variant py-lg font-body-base text-sm">
+            <div id="reporte-empty-state" class="hidden text-center text-on-surface-variant py-md font-body-base text-sm">
                 No hay datos capturados en Paloteo 3 para generar reporte.
             </div>
         </div><!-- /panel-scan -->
@@ -882,35 +889,35 @@
 
         <!-- Bottom Navigation -->
         <nav class="fixed bottom-0 left-0 w-full bg-surface-container border-t border-outline-variant z-30">
-            <div id="submit-section" class="h-20 flex justify-around items-stretch">
+            <div id="submit-section" class="h-[4.25rem] flex justify-around items-stretch">
                 <!-- Tab 1: PALOTEO 3 -->
-                <button class="flex-1 flex flex-col items-center justify-center gap-xs text-on-surface-variant hover:text-primary-fixed-dim transition-colors border-b-2 border-outline-variant hover:border-primary-fixed-dim group active-tab" data-tab="stock">
-                    <span class="material-symbols-outlined text-md group-hover:glow-cyan-intense">inventory_2</span>
-                    <span class="text-[10px] font-label-mono tracking-widest uppercase font-semibold">Paloteo 3</span>
+                <button class="flex-1 flex flex-col items-center justify-center gap-[2px] px-[2px] text-on-surface-variant hover:text-primary-fixed-dim transition-colors border-b-2 border-outline-variant hover:border-primary-fixed-dim group active-tab" data-tab="stock">
+                    <span class="material-symbols-outlined text-sm group-hover:glow-cyan-intense">inventory_2</span>
+                    <span class="text-[9px] font-label-mono tracking-[0.12em] uppercase font-semibold leading-none text-center">Paloteo 3</span>
                 </button>
 
                 <!-- Tab 2: PALOTEO 1 (acción principal) -->
-                <button id="btn-guardar" disabled aria-label="Paloteo 1" class="flex-1 flex flex-col items-center justify-center gap-xs transition-colors border-b-2 border-outline-variant text-on-surface-variant opacity-40 cursor-not-allowed">
-                    <span class="material-symbols-outlined text-md">send</span>
-                    <span class="text-[10px] font-label-mono tracking-widest uppercase font-semibold">Paloteo 1</span>
+                <button id="btn-guardar" disabled aria-label="Paloteo 1" class="flex-1 flex flex-col items-center justify-center gap-[2px] px-[2px] transition-colors border-b-2 border-outline-variant text-on-surface-variant opacity-40 cursor-not-allowed">
+                    <span class="material-symbols-outlined text-sm">send</span>
+                    <span class="text-[9px] font-label-mono tracking-[0.12em] uppercase font-semibold leading-none text-center">Paloteo 1</span>
                 </button>
 
                 <!-- Tab 3: REPORTE -->
-                <button class="flex-1 flex flex-col items-center justify-center gap-xs text-on-surface-variant hover:text-primary-fixed-dim transition-colors border-b-2 border-outline-variant hover:border-primary-fixed-dim group" data-tab="scan">
-                    <span class="material-symbols-outlined text-md">summarize</span>
-                    <span class="text-[10px] font-label-mono tracking-widest uppercase font-semibold">Reporte</span>
+                <button class="flex-1 flex flex-col items-center justify-center gap-[2px] px-[2px] text-on-surface-variant hover:text-primary-fixed-dim transition-colors border-b-2 border-outline-variant hover:border-primary-fixed-dim group" data-tab="scan">
+                    <span class="material-symbols-outlined text-sm">summarize</span>
+                    <span class="text-[9px] font-label-mono tracking-[0.12em] uppercase font-semibold leading-none text-center">Reporte</span>
                 </button>
 
                 <!-- Tab 4: PALOTEO 2 -->
-                <button class="flex-1 flex flex-col items-center justify-center gap-xs text-on-surface-variant hover:text-primary-fixed-dim transition-colors border-b-2 border-outline-variant hover:border-primary-fixed-dim group" data-tab="logs">
-                    <span class="material-symbols-outlined text-md">history</span>
-                    <span class="text-[10px] font-label-mono tracking-widest uppercase font-semibold">Paloteo 2</span>
+                <button class="flex-1 flex flex-col items-center justify-center gap-[2px] px-[2px] text-on-surface-variant hover:text-primary-fixed-dim transition-colors border-b-2 border-outline-variant hover:border-primary-fixed-dim group" data-tab="logs">
+                    <span class="material-symbols-outlined text-sm">history</span>
+                    <span class="text-[9px] font-label-mono tracking-[0.12em] uppercase font-semibold leading-none text-center">Paloteo 2</span>
                 </button>
             </div>
         </nav>
     </div>
 
-    <script src="/assets/app.js?v=9.24"></script>
+    <script src="/assets/app.js?v=9.28"></script>
 
     <script>
         (function () {
