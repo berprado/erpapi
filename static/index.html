@@ -668,19 +668,15 @@
             <div class="bg-surface-container border border-outline-variant rounded-md overflow-x-auto shadow-lg">
 
                 <!-- Header tabla -->
-                <div class="grid gap-xs px-sm py-sm border-b border-outline-variant bg-surface-container-low text-[10px] font-label-mono tracking-widest uppercase text-on-surface-variant" style="grid-template-columns: 2.5rem 4rem 1fr 4.5rem 5rem 4rem 4rem 4rem; min-width: 600px;">
-                    <span class="text-right">ID</span>
+                <div class="grid gap-xs px-sm py-sm border-b border-outline-variant bg-surface-container-low text-[10px] font-label-mono tracking-widest uppercase text-on-surface-variant" style="grid-template-columns: 5rem 1fr 5rem 6rem; min-width: 430px;">
                     <span class="text-right">Cód</span>
                     <span>Nombre</span>
                     <span class="text-right">Unid</span>
                     <span class="text-right">Peso (g)</span>
-                    <span class="text-right">Oz Eq</span>
-                    <span class="text-right">Δ Unid</span>
-                    <span class="text-right">Δ Oz</span>
                 </div>
 
                 <!-- Filas generadas por JS -->
-                <div id="stock-list" class="divide-y divide-outline-variant" style="min-width: 600px;">
+                <div id="stock-list" class="divide-y divide-outline-variant" style="min-width: 430px;">
                 </div>
             </div>
 
@@ -692,14 +688,30 @@
         </div><!-- /panel-stock -->
 
 
-        <!-- ========== PANEL SCAN (placeholder) ========== -->
+        <!-- ========== PANEL REPORTE ========== -->
         <div id="panel-scan" class="tab-panel hidden p-md max-w-2xl mx-auto w-full">
-            <div class="flex flex-col items-center justify-center py-20 text-center gap-lg">
-                <span class="material-symbols-outlined text-outline-variant" style="font-size:4rem;">qr_code_scanner</span>
+            <div class="flex items-center justify-between mb-md">
                 <div>
-                    <p class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase">Escáner QR / Barras</p>
-                    <p class="text-xs text-on-surface-variant mt-xs">Próximamente disponible</p>
+                    <h2 class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase flex items-center gap-sm">
+                        <span class="material-symbols-outlined text-primary-fixed" style="font-size:1.1rem;">summarize</span>
+                        Reporte
+                    </h2>
+                    <p class="text-xs text-on-surface-variant mt-xs">Diferencias calculadas con base en lo capturado en Paloteo 3</p>
                 </div>
+            </div>
+
+            <div class="bg-surface-container border border-outline-variant rounded-md overflow-x-auto shadow-lg">
+                <div class="grid gap-xs px-sm py-sm border-b border-outline-variant bg-surface-container-low text-[10px] font-label-mono tracking-widest uppercase text-on-surface-variant" style="grid-template-columns: 5rem 1fr 5.5rem 7rem; min-width: 460px;">
+                    <span class="text-right">Cód</span>
+                    <span>Nombre</span>
+                    <span class="text-right">Δ Unid</span>
+                    <span class="text-right">Δ Oz</span>
+                </div>
+                <div id="reporte-list" class="divide-y divide-outline-variant" style="min-width: 460px;"></div>
+            </div>
+
+            <div id="reporte-empty-state" class="hidden text-center text-on-surface-variant py-lg font-body-base text-sm">
+                No hay datos capturados en Paloteo 3 para generar reporte.
             </div>
         </div><!-- /panel-scan -->
 
@@ -883,10 +895,10 @@
                     <span class="text-[10px] font-label-mono tracking-widest uppercase font-semibold">Paloteo 1</span>
                 </button>
 
-                <!-- Tab 3: SCAN -->
+                <!-- Tab 3: REPORTE -->
                 <button class="flex-1 flex flex-col items-center justify-center gap-xs text-on-surface-variant hover:text-primary-fixed-dim transition-colors border-b-2 border-outline-variant hover:border-primary-fixed-dim group" data-tab="scan">
-                    <span class="material-symbols-outlined text-md">qr_code_scanner</span>
-                    <span class="text-[10px] font-label-mono tracking-widest uppercase font-semibold">Scan</span>
+                    <span class="material-symbols-outlined text-md">summarize</span>
+                    <span class="text-[10px] font-label-mono tracking-widest uppercase font-semibold">Reporte</span>
                 </button>
 
                 <!-- Tab 4: PALOTEO 2 -->
@@ -898,7 +910,7 @@
         </nav>
     </div>
 
-    <script src="/assets/app.js?v=9.21"></script>
+    <script src="/assets/app.js?v=9.24"></script>
 
     <script>
         (function () {
