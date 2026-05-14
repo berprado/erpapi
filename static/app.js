@@ -33,8 +33,6 @@ const inputObservaciones = document.getElementById('observaciones-paloteo');
 const btnEnviarInventario = document.getElementById('btn-enviar-inventario');
 const btnCancelarObservaciones = document.getElementById('btn-cancelar-observaciones');
 const capturaCardContainer = document.getElementById('captura-card-container');
-const capturaIndiceActual = document.getElementById('captura-indice-actual');
-const capturaIndiceTotal = document.getElementById('captura-indice-total');
 const capturaTotalCapturadas = document.getElementById('captura-total-capturadas');
 const capturaPorcentaje = document.getElementById('captura-porcentaje');
 const capturaBtnAnterior = document.getElementById('captura-btn-anterior');
@@ -1245,8 +1243,6 @@ function resetModoCaptura() {
     capturaEstado.completos = new Set();
 
     if (capturaCardContainer) capturaCardContainer.innerHTML = '';
-    if (capturaIndiceActual) capturaIndiceActual.textContent = '0';
-    if (capturaIndiceTotal) capturaIndiceTotal.textContent = '0';
     if (capturaTotalCapturadas) capturaTotalCapturadas.textContent = '0';
     if (capturaPorcentaje) capturaPorcentaje.textContent = '0%';
 }
@@ -1354,10 +1350,14 @@ function actualizarResumenCaptura() {
     const completas = capturaEstado.completos.size;
     const pct = total > 0 ? Math.round((completas / total) * 100) : 0;
 
-    capturaIndiceTotal.textContent = String(total);
-    capturaIndiceActual.textContent = total > 0 ? String(capturaEstado.indice + 1) : '0';
-    capturaTotalCapturadas.textContent = String(completas);
-    capturaPorcentaje.textContent = `${pct}%`;
+    // Los spans de índice viven dentro de la tarjeta activa (se recrean en cada render)
+    const elIndiceActual = document.getElementById('captura-indice-actual');
+    const elIndiceTotal = document.getElementById('captura-indice-total');
+    if (elIndiceActual) elIndiceActual.textContent = total > 0 ? String(capturaEstado.indice + 1) : '0';
+    if (elIndiceTotal) elIndiceTotal.textContent = String(total);
+
+    if (capturaTotalCapturadas) capturaTotalCapturadas.textContent = String(completas);
+    if (capturaPorcentaje) capturaPorcentaje.textContent = `${pct}%`;
 
     if (capturaBtnAnterior) capturaBtnAnterior.disabled = capturaEstado.indice <= 0;
     if (capturaBtnAnterior) capturaBtnAnterior.classList.toggle('opacity-40', capturaEstado.indice <= 0);
@@ -1376,6 +1376,14 @@ function renderTarjetaCaptura(indice) {
 
     capturaCardContainer.innerHTML = '';
     const card = crearTarjetaProductoElement(producto, 'captura');
+
+    // Insertar contador de posición en la esquina superior derecha de la tarjeta
+    const total = capturaEstado.idsOrdenados.length;
+    const badgeContador = document.createElement('div');
+    badgeContador.className = 'flex items-center justify-end gap-xs mb-sm';
+    badgeContador.innerHTML = `<span class="text-[10px] font-label-mono text-on-surface-variant uppercase tracking-widest">Producto</span><span id="captura-indice-actual" class="text-sm font-semibold text-primary-fixed">${indice + 1}</span><span class="text-[10px] font-label-mono text-on-surface-variant">de</span><span id="captura-indice-total" class="text-sm font-semibold text-primary-fixed">${total}</span>`;
+    card.insertBefore(badgeContador, card.firstChild);
+
     capturaCardContainer.appendChild(card);
 
     const cardInventario = getCardInventarioById(idProducto);
