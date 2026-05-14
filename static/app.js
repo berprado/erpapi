@@ -566,6 +566,7 @@ async function cargarProductos() {
         if (response.ok && productos.length > 0) {
             productosInventario = productos;
             renderizarProductos(productos);
+            renderizarPaloteo3(productos);
             _habilitarBtnEnvio();
             
             // NUEVO: Mostrar resumen de productos (total, pesables, no pesables)
@@ -576,10 +577,12 @@ async function cargarProductos() {
         } else {
             productosInventario = [];
             listaProductos.innerHTML = `<div class="text-center text-on-surface-variant py-lg font-body-base">No hay productos consumidos para auditar hoy.</div>`;
+            mostrarEstadoVacioPaloteo3();
             ocultarResumenProductos();
         }
     } catch (error) {
         console.error("Error cargando productos", error);
+        mostrarEstadoVacioPaloteo3();
         ocultarResumenProductos();
     }
 }
@@ -830,6 +833,91 @@ function renderizarProductos(productos) {
 
     inicializarCalculos(listaProductos);
 }
+
+function mostrarEstadoVacioPaloteo3() {
+    const stockList = document.getElementById('stock-list');
+    const emptyState = document.getElementById('stock-empty-state');
+    if (stockList) stockList.innerHTML = '';
+    if (emptyState) emptyState.classList.remove('hidden');
+}
+
+function crearFilaPaloteo3(producto) {
+    const row = document.createElement('div');
+    row.className = 'stock-row grid gap-xs px-sm py-xs items-center hover:bg-surface-container-highest transition-colors';
+    row.style.gridTemplateColumns = '2.5rem 4rem 1fr 4.5rem 5rem 4rem 4rem 4rem';
+    row.dataset.search = `${producto.id_producto || ''} ${producto.codigo || ''} ${producto.nombre || ''}`.toLowerCase();
+
+    const perfiles = Array.isArray(producto.perfiles) ? producto.perfiles : [];
+    const perfilBase = perfiles.length > 0 ? perfiles[0] : null;
+    const tara = perfilBase ? (parseFloat(perfilBase.tara) || 0) : 0;
+    const gramosPorOz = perfilBase ? (parseFloat(perfilBase.gramos_por_oz) || 29.5735) : 29.5735;
+    const idealUnidades = parseFloat(producto.stock_ideal_unidades) || 0;
+    const idealOnzas = parseFloat(producto.stock_ideal_onzas) || 0;
+
+    row.innerHTML = `
+        <span class="text-data-tabular text-on-surface-variant text-right text-xs">${escapeHtml(String(producto.id_producto ?? ''))}</span>
+        <span class="text-data-tabular text-on-surface text-right text-xs truncate" title="${escapeHtml(String(producto.codigo ?? ''))}">${escapeHtml(String(producto.codigo ?? '—'))}</span>
+        <span class="text-xs text-on-surface truncate" title="${escapeHtml(producto.nombre || '')}">${escapeHtml(producto.nombre || '')}</span>
+        <input type="number" min="0" step="1" value="0" class="stock-input-unidades w-full text-right text-xs bg-surface border border-outline-variant rounded px-xs py-xs text-data-tabular text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors" data-ideal-unidades="${idealUnidades}">
+        <input type="number" min="0" step="0.1" value="0" class="stock-input-peso w-full text-right text-xs bg-surface border border-outline-variant rounded px-xs py-xs text-data-tabular text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors" data-tara="${tara}" data-gramos-oz="${gramosPorOz}" data-ideal-onzas="${idealOnzas}">
+        <span class="stock-oz text-data-tabular text-on-surface text-right text-xs font-semibold">0.00</span>
+        <span class="stock-dif-unid text-right text-xs font-semibold"></span>
+        <span class="stock-dif-oz text-right text-xs font-semibold"></span>
+    `;
+
+    recalcularFilaPaloteo3(row);
+    return row;
+}
+
+function recalcularFilaPaloteo3(row) {
+    if (!row) return;
+
+    const inputUnidades = row.querySelector('.stock-input-unidades');
+    const inputPeso = row.querySelector('.stock-input-peso');
+    const ozEl = row.querySelector('.stock-oz');
+    const difUnidEl = row.querySelector('.stock-dif-unid');
+    const difOzEl = row.querySelector('.stock-dif-oz');
+    if (!inputUnidades || !inputPeso || !ozEl || !difUnidEl || !difOzEl) return;
+
+    const unidadesReales = parseInt(inputUnidades.value, 10) || 0;
+    const pesoIngresado = parseFloat(inputPeso.value) || 0;
+    const tara = parseFloat(inputPeso.dataset.tara) || 0;
+    const gramosPorOz = parseFloat(inputPeso.dataset.gramosOz) || 29.5735;
+    const idealUnidades = parseFloat(inputUnidades.dataset.idealUnidades) || 0;
+    const idealOnzas = parseFloat(inputPeso.dataset.idealOnzas) || 0;
+
+    const margenError = 10.0;
+    let onzasReales = 0;
+    if (gramosPorOz > 0 && pesoIngresado >= (tara - margenError)) {
+        const pesoLiquido = Math.max(0, pesoIngresado - tara);
+        onzasReales = pesoLiquido / gramosPorOz;
+    }
+
+    const difUnidades = unidadesReales - idealUnidades;
+    const difOnzas = onzasReales - idealOnzas;
+
+    ozEl.textContent = onzasReales.toFixed(2);
+    difUnidEl.innerHTML = formatearDiferencia(difUnidades, false);
+    difOzEl.innerHTML = formatearDiferencia(difOnzas, true);
+}
+
+function renderizarPaloteo3(productos) {
+    const stockList = document.getElementById('stock-list');
+    const emptyState = document.getElementById('stock-empty-state');
+    if (!stockList) return;
+
+    if (!productos || productos.length === 0) {
+        mostrarEstadoVacioPaloteo3();
+        return;
+    }
+
+    stockList.innerHTML = '';
+    if (emptyState) emptyState.classList.add('hidden');
+    productos.forEach(producto => {
+        stockList.appendChild(crearFilaPaloteo3(producto));
+    });
+}
+
 // Fix #27: Ahora usa crearInputPeso() en lugar de duplicar el HTML del input.
 window.agregarInputPeso = function(idProducto, perfilesJson) {
     const card = document.querySelector(`#lista-productos .product-card[data-id="${idProducto}"]`);
@@ -1443,9 +1531,19 @@ if (stockSearchInput) {
     stockSearchInput.addEventListener('input', () => {
         const query = stockSearchInput.value.toLowerCase().trim();
         document.querySelectorAll('#stock-list .stock-row').forEach(row => {
-            const nombre = row.querySelector('span')?.textContent.toLowerCase() || '';
-            row.classList.toggle('hidden', query.length > 0 && !nombre.includes(query));
+            const searchText = row.dataset.search || '';
+            row.classList.toggle('hidden', query.length > 0 && !searchText.includes(query));
         });
+    });
+}
+
+const stockList = document.getElementById('stock-list');
+if (stockList) {
+    stockList.addEventListener('input', (e) => {
+        if (e.target.classList.contains('stock-input-unidades') || e.target.classList.contains('stock-input-peso')) {
+            const row = e.target.closest('.stock-row');
+            recalcularFilaPaloteo3(row);
+        }
     });
 }
 
