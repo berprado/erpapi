@@ -1446,9 +1446,10 @@ observacionesOverlay.addEventListener('click', () => {
 
 /** Mapeo tab → panel. El panel de inventario es el panel "home" sin tab propio. */
 const TAB_PANEL_MAP = {
-    stock: 'panel-stock',
-    scan:  'panel-scan',
-    logs:  'panel-logs',
+    stock:      'panel-stock',
+    inventario: 'panel-inventario',
+    scan:       'panel-scan',
+    logs:       'panel-logs',
 };
 
 /**
