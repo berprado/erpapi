@@ -39,6 +39,7 @@ const capturaBtnAnterior = document.getElementById('captura-btn-anterior');
 const capturaBtnSiguiente = document.getElementById('captura-btn-siguiente');
 const capturaBtnFinalizar = document.getElementById('captura-btn-finalizar');
 const stockBtnGuardar = document.getElementById('stock-btn-guardar');
+const reporteBtnPdf = document.getElementById('reporte-btn-pdf');
 
 function renderCriticalIcon(iconName, className = 'ui-icon') {
     const iconPaths = {
@@ -984,6 +985,95 @@ function renderizarReportePaloteo3() {
     });
 }
 
+async function exportarReportePaloteo3Pdf() {
+        const filas = obtenerFilasReportePaloteo3();
+        if (!filas.length) {
+                await mostrarDialogoResultado({
+                        tipo: 'warning',
+                        titulo: 'Sin datos para exportar',
+                        mensaje: 'No hay diferencias capturadas para generar el reporte en PDF.'
+                });
+                return;
+        }
+
+        const ahora = new Date();
+        const fecha = ahora.toLocaleDateString('es-DO');
+        const hora = ahora.toLocaleTimeString('es-DO');
+        const usuario = localStorage.getItem('nombres') || 'No identificado';
+        const operacion = currentOperacionId != null ? String(currentOperacionId) : 'N/D';
+        const barra = ID_BARRA_ACTUAL != null ? String(ID_BARRA_ACTUAL) : 'N/D';
+
+        const rowsHtml = filas.map(fila => {
+                const textoUnid = `${fila.difUnidades > 0 ? '+' : ''}${Math.round(fila.difUnidades)}`;
+                const textoOz = `${fila.difOnzas > 0 ? '+' : ''}${fila.difOnzas.toFixed(2)} oz`;
+                return `
+                        <tr>
+                                <td>${escapeHtml(fila.codigo)}</td>
+                                <td>${escapeHtml(fila.nombre)}</td>
+                                <td style="text-align:right;">${escapeHtml(textoUnid)}</td>
+                                <td style="text-align:right;">${escapeHtml(textoOz)}</td>
+                        </tr>
+                `;
+        }).join('');
+
+        const contenido = `
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Reporte Paloteo 3</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 24px; color: #111; }
+        h1 { margin: 0 0 8px 0; font-size: 18px; }
+        p { margin: 0 0 8px 0; font-size: 12px; color: #444; }
+        .meta { margin: 0 0 16px 0; font-size: 12px; color: #222; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }
+        .meta strong { color: #000; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #ccc; padding: 8px; font-size: 12px; }
+        th { background: #f2f2f2; text-transform: uppercase; letter-spacing: 0.04em; }
+    </style>
+</head>
+<body>
+    <h1>Reporte de Diferencias - Paloteo 3</h1>
+    <div class="meta">
+        <div><strong>Generado:</strong> ${escapeHtml(fecha)} ${escapeHtml(hora)}</div>
+        <div><strong>Usuario:</strong> ${escapeHtml(usuario)}</div>
+        <div><strong>Operativa:</strong> ${escapeHtml(operacion)}</div>
+        <div><strong>Barra:</strong> ${escapeHtml(barra)}</div>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>Código</th>
+                <th>Producto</th>
+                <th>Δ Unidades</th>
+                <th>Δ Onzas</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${rowsHtml}
+        </tbody>
+    </table>
+</body>
+</html>`;
+
+        const ventana = window.open('', '_blank', 'noopener,noreferrer,width=900,height=700');
+        if (!ventana) {
+                await mostrarDialogoResultado({
+                        tipo: 'error',
+                        titulo: 'No se pudo abrir la exportación',
+                        mensaje: 'El navegador bloqueó la ventana de impresión. Habilita pop-ups e intenta de nuevo.'
+                });
+                return;
+        }
+
+        ventana.document.open();
+        ventana.document.write(contenido);
+        ventana.document.close();
+        ventana.focus();
+        ventana.print();
+}
+
 function syncFilaPaloteo3ConInventario(row) {
     if (!row) return;
 
@@ -1899,5 +1989,11 @@ listaProductos.addEventListener('click', (e) => {
 function inicializarCalculos() {
     document.querySelectorAll('#lista-productos .product-card').forEach(card => {
         recalcularTarjeta(card);
+    });
+}
+
+if (reporteBtnPdf) {
+    reporteBtnPdf.addEventListener('click', async () => {
+        await exportarReportePaloteo3Pdf();
     });
 }
