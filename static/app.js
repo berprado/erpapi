@@ -893,30 +893,71 @@ function crearFilaPaloteo3(producto) {
                 <span class="text-xs text-on-surface truncate" title="${escapeHtml(producto.nombre || '')}">${escapeHtml(producto.nombre || '')}</span>
             </div>
 
-            <!-- Segunda línea: input unidades + peso (lado a lado en 2 columnas) -->
-            <div class="col-span-full grid grid-cols-2 gap-xs">
-                <!-- Input Unidades con botones +/- -->
-                <div class="flex flex-col gap-[2px]">
-                    <label class="text-[9px] text-on-surface-variant uppercase tracking-wider font-label-mono">Unid</label>
-                    <div class="flex items-center gap-[2px]">
-                        <button type="button" class="stock-btn-dec-unid flex-none w-6 h-8 bg-surface border border-outline-variant rounded flex items-center justify-center text-on-surface hover:bg-surface-container-highest transition-colors font-semibold text-sm" data-id-producto="${producto.id_producto}">−</button>
-                        <input type="number" min="0" step="1" value="${escapeHtml(capturado.unidades)}" class="stock-input-unidades flex-1 text-center text-xs bg-surface border border-outline-variant rounded px-[4px] py-xs text-data-tabular text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors" placeholder="0">
-                        <button type="button" class="stock-btn-inc-unid flex-none w-6 h-8 bg-surface border border-outline-variant rounded flex items-center justify-center text-on-surface hover:bg-surface-container-highest transition-colors font-semibold text-sm" data-id-producto="${producto.id_producto}">+</button>
-                    </div>
+            <!-- Segunda línea: inputs unidades y peso con botones integrados (compacto para móvil) -->
+            <div class="col-span-full flex gap-sm text-xs">
+                <!-- Unidades con botones +/- -->
+                <div class="flex items-center gap-1 flex-1">
+                    <span class="material-symbols-outlined text-on-surface-variant" style="font-size:1.4rem;" title="Unidades">123</span>
+                    <input type="number" min="0" step="1" value="${escapeHtml(capturado.unidades)}" class="stock-input-unidades w-14 text-center bg-surface border border-outline-variant rounded px-1 py-1 text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors" placeholder="0">
+                    <button type="button" class="stock-btn-dec-unid flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded flex items-center justify-center text-on-surface hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors font-semibold leading-none" data-id-producto="${producto.id_producto}" title="Restar">−</button>
+                    <button type="button" class="stock-btn-inc-unid flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded flex items-center justify-center text-on-surface hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors font-semibold leading-none" data-id-producto="${producto.id_producto}" title="Sumar">+</button>
                 </div>
 
-                <!-- Input Peso con botones +/- -->
-                <div class="flex flex-col gap-[2px]">
-                    <label class="text-[9px] text-on-surface-variant uppercase tracking-wider font-label-mono">Peso (g)</label>
-                    <div class="flex items-center gap-[2px]">
-                        <button type="button" class="stock-btn-dec-peso flex-none w-6 h-8 bg-surface border border-outline-variant rounded flex items-center justify-center text-on-surface hover:bg-surface-container-highest transition-colors font-semibold text-sm" data-id-producto="${producto.id_producto}">−</button>
-                        <input type="number" min="0" step="0.1" value="${escapeHtml(capturado.peso)}" class="stock-input-peso flex-1 text-center text-xs bg-surface border border-outline-variant rounded px-[4px] py-xs text-data-tabular text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors" placeholder="0">
-                        <button type="button" class="stock-btn-inc-peso flex-none w-6 h-8 bg-surface border border-outline-variant rounded flex items-center justify-center text-on-surface hover:bg-surface-container-highest transition-colors font-semibold text-sm" data-id-producto="${producto.id_producto}">+</button>
-                    </div>
+                <!-- Peso con botones +/- -->
+                <div class="flex items-center gap-1 flex-1">
+                    <span class="material-symbols-outlined text-on-surface-variant" style="font-size:1.1rem;" title="Peso">balance</span>
+                    <input type="number" min="0" step="0.1" value="${escapeHtml(capturado.peso)}" class="stock-input-peso w-14 text-center bg-surface border border-outline-variant rounded px-1 py-1 text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors" placeholder="0">
+                    <button type="button" class="stock-btn-dec-peso flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded flex items-center justify-center text-on-surface hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors font-semibold leading-none" data-id-producto="${producto.id_producto}" title="Restar">−</button>
+                    <button type="button" class="stock-btn-inc-peso flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded flex items-center justify-center text-on-surface hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors font-semibold leading-none" data-id-producto="${producto.id_producto}" title="Sumar">+</button>
                 </div>
             </div>
         </div>
     `;
+
+    // Agregar listeners directamente a los botones
+    const btnDecUnid = row.querySelector('.stock-btn-dec-unid');
+    const btnIncUnid = row.querySelector('.stock-btn-inc-unid');
+    const btnDecPeso = row.querySelector('.stock-btn-dec-peso');
+    const btnIncPeso = row.querySelector('.stock-btn-inc-peso');
+    const inputUnidades = row.querySelector('.stock-input-unidades');
+    const inputPeso = row.querySelector('.stock-input-peso');
+
+    const ajustarValor = (input, incrementar, isPeso = false) => {
+        let valor = parseFloat(input.value) || 0;
+        const paso = isPeso ? 0.1 : 1;
+        valor = incrementar ? (valor + paso) : Math.max(0, valor - paso);
+        
+        if (isPeso) {
+            valor = parseFloat(valor.toFixed(1));
+        }
+        
+        input.value = valor;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+
+    if (btnDecUnid) btnDecUnid.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        ajustarValor(inputUnidades, false, false);
+    });
+
+    if (btnIncUnid) btnIncUnid.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        ajustarValor(inputUnidades, true, false);
+    });
+
+    if (btnDecPeso) btnDecPeso.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        ajustarValor(inputPeso, false, true);
+    });
+
+    if (btnIncPeso) btnIncPeso.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        ajustarValor(inputPeso, true, true);
+    });
     
     return row;
 }
@@ -1741,39 +1782,6 @@ if (stockList) {
             syncFilaPaloteo3ConInventario(row);
             renderizarReportePaloteo3();
         }
-    });
-
-    // Listeners para botones +/- en PALOTEO 3
-    stockList.addEventListener('click', (e) => {
-        const btn = e.target.closest('[class*="stock-btn"]');
-        if (!btn) return;
-
-        const isInc = btn.classList.contains('stock-btn-inc-unid') || btn.classList.contains('stock-btn-inc-peso');
-        const isDec = btn.classList.contains('stock-btn-dec-unid') || btn.classList.contains('stock-btn-dec-peso');
-        const isUnid = btn.classList.contains('stock-btn-inc-unid') || btn.classList.contains('stock-btn-dec-unid');
-        const isPeso = btn.classList.contains('stock-btn-inc-peso') || btn.classList.contains('stock-btn-dec-peso');
-
-        if (!isInc && !isDec) return;
-
-        // Encontrar el input hermano
-        const flex = btn.closest('.flex');
-        const input = flex ? flex.querySelector(isUnid ? '.stock-input-unidades' : '.stock-input-peso') : null;
-        if (!input) return;
-
-        // Cambiar valor
-        let valor = parseFloat(input.value) || 0;
-        const paso = isUnid ? 1 : 0.1;
-        valor = isInc ? (valor + paso) : Math.max(0, valor - paso);
-        
-        // Para peso, limitar a 1 decimal
-        if (isPeso) {
-            valor = parseFloat(valor.toFixed(1));
-        }
-        
-        input.value = valor;
-
-        // Disparar evento input para sincronizar
-        input.dispatchEvent(new Event('input', { bubbles: true }));
     });
 }
 

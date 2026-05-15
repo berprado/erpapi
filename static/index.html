@@ -173,6 +173,17 @@
             visibility: visible;
         }
 
+        /* Ocultar spinners (flechas) en inputs type="number" */
+        input[type="number"]::-webkit-outer-spin-button,
+        input[type="number"]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        input[type="number"] {
+            -moz-appearance: textfield;
+        }
+
         /* States consistentes para botones en toda la app */
         button {
             transition: filter 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease, opacity 0.2s ease;
@@ -892,34 +903,34 @@
         <!-- Bottom Navigation -->
         <nav class="fixed bottom-0 left-0 w-full bg-surface-container border-t border-outline-variant z-30">
             <div id="submit-section" class="h-[4.25rem] flex justify-around items-stretch">
-                <!-- Tab 1: PALOTEO 3 -->
-                <button class="flex-1 flex flex-col items-center justify-center gap-[2px] px-[2px] text-on-surface-variant hover:text-primary-fixed-dim transition-colors border-b-2 border-outline-variant hover:border-primary-fixed-dim group active-tab" data-tab="stock">
-                    <span class="material-symbols-outlined text-sm group-hover:glow-cyan-intense">inventory_2</span>
-                    <span class="text-[9px] font-label-mono tracking-[0.12em] uppercase font-semibold leading-none text-center">Paloteo 3</span>
-                </button>
-
-                <!-- Tab 2: PALOTEO 1 -->
+                <!-- Tab 1: PALOTEO 1 -->
                 <button class="flex-1 flex flex-col items-center justify-center gap-[2px] px-[2px] text-on-surface-variant hover:text-primary-fixed-dim transition-colors border-b-2 border-outline-variant hover:border-primary-fixed-dim group" data-tab="inventario">
                     <span class="material-symbols-outlined text-sm group-hover:glow-cyan-intense">inventory_2</span>
                     <span class="text-[9px] font-label-mono tracking-[0.12em] uppercase font-semibold leading-none text-center">Paloteo 1</span>
                 </button>
 
-                <!-- Tab 3: REPORTE -->
-                <button class="flex-1 flex flex-col items-center justify-center gap-[2px] px-[2px] text-on-surface-variant hover:text-primary-fixed-dim transition-colors border-b-2 border-outline-variant hover:border-primary-fixed-dim group" data-tab="scan">
-                    <span class="material-symbols-outlined text-sm">summarize</span>
-                    <span class="text-[9px] font-label-mono tracking-[0.12em] uppercase font-semibold leading-none text-center">Reporte</span>
-                </button>
-
-                <!-- Tab 4: PALOTEO 2 -->
+                <!-- Tab 2: PALOTEO 2 -->
                 <button class="flex-1 flex flex-col items-center justify-center gap-[2px] px-[2px] text-on-surface-variant hover:text-primary-fixed-dim transition-colors border-b-2 border-outline-variant hover:border-primary-fixed-dim group" data-tab="logs">
                     <span class="material-symbols-outlined text-sm">history</span>
                     <span class="text-[9px] font-label-mono tracking-[0.12em] uppercase font-semibold leading-none text-center">Paloteo 2</span>
+                </button>
+
+                <!-- Tab 3: PALOTEO 3 -->
+                <button class="flex-1 flex flex-col items-center justify-center gap-[2px] px-[2px] text-on-surface-variant hover:text-primary-fixed-dim transition-colors border-b-2 border-outline-variant hover:border-primary-fixed-dim group active-tab" data-tab="stock">
+                    <span class="material-symbols-outlined text-sm group-hover:glow-cyan-intense">inventory_2</span>
+                    <span class="text-[9px] font-label-mono tracking-[0.12em] uppercase font-semibold leading-none text-center">Paloteo 3</span>
+                </button>
+
+                <!-- Tab 4: REPORTE -->
+                <button class="flex-1 flex flex-col items-center justify-center gap-[2px] px-[2px] text-on-surface-variant hover:text-primary-fixed-dim transition-colors border-b-2 border-outline-variant hover:border-primary-fixed-dim group" data-tab="scan">
+                    <span class="material-symbols-outlined text-sm">summarize</span>
+                    <span class="text-[9px] font-label-mono tracking-[0.12em] uppercase font-semibold leading-none text-center">Reporte</span>
                 </button>
             </div>
         </nav>
     </div>
 
-    <script src="/assets/app.js?v=9.38"></script>
+    <script src="/assets/app.js?v=9.45"></script>
 
     <script>
         (function () {
