@@ -1,61 +1,68 @@
-# BackStage — API de Inventario POS
+# BackStage - API de Inventario POS
 
-Backend REST construido con **FastAPI** y frontend **PWA** integrado para el control de inventario físico y auditoría de barra del sistema POS BackStage.
-
----
-
-## Descripción General
-
-El sistema permite a los bartenders registrar el inventario físico al cierre de cada operativa nocturna. El flujo principal es:
-
-1. El usuario inicia sesión desde la PWA.
-2. La API verifica que la operativa esté en estado **INICIO CIERRE** (estado `24`).
-3. El bartender registra botellas cerradas y pesos de botellas abiertas por producto ("paloteo").
-4. La API convierte los gramos medidos a onzas (redondeadas a la media onza más cercana) y guarda el resultado tanto en las tablas del POS como en una tabla de auditoría cruda.
+Backend REST construido con FastAPI y frontend PWA integrado para control de inventario fisico y auditoria de barra del sistema POS BackStage.
 
 ---
 
-## Stack Tecnológico
+## Descripcion General
 
-| Capa | Tecnología |
+El flujo operativo actual es:
+
+1. El usuario inicia sesion en la PWA.
+2. La API valida que la operativa este en estado INICIO CIERRE (`24`).
+3. Se registra inventario fisico (paloteo 1 y paloteo 2) por producto.
+4. Se captura paloteo 3 (captura ciega) para contraste.
+5. Se visualiza reporte de diferencias y se puede exportar a PDF.
+
+Durante el registro, la API convierte gramos a onzas, conserva onzas exactas en auditoria cruda y guarda para POS las onzas redondeadas a media onza.
+
+---
+
+## Stack Tecnologico
+
+| Capa | Tecnologia |
 |---|---|
-| Backend | Python 3.x · FastAPI · SQLAlchemy · PyMySQL |
-| Autenticación | JWT (PyJWT · HS256) |
-| Base de datos | MySQL (WAMP local / producción) |
-| Frontend | HTML · Tailwind CSS · JavaScript Vanilla |
-| PWA | Service Worker · Web App Manifest |
-| Configuración | Pydantic Settings · `.env` |
+| Backend | Python 3.x, FastAPI, SQLAlchemy, PyMySQL |
+| Autenticacion | JWT (PyJWT, HS256) |
+| Base de datos | MySQL (WAMP local / produccion) |
+| Frontend | HTML, Tailwind CSS, JavaScript Vanilla |
+| PWA | Service Worker, Web App Manifest |
+| PDF | fpdf2 |
+| Configuracion | Pydantic Settings, `.env` |
 
 ---
 
 ## Estructura del Proyecto
 
-```
+```text
 erpapi/
-├── main.py          # Endpoints FastAPI (rutas, lógica de negocio)
-├── models.py        # Modelos SQLAlchemy (tablas de la BD)
-├── schemas.py       # Esquemas Pydantic (validación de entrada/salida)
-├── database.py      # Motor y sesión de SQLAlchemy
-├── config.py        # Configuración por entorno (test / producción)
-├── static/
-│   ├── index.html   # PWA — Shell principal (BackStage Live Dashboard)
-│   ├── app.js       # Lógica del frontend
-│   ├── sw.js        # Service Worker (Cache First / Network First)
-│   ├── manifest.json
-│   └── cellar-sync-tokens.css  # Design tokens CSS
-├── querys/          # Queries SQL de referencia
-├── documentos/      # Documentación técnica y análisis
-└── TODO.md          # Backlog de tareas pendientes
+|- main.py
+|- models.py
+|- schemas.py
+|- database.py
+|- config.py
+|- static/
+|  |- index.html
+|  |- app.js
+|  |- sw.js
+|  |- manifest.json
+|  |- cellar-sync-tokens.css
+|  |- imgs/
+|  |- icons/
+|  |- pdfs/
+|- querys/
+|- documentos/
+|- TODO.md
 ```
 
 ---
 
-## Configuración del Entorno
+## Configuracion del Entorno
 
 ### 1. Requisitos
 
 - Python 3.10+
-- WAMP / MySQL corriendo localmente (para desarrollo)
+- WAMP/MySQL en ejecucion
 - `pip`
 
 ### 2. Instalar dependencias
@@ -68,22 +75,22 @@ pip install -r requirements.txt
 
 ### 3. Variables de entorno
 
-Crea un archivo `.env` en la raíz del proyecto con el siguiente formato:
+Crear un archivo `.env` en la raiz:
 
 ```env
 APP_ENV=test
 
-# Clave JWT (mínimo 32 caracteres)
+# JWT (minimo 32 caracteres)
 SECRET_KEY=tu_clave_secreta_muy_larga_y_aleatoria
 
-# Base de datos de pruebas (WAMP local)
+# Base de datos test
 TEST_DB_HOST=localhost
 TEST_DB_USER=root
 TEST_DB_PASS=
 TEST_DB_NAME=nombre_base_de_datos
 TEST_DB_PORT=3306
 
-# Base de datos de producción
+# Base de datos produccion
 PROD_DB_HOST=host_produccion
 PROD_DB_USER=usuario_prod
 PROD_DB_PASS=contrasena_prod
@@ -91,11 +98,11 @@ PROD_DB_NAME=nombre_bd_prod
 PROD_DB_PORT=3306
 ```
 
-> **Nota:** Para generar una `SECRET_KEY` segura:
-> ```powershell
-> python -c "import secrets; print(secrets.token_hex(32))"
-> ```
-> Cambia `APP_ENV=production` para conectar a la BD de producción.
+Generar una `SECRET_KEY` segura:
+
+```powershell
+python -c "import secrets; print(secrets.token_hex(32))"
+```
 
 ### 4. Levantar el servidor
 
@@ -103,160 +110,139 @@ PROD_DB_PORT=3306
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-La PWA estará disponible en `http://localhost:8000/` y la documentación interactiva en `http://localhost:8000/docs`.
+App: `http://localhost:8000/`
+Docs: `http://localhost:8000/docs`
 
 ---
 
 ## Endpoints de la API
 
-### Autenticación
+### Autenticacion
 
-| Método | Ruta | Descripción |
+| Metodo | Ruta | Descripcion |
 |---|---|---|
 | `GET` | `/api` | Estado de la API |
-| `GET` | `/api/health` | Verifica la conexión a la BD |
-| `POST` | `/api/auth/login` | Inicio de sesión, devuelve JWT |
+| `GET` | `/api/health` | Verifica conexion a BD |
+| `POST` | `/api/auth/login` | Inicio de sesion, devuelve JWT |
 
-**Body de login:**
-```json
-{
-  "usuario": "jperez",
-  "contrasena": "mi_password"
-}
-```
+### Operacion (requiere JWT)
 
-**Respuesta exitosa:**
-```json
-{
-  "access_token": "eyJ...",
-  "token_type": "Bearer",
-  "usuario_id": 5,
-  "nombres": "PÉREZ MAMANI, JUAN"
-}
-```
-
----
-
-### Operación (requiere JWT)
-
-| Método | Ruta | Descripción |
+| Metodo | Ruta | Descripcion |
 |---|---|---|
-| `GET` | `/api/operacion/activa` | Verifica si la operativa está en INICIO CIERRE |
-
----
+| `GET` | `/api/operacion/activa` | Valida estado de operativa para paloteo |
 
 ### Inventario / Paloteo (requiere JWT)
 
-| Método | Ruta | Descripción |
+| Metodo | Ruta | Descripcion |
 |---|---|---|
-| `GET` | `/api/inventario/pendientes` | Lista de productos con movimiento en la operativa activa |
-| `POST` | `/api/inventario/paloteo` | Registra el inventario físico completo |
-| `GET` | `/api/inventario/paloteo/{id_operacion}` | Recupera el inventario ya registrado y si está habilitado para edición |
-| `PUT` | `/api/inventario/paloteo/{id_inventario_pos}` | Corrige un inventario físico existente |
+| `GET` | `/api/inventario/pendientes` | Lista productos con movimiento y configuracion de pesaje |
+| `POST` | `/api/inventario/paloteo` | Registra inventario fisico completo |
+| `GET` | `/api/inventario/paloteo/{id_operacion}` | Obtiene inventario registrado y si puede editarse |
+| `PUT` | `/api/inventario/paloteo/{id_inventario_pos}` | Corrige inventario fisico existente |
 
-**Body de paloteo (ejemplo):**
+Reglas de correccion actuales:
+
+1. Solo se corrige si la operativa sigue en estado `24`.
+2. `id_operacion` e `id_barra` del payload deben coincidir con la cabecera existente.
+3. La correccion actualiza de forma selectiva los productos enviados; los no enviados se conservan.
+4. Si la operativa cambia de estado, la API bloquea la correccion.
+
+### Perfiles de Pesaje (requiere JWT)
+
+| Metodo | Ruta | Descripcion |
+|---|---|---|
+| `POST` | `/api/pesaje/perfiles` | Crea un modelo de botella para producto pesable |
+
+### Reporte Paloteo 3 (requiere JWT)
+
+| Metodo | Ruta | Descripcion |
+|---|---|---|
+| `POST` | `/api/paloteo3/exportar-pdf` | Genera y descarga PDF del reporte de diferencias |
+
+Body ejemplo de exportacion:
+
 ```json
 {
   "id_operacion": 42,
   "id_barra": 1,
-  "observaciones": "Conteo realizado a las 03:00 AM",
-  "items": [
+  "usuario": "PEREZ MAMANI, JUAN",
+  "filas": [
     {
-      "id_producto": 101,
-      "botellas_cerradas": 2,
-      "pesos_abiertas": [
-        { "peso": 650.5, "perfil_id": 3 }
-      ]
+      "idProducto": "101",
+      "codigo": "LIC-001",
+      "nombre": "WHISKY 750 ML",
+      "difUnidades": 1,
+      "difOnzas": -3.5
     }
   ]
 }
 ```
 
-**Reglas para corrección de inventario físico:**
-
-1. Solo se puede corregir un inventario ya registrado si su operativa sigue en estado `24` (INICIO CIERRE).
-2. El `id_operacion` y `id_barra` enviados en el `PUT` deben coincidir con el inventario físico original.
-3. La corrección reemplaza el detalle previo del inventario por el nuevo detalle enviado.
-4. Si la operativa cambió de estado, la API bloquea la corrección.
-
 ---
 
-### Perfiles de Pesaje (requiere JWT)
+## Logica de Conversion de Pesos
 
-| Método | Ruta | Descripción |
-|---|---|---|
-| `POST` | `/api/pesaje/perfiles` | Crea un nuevo modelo de botella para un producto |
+Para cada botella abierta:
 
----
-
-## Lógica de Conversión de Pesos
-
-Para cada botella abierta registrada:
-
-1. Se verifica que el `peso_medido >= (tara - margen_error_balanza)` (margen: 10g).
-2. Se calcula el peso del líquido: `peso_liquido = max(0, peso_medido - tara)`.
+1. Se valida `peso_medido >= (tara - 10g)`.
+2. Se calcula `peso_liquido = max(0, peso_medido - tara)`.
 3. Se convierte a onzas: `onzas = peso_liquido / gramos_por_oz`.
-4. El total se guarda **exacto** en la tabla de auditoría cruda.
-5. Se redondea a la **media onza más cercana** para el POS:
-   ```python
-   onzas_pos = round(total_onzas * 2) / 2
-   ```
+4. Se guarda el total exacto en `app_paloteo_registro_crudo`.
+5. Se redondea para POS: `onzas_pos = round(total_onzas * 2) / 2`.
 
 ---
 
-## Modelos de Base de Datos
+## Modelos de Base de Datos (mapeados en API)
 
-| Tabla | Descripción |
+| Tabla | Descripcion |
 |---|---|
-| `seg_usuario` | Usuarios del sistema |
-| `seg_acceso` | Auditoría de accesos (login) |
-| `ope_operacion` | Operativas de la barra |
-| `app_producto_pesaje_config` | Perfiles de botella por producto |
-| `bar_inventario_fisico` | Cabecera del inventario físico (POS) |
-| `bar_detalle_fisico` | Detalle por producto del inventario (POS) |
-| `app_paloteo_registro_crudo` | Auditoría cruda con pesos exactos |
+| `seg_usuario` | Usuarios |
+| `seg_acceso` | Auditoria de accesos |
+| `ope_operacion` | Operativas |
+| `app_producto_pesaje_config` | Configuracion/perfiles de pesaje |
+| `bar_inventario_fisico` | Cabecera inventario fisico POS |
+| `bar_detalle_fisico` | Detalle inventario fisico POS |
+| `app_paloteo_registro_crudo` | Auditoria cruda de pesajes |
 
 ---
 
 ## PWA Frontend
 
-La aplicación web progresiva **BackStage** se sirve directamente desde `/` y usa un design system "Electric Industrial" con los siguientes tokens de diseño:
+La PWA se sirve desde `/` y assets desde `/assets`.
 
-- **Primary:** Electric Cyan (`#00dbe9`)
-- **Background:** Dark Surface (`#0d1515`)
-- **Tipografía:** Space Grotesk
-- **Iconos:** Google Material Symbols Outlined
+Flujo actual de navegacion:
 
-El Service Worker implementa:
-- **Cache First** para todos los assets estáticos.
-- **Network First** para las llamadas a la API (`/api/*`).
+- PALOTEO 1
+- PALOTEO 2
+- PALOTEO 3 (captura ciega)
+- REPORTE (diferencias y exportacion PDF)
+
+Service Worker:
+
+- Cache First para assets estaticos.
+- Network First para llamadas `/api/*`.
 
 ---
 
 ## Seguridad
 
-- Las contraseñas se verifican comparando hashes **SHA-256** (compatible con el POS existente).
-- Los tokens JWT tienen vigencia de **10 horas** (`HS256`).
-- Todos los endpoints de negocio están protegidos con `HTTPBearer` y validan que el usuario esté activo en BD.
-- Se valida longitud mínima de `SECRET_KEY` (32 caracteres) al arrancar la aplicación.
-- CORS habilitado para clientes web (configurable en `main.py`).
+- Verificacion de contrasena con SHA-256 (compatibilidad POS).
+- JWT con expiracion de 10 horas.
+- Endpoints de negocio protegidos con HTTPBearer.
+- Validacion de longitud minima de `SECRET_KEY` en configuracion.
+- CORS habilitado para clientes web.
 
 ---
 
 ## Entornos
 
-| `APP_ENV` | Base de datos usada |
+| APP_ENV | Base de datos |
 |---|---|
-| `test` (default) | WAMP local (`TEST_DB_*`) |
+| `test` | WAMP local (`TEST_DB_*`) |
 | `production` | Servidor remoto (`PROD_DB_*`) |
 
 ---
 
-## Pendientes Principales
+## Pendientes
 
-Ver [TODO.md](TODO.md) para el backlog completo. Los más relevantes:
-
-- Separar endpoints en routers por módulo (`APIRouter`).
-- Implementar refresh token.
-- Agregar tests automatizados (login, paloteo válido/inválido).
-- Implementar manejo de errores global con `exception_handler`.
+Ver `TODO.md` para el backlog actualizado.
