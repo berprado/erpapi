@@ -641,6 +641,12 @@
                 <span id="banner-correccion-texto"></span>
             </div>
 
+            <!-- Botón de envío de Paloteo 1 -->
+            <button id="btn-guardar-inventario" type="button" disabled class="mt-md w-full bg-primary-container text-on-primary-fixed py-sm px-sm rounded-sharp flex items-center justify-center gap-xs hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest text-[11px] font-label-mono font-semibold opacity-40 cursor-not-allowed">
+                <span class="material-symbols-outlined text-sm">send</span>
+                Enviar Paloteo 1
+            </button>
+
         </div><!-- /panel-inventario -->
 
 
@@ -892,9 +898,9 @@
                     <span class="text-[9px] font-label-mono tracking-[0.12em] uppercase font-semibold leading-none text-center">Paloteo 3</span>
                 </button>
 
-                <!-- Tab 2: PALOTEO 1 (acción principal) -->
-                <button id="btn-guardar" disabled aria-label="Paloteo 1" class="flex-1 flex flex-col items-center justify-center gap-[2px] px-[2px] transition-colors border-b-2 border-outline-variant text-on-surface-variant opacity-40 cursor-not-allowed">
-                    <span class="material-symbols-outlined text-sm">send</span>
+                <!-- Tab 2: PALOTEO 1 -->
+                <button class="flex-1 flex flex-col items-center justify-center gap-[2px] px-[2px] text-on-surface-variant hover:text-primary-fixed-dim transition-colors border-b-2 border-outline-variant hover:border-primary-fixed-dim group" data-tab="inventario">
+                    <span class="material-symbols-outlined text-sm group-hover:glow-cyan-intense">inventory_2</span>
                     <span class="text-[9px] font-label-mono tracking-[0.12em] uppercase font-semibold leading-none text-center">Paloteo 1</span>
                 </button>
 
@@ -913,7 +919,7 @@
         </nav>
     </div>
 
-    <script src="/assets/app.js?v=9.33"></script>
+    <script src="/assets/app.js?v=9.34"></script>
 
     <script>
         (function () {
