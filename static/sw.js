@@ -4,7 +4,7 @@
 //             Network First para llamadas a la API.
 // ============================================================
 
-const CACHE_NAME = 'backstage-v9.35';
+const CACHE_NAME = 'backstage-v9.38';
 
 // Archivos que se pre-cachean al instalar la PWA
 const ASSETS_TO_CACHE = [

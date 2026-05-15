@@ -860,8 +860,14 @@ function obtenerValoresCapturadosPaloteo3(idProducto) {
 
 function crearFilaPaloteo3(producto) {
     const row = document.createElement('div');
-    row.className = 'stock-row grid gap-xs px-sm py-xs items-center hover:bg-surface-container-highest transition-colors';
-    row.style.gridTemplateColumns = '3.25rem minmax(0, 1fr) 4rem 5.25rem';
+    row.className = 'stock-row grid gap-xs px-sm py-sm items-start sm:items-center hover:bg-surface-container-highest transition-colors';
+    // Responsive: apilado en móvil (1 col), grid 4 cols en desktop (sm+)
+    row.style.gridTemplateColumns = '1fr';
+    row.classList.add('sm:gap-xs');
+    
+    // Aplicar grid desktop con media query inline para mejor compatibilidad
+    row.setAttribute('data-mobile-stack', 'true');
+    
     row.dataset.idProducto = String(producto.id_producto || '');
     row.dataset.search = `${producto.id_producto || ''} ${producto.codigo || ''} ${producto.nombre || ''}`.toLowerCase();
     row.dataset.codigo = String(producto.codigo || '—');
@@ -880,11 +886,38 @@ function crearFilaPaloteo3(producto) {
     row.dataset.gramosOz = String(gramosPorOz);
 
     row.innerHTML = `
-        <span class="text-data-tabular text-on-surface text-right text-xs truncate pr-[2px]" title="${escapeHtml(String(producto.codigo ?? ''))}">${escapeHtml(String(producto.codigo ?? '—'))}</span>
-        <span class="text-xs text-on-surface truncate" title="${escapeHtml(producto.nombre || '')}">${escapeHtml(producto.nombre || '')}</span>
-        <input type="number" min="0" step="1" value="${escapeHtml(capturado.unidades)}" class="stock-input-unidades w-full text-right text-xs bg-surface border border-outline-variant rounded px-[6px] py-xs text-data-tabular text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors" placeholder="0">
-        <input type="number" min="0" step="0.1" value="${escapeHtml(capturado.peso)}" class="stock-input-peso w-full text-right text-xs bg-surface border border-outline-variant rounded px-[6px] py-xs text-data-tabular text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors" placeholder="0">
+        <div class="contents">
+            <!-- Primera línea: código + nombre (ancho completo) -->
+            <div class="col-span-full flex items-center gap-xs min-h-10">
+                <span class="text-data-tabular text-on-surface text-right text-xs font-semibold bg-surface-container-low px-xs py-[2px] rounded min-w-max" title="${escapeHtml(String(producto.codigo ?? ''))}">${escapeHtml(String(producto.codigo ?? '—'))}</span>
+                <span class="text-xs text-on-surface truncate" title="${escapeHtml(producto.nombre || '')}">${escapeHtml(producto.nombre || '')}</span>
+            </div>
+
+            <!-- Segunda línea: input unidades + peso (lado a lado en 2 columnas) -->
+            <div class="col-span-full grid grid-cols-2 gap-xs">
+                <!-- Input Unidades con botones +/- -->
+                <div class="flex flex-col gap-[2px]">
+                    <label class="text-[9px] text-on-surface-variant uppercase tracking-wider font-label-mono">Unid</label>
+                    <div class="flex items-center gap-[2px]">
+                        <button type="button" class="stock-btn-dec-unid flex-none w-6 h-8 bg-surface border border-outline-variant rounded flex items-center justify-center text-on-surface hover:bg-surface-container-highest transition-colors font-semibold text-sm" data-id-producto="${producto.id_producto}">−</button>
+                        <input type="number" min="0" step="1" value="${escapeHtml(capturado.unidades)}" class="stock-input-unidades flex-1 text-center text-xs bg-surface border border-outline-variant rounded px-[4px] py-xs text-data-tabular text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors" placeholder="0">
+                        <button type="button" class="stock-btn-inc-unid flex-none w-6 h-8 bg-surface border border-outline-variant rounded flex items-center justify-center text-on-surface hover:bg-surface-container-highest transition-colors font-semibold text-sm" data-id-producto="${producto.id_producto}">+</button>
+                    </div>
+                </div>
+
+                <!-- Input Peso con botones +/- -->
+                <div class="flex flex-col gap-[2px]">
+                    <label class="text-[9px] text-on-surface-variant uppercase tracking-wider font-label-mono">Peso (g)</label>
+                    <div class="flex items-center gap-[2px]">
+                        <button type="button" class="stock-btn-dec-peso flex-none w-6 h-8 bg-surface border border-outline-variant rounded flex items-center justify-center text-on-surface hover:bg-surface-container-highest transition-colors font-semibold text-sm" data-id-producto="${producto.id_producto}">−</button>
+                        <input type="number" min="0" step="0.1" value="${escapeHtml(capturado.peso)}" class="stock-input-peso flex-1 text-center text-xs bg-surface border border-outline-variant rounded px-[4px] py-xs text-data-tabular text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors" placeholder="0">
+                        <button type="button" class="stock-btn-inc-peso flex-none w-6 h-8 bg-surface border border-outline-variant rounded flex items-center justify-center text-on-surface hover:bg-surface-container-highest transition-colors font-semibold text-sm" data-id-producto="${producto.id_producto}">+</button>
+                    </div>
+                </div>
+            </div>
+        </div>
     `;
+    
     return row;
 }
 
@@ -1708,6 +1741,39 @@ if (stockList) {
             syncFilaPaloteo3ConInventario(row);
             renderizarReportePaloteo3();
         }
+    });
+
+    // Listeners para botones +/- en PALOTEO 3
+    stockList.addEventListener('click', (e) => {
+        const btn = e.target.closest('[class*="stock-btn"]');
+        if (!btn) return;
+
+        const isInc = btn.classList.contains('stock-btn-inc-unid') || btn.classList.contains('stock-btn-inc-peso');
+        const isDec = btn.classList.contains('stock-btn-dec-unid') || btn.classList.contains('stock-btn-dec-peso');
+        const isUnid = btn.classList.contains('stock-btn-inc-unid') || btn.classList.contains('stock-btn-dec-unid');
+        const isPeso = btn.classList.contains('stock-btn-inc-peso') || btn.classList.contains('stock-btn-dec-peso');
+
+        if (!isInc && !isDec) return;
+
+        // Encontrar el input hermano
+        const flex = btn.closest('.flex');
+        const input = flex ? flex.querySelector(isUnid ? '.stock-input-unidades' : '.stock-input-peso') : null;
+        if (!input) return;
+
+        // Cambiar valor
+        let valor = parseFloat(input.value) || 0;
+        const paso = isUnid ? 1 : 0.1;
+        valor = isInc ? (valor + paso) : Math.max(0, valor - paso);
+        
+        // Para peso, limitar a 1 decimal
+        if (isPeso) {
+            valor = parseFloat(valor.toFixed(1));
+        }
+        
+        input.value = valor;
+
+        // Disparar evento input para sincronizar
+        input.dispatchEvent(new Event('input', { bubbles: true }));
     });
 }
 
