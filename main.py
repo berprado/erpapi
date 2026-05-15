@@ -708,11 +708,14 @@ def exportar_pdf_paloteo3(
 
     # filas de datos
     pdf.set_font("Helvetica", "", 8)
-    for fila in payload.filas:
+    for idx, fila in enumerate(payload.filas):
         texto_unid = f"{'+' if fila.difUnidades > 0 else ''}{round(fila.difUnidades)}"
         texto_oz   = f"{'+' if fila.difOnzas > 0 else ''}{fila.difOnzas:.2f} oz"
         r_u, g_u, b_u = _color_diferencia(fila.difUnidades)
         r_o, g_o, b_o = _color_diferencia(fila.difOnzas)
+
+        fondo = (245, 245, 245) if idx % 2 == 1 else (255, 255, 255)
+        pdf.set_fill_color(*fondo)
 
         valores = [fila.idProducto, fila.codigo, fila.nombre, texto_unid, texto_oz]
         colores = [None, None, None, (r_u, g_u, b_u), (r_o, g_o, b_o)]
@@ -724,7 +727,7 @@ def exportar_pdf_paloteo3(
             else:
                 pdf.set_text_color(17, 17, 17)
                 pdf.set_font("Helvetica", "", 8)
-            pdf.cell(w, row_h, str(val), border=1, align=align)
+            pdf.cell(w, row_h, str(val), border=1, align=align, fill=True)
         pdf.ln()
 
     pdf.output(ruta_pdf)
