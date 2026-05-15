@@ -653,7 +653,7 @@
             </div>
 
             <!-- Botón de envío de Paloteo 1 -->
-            <button id="btn-guardar-inventario" type="button" disabled class="mt-md w-full bg-primary-container text-on-primary-fixed py-sm px-sm rounded-sharp flex items-center justify-center gap-xs hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest text-[11px] font-label-mono font-semibold opacity-40 cursor-not-allowed">
+            <button id="btn-guardar-inventario" type="button" disabled class="mt-md w-full bg-primary-container text-on-primary-container py-sm px-sm rounded-sharp flex items-center justify-center gap-xs hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest text-[11px] font-label-mono font-semibold cursor-not-allowed disabled:opacity-60">
                 <span class="material-symbols-outlined text-sm">send</span>
                 Enviar Paloteo 1
             </button>
@@ -904,7 +904,7 @@
         <nav class="fixed bottom-0 left-0 w-full bg-surface-container border-t border-outline-variant z-30">
             <div id="submit-section" class="h-[4.25rem] flex justify-around items-stretch">
                 <!-- Tab 1: PALOTEO 1 -->
-                <button class="flex-1 flex flex-col items-center justify-center gap-[2px] px-[2px] text-on-surface-variant hover:text-primary-fixed-dim transition-colors border-b-2 border-outline-variant hover:border-primary-fixed-dim group" data-tab="inventario">
+                <button class="flex-1 flex flex-col items-center justify-center gap-[2px] px-[2px] text-on-surface-variant hover:text-primary-fixed-dim transition-colors border-b-2 border-outline-variant hover:border-primary-fixed-dim group active-tab" data-tab="inventario">
                     <span class="material-symbols-outlined text-sm group-hover:glow-cyan-intense">inventory_2</span>
                     <span class="text-[9px] font-label-mono tracking-[0.12em] uppercase font-semibold leading-none text-center">Paloteo 1</span>
                 </button>
@@ -916,7 +916,7 @@
                 </button>
 
                 <!-- Tab 3: PALOTEO 3 -->
-                <button class="flex-1 flex flex-col items-center justify-center gap-[2px] px-[2px] text-on-surface-variant hover:text-primary-fixed-dim transition-colors border-b-2 border-outline-variant hover:border-primary-fixed-dim group active-tab" data-tab="stock">
+                <button class="flex-1 flex flex-col items-center justify-center gap-[2px] px-[2px] text-on-surface-variant hover:text-primary-fixed-dim transition-colors border-b-2 border-outline-variant hover:border-primary-fixed-dim group" data-tab="stock">
                     <span class="material-symbols-outlined text-sm group-hover:glow-cyan-intense">inventory_2</span>
                     <span class="text-[9px] font-label-mono tracking-[0.12em] uppercase font-semibold leading-none text-center">Paloteo 3</span>
                 </button>
@@ -930,7 +930,7 @@
         </nav>
     </div>
 
-    <script src="/assets/app.js?v=9.45"></script>
+    <script src="/assets/app.js?v=9.48"></script>
 
     <script>
         (function () {
