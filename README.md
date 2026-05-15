@@ -246,3 +246,7 @@ Service Worker:
 ## Pendientes
 
 Ver `TODO.md` para el backlog actualizado.
+
+## Documentacion Adicional
+
+- [Proceso de Almacenamiento de Paloteo](documentos/DOCUMENTACION_ALMACENAMIENTO_PALOTEO.md)
