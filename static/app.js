@@ -882,8 +882,8 @@ function crearFilaPaloteo3(producto) {
     row.innerHTML = `
         <span class="text-data-tabular text-on-surface text-right text-xs truncate pr-[2px]" title="${escapeHtml(String(producto.codigo ?? ''))}">${escapeHtml(String(producto.codigo ?? '—'))}</span>
         <span class="text-xs text-on-surface truncate" title="${escapeHtml(producto.nombre || '')}">${escapeHtml(producto.nombre || '')}</span>
-        <input type="number" min="0" step="1" value="${escapeHtml(capturado.unidades)}" class="stock-input-unidades w-full text-right text-xs bg-surface border border-outline-variant rounded px-[6px] py-xs text-data-tabular text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors" data-ideal-unidades="${idealUnidades}" placeholder="0">
-        <input type="number" min="0" step="0.1" value="${escapeHtml(capturado.peso)}" class="stock-input-peso w-full text-right text-xs bg-surface border border-outline-variant rounded px-[6px] py-xs text-data-tabular text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors" data-tara="${tara}" data-gramos-oz="${gramosPorOz}" data-ideal-onzas="${idealOnzas}" placeholder="0">
+        <input type="number" min="0" step="1" value="${escapeHtml(capturado.unidades)}" class="stock-input-unidades w-full text-right text-xs bg-surface border border-outline-variant rounded px-[6px] py-xs text-data-tabular text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors" placeholder="0">
+        <input type="number" min="0" step="0.1" value="${escapeHtml(capturado.peso)}" class="stock-input-peso w-full text-right text-xs bg-surface border border-outline-variant rounded px-[6px] py-xs text-data-tabular text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors" placeholder="0">
     `;
     return row;
 }
@@ -916,6 +916,7 @@ function obtenerFilasReportePaloteo3() {
         const inputPeso = row.querySelector('.stock-input-peso');
         if (!inputUnidades || !inputPeso) return;
 
+        const idProducto = row.dataset.idProducto || '';
         const codigo = row.dataset.codigo || '—';
         const nombre = row.dataset.nombre || '';
         const unidadesReales = parseInt(inputUnidades.value, 10) || 0;
@@ -931,6 +932,7 @@ function obtenerFilasReportePaloteo3() {
         const onzasReales = gramosOz > 0 ? (pesoLiquidoReal / gramosOz) : 0;
 
         filas.push({
+            idProducto,
             codigo,
             nombre,
             difUnidades: unidadesReales - idealUnidades,
@@ -985,38 +987,52 @@ function renderizarReportePaloteo3() {
     });
 }
 
+function _colorDiferenciaPdf(valor) {
+    if (valor > 0) return '#EF4444';
+    if (valor < 0) return '#F59E0B';
+    return '#48E898';
+}
+
 async function exportarReportePaloteo3Pdf() {
-        const filas = obtenerFilasReportePaloteo3();
-        if (!filas.length) {
-                await mostrarDialogoResultado({
-                        tipo: 'warning',
-                        titulo: 'Sin datos para exportar',
-                        mensaje: 'No hay diferencias capturadas para generar el reporte en PDF.'
-                });
-                return;
-        }
+    const todasLasFilas = obtenerFilasReportePaloteo3();
+    const filas = todasLasFilas.filter(f => f.difUnidades !== 0 || f.difOnzas !== 0);
 
-        const ahora = new Date();
-        const fecha = ahora.toLocaleDateString('es-DO');
-        const hora = ahora.toLocaleTimeString('es-DO');
-        const usuario = localStorage.getItem('nombres') || 'No identificado';
-        const operacion = currentOperacionId != null ? String(currentOperacionId) : 'N/D';
-        const barra = ID_BARRA_ACTUAL != null ? String(ID_BARRA_ACTUAL) : 'N/D';
+    if (!filas.length) {
+        const mensaje = todasLasFilas.length === 0
+            ? 'No hay productos cargados en Paloteo 3.'
+            : 'Todos los productos coinciden con el inventario ideal. No hay diferencias que reportar.';
+        await mostrarDialogoResultado({
+            tipo: 'warning',
+            titulo: 'Sin diferencias para exportar',
+            mensaje,
+        });
+        return;
+    }
 
-        const rowsHtml = filas.map(fila => {
-                const textoUnid = `${fila.difUnidades > 0 ? '+' : ''}${Math.round(fila.difUnidades)}`;
-                const textoOz = `${fila.difOnzas > 0 ? '+' : ''}${fila.difOnzas.toFixed(2)} oz`;
-                return `
-                        <tr>
-                                <td>${escapeHtml(fila.codigo)}</td>
-                                <td>${escapeHtml(fila.nombre)}</td>
-                                <td style="text-align:right;">${escapeHtml(textoUnid)}</td>
-                                <td style="text-align:right;">${escapeHtml(textoOz)}</td>
-                        </tr>
-                `;
-        }).join('');
+    const ahora = new Date();
+    const fecha = ahora.toLocaleDateString('es-DO');
+    const hora = ahora.toLocaleTimeString('es-DO');
+    const usuario = localStorage.getItem('nombres') || 'No identificado';
+    const operacion = currentOperacionId != null ? String(currentOperacionId) : 'N/D';
+    const barra = ID_BARRA_ACTUAL != null ? String(ID_BARRA_ACTUAL) : 'N/D';
 
-        const contenido = `
+    const rowsHtml = filas.map(fila => {
+        const textoUnid = `${fila.difUnidades > 0 ? '+' : ''}${Math.round(fila.difUnidades)}`;
+        const textoOz = `${fila.difOnzas > 0 ? '+' : ''}${fila.difOnzas.toFixed(2)} oz`;
+        const colorUnid = _colorDiferenciaPdf(fila.difUnidades);
+        const colorOz = _colorDiferenciaPdf(fila.difOnzas);
+        return `
+            <tr>
+                <td style="text-align:right;">${escapeHtml(fila.idProducto)}</td>
+                <td>${escapeHtml(fila.codigo)}</td>
+                <td>${escapeHtml(fila.nombre)}</td>
+                <td style="text-align:right; color:${colorUnid}; font-weight:600;">${escapeHtml(textoUnid)}</td>
+                <td style="text-align:right; color:${colorOz}; font-weight:600;">${escapeHtml(textoOz)}</td>
+            </tr>
+        `;
+    }).join('');
+
+    const contenido = `
 <!doctype html>
 <html lang="es">
 <head>
@@ -1025,7 +1041,6 @@ async function exportarReportePaloteo3Pdf() {
     <style>
         body { font-family: Arial, sans-serif; margin: 24px; color: #111; }
         h1 { margin: 0 0 8px 0; font-size: 18px; }
-        p { margin: 0 0 8px 0; font-size: 12px; color: #444; }
         .meta { margin: 0 0 16px 0; font-size: 12px; color: #222; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }
         .meta strong { color: #000; }
         table { width: 100%; border-collapse: collapse; }
@@ -1044,6 +1059,7 @@ async function exportarReportePaloteo3Pdf() {
     <table>
         <thead>
             <tr>
+                <th style="text-align:right;">ID</th>
                 <th>Código</th>
                 <th>Producto</th>
                 <th>Δ Unidades</th>
@@ -1057,21 +1073,20 @@ async function exportarReportePaloteo3Pdf() {
 </body>
 </html>`;
 
-        const ventana = window.open('', '_blank', 'noopener,noreferrer,width=900,height=700');
-        if (!ventana) {
-                await mostrarDialogoResultado({
-                        tipo: 'error',
-                        titulo: 'No se pudo abrir la exportación',
-                        mensaje: 'El navegador bloqueó la ventana de impresión. Habilita pop-ups e intenta de nuevo.'
-                });
-                return;
-        }
+    let iframe = document.getElementById('__paloteo3-print-frame__');
+    if (!iframe) {
+        iframe = document.createElement('iframe');
+        iframe.id = '__paloteo3-print-frame__';
+        iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:0;height:0;border:0;';
+        document.body.appendChild(iframe);
+    }
 
-        ventana.document.open();
-        ventana.document.write(contenido);
-        ventana.document.close();
-        ventana.focus();
-        ventana.print();
+    const doc = iframe.contentDocument || iframe.contentWindow.document;
+    doc.open();
+    doc.write(contenido);
+    doc.close();
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
 }
 
 function syncFilaPaloteo3ConInventario(row) {
