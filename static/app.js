@@ -987,12 +987,6 @@ function renderizarReportePaloteo3() {
     });
 }
 
-function _colorDiferenciaPdf(valor) {
-    if (valor > 0) return '#EF4444';
-    if (valor < 0) return '#F59E0B';
-    return '#48E898';
-}
-
 async function exportarReportePaloteo3Pdf() {
     const todasLasFilas = obtenerFilasReportePaloteo3();
     const filas = todasLasFilas.filter(f => f.difUnidades !== 0 || f.difOnzas !== 0);
@@ -1001,92 +995,52 @@ async function exportarReportePaloteo3Pdf() {
         const mensaje = todasLasFilas.length === 0
             ? 'No hay productos cargados en Paloteo 3.'
             : 'Todos los productos coinciden con el inventario ideal. No hay diferencias que reportar.';
-        await mostrarDialogoResultado({
-            tipo: 'warning',
-            titulo: 'Sin diferencias para exportar',
-            mensaje,
-        });
+        await mostrarDialogoResultado({ tipo: 'warning', titulo: 'Sin diferencias para exportar', mensaje });
         return;
     }
 
-    const ahora = new Date();
-    const fecha = ahora.toLocaleDateString('es-DO');
-    const hora = ahora.toLocaleTimeString('es-DO');
-    const usuario = localStorage.getItem('nombres') || 'No identificado';
-    const operacion = currentOperacionId != null ? String(currentOperacionId) : 'N/D';
-    const barra = ID_BARRA_ACTUAL != null ? String(ID_BARRA_ACTUAL) : 'N/D';
+    const payload = {
+        id_operacion: currentOperacionId,
+        id_barra: ID_BARRA_ACTUAL,
+        usuario: localStorage.getItem('nombres') || 'No identificado',
+        filas: filas.map(f => ({
+            idProducto: f.idProducto,
+            codigo: f.codigo,
+            nombre: f.nombre,
+            difUnidades: f.difUnidades,
+            difOnzas: f.difOnzas,
+        })),
+    };
 
-    const rowsHtml = filas.map(fila => {
-        const textoUnid = `${fila.difUnidades > 0 ? '+' : ''}${Math.round(fila.difUnidades)}`;
-        const textoOz = `${fila.difOnzas > 0 ? '+' : ''}${fila.difOnzas.toFixed(2)} oz`;
-        const colorUnid = _colorDiferenciaPdf(fila.difUnidades);
-        const colorOz = _colorDiferenciaPdf(fila.difOnzas);
-        return `
-            <tr>
-                <td style="text-align:right;">${escapeHtml(fila.idProducto)}</td>
-                <td>${escapeHtml(fila.codigo)}</td>
-                <td>${escapeHtml(fila.nombre)}</td>
-                <td style="text-align:right; color:${colorUnid}; font-weight:600;">${escapeHtml(textoUnid)}</td>
-                <td style="text-align:right; color:${colorOz}; font-weight:600;">${escapeHtml(textoOz)}</td>
-            </tr>
-        `;
-    }).join('');
-
-    const contenido = `
-<!doctype html>
-<html lang="es">
-<head>
-    <meta charset="utf-8">
-    <title>Reporte Paloteo 3</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 24px; color: #111; }
-        h1 { margin: 0 0 8px 0; font-size: 18px; }
-        .meta { margin: 0 0 16px 0; font-size: 12px; color: #222; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }
-        .meta strong { color: #000; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { border: 1px solid #ccc; padding: 8px; font-size: 12px; }
-        th { background: #f2f2f2; text-transform: uppercase; letter-spacing: 0.04em; }
-    </style>
-</head>
-<body>
-    <h1>Reporte de Diferencias - Paloteo 3</h1>
-    <div class="meta">
-        <div><strong>Generado:</strong> ${escapeHtml(fecha)} ${escapeHtml(hora)}</div>
-        <div><strong>Usuario:</strong> ${escapeHtml(usuario)}</div>
-        <div><strong>Operativa:</strong> ${escapeHtml(operacion)}</div>
-        <div><strong>Barra:</strong> ${escapeHtml(barra)}</div>
-    </div>
-    <table>
-        <thead>
-            <tr>
-                <th style="text-align:right;">ID</th>
-                <th>Código</th>
-                <th>Producto</th>
-                <th>Δ Unidades</th>
-                <th>Δ Onzas</th>
-            </tr>
-        </thead>
-        <tbody>
-            ${rowsHtml}
-        </tbody>
-    </table>
-</body>
-</html>`;
-
-    let iframe = document.getElementById('__paloteo3-print-frame__');
-    if (!iframe) {
-        iframe = document.createElement('iframe');
-        iframe.id = '__paloteo3-print-frame__';
-        iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:0;height:0;border:0;';
-        document.body.appendChild(iframe);
+    let resp;
+    try {
+        resp = await fetch('/api/paloteo3/exportar-pdf', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${currentToken}`,
+            },
+            body: JSON.stringify(payload),
+        });
+    } catch (_) {
+        await mostrarDialogoResultado({ tipo: 'error', titulo: 'Error de red', mensaje: 'No se pudo conectar con el servidor para generar el PDF.' });
+        return;
     }
 
-    const doc = iframe.contentDocument || iframe.contentWindow.document;
-    doc.open();
-    doc.write(contenido);
-    doc.close();
-    iframe.contentWindow.focus();
-    iframe.contentWindow.print();
+    if (!resp.ok) {
+        await mostrarDialogoResultado({ tipo: 'error', titulo: 'Error al generar PDF', mensaje: `El servidor respondió con error ${resp.status}.` });
+        return;
+    }
+
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `PALOTEO_${currentOperacionId}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
 }
 
 function syncFilaPaloteo3ConInventario(row) {

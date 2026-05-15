@@ -623,6 +623,120 @@ def obtener_productos_pendientes(
 
     return list(productos_dict.values())
 
+# --- EXPORTACIÓN PDF PALOTEO 3 ---
+
+import os
+from fpdf import FPDF
+
+_PDF_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "pdfs")
+_LOGO_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "imgs", "backstage_horizontal_banner.png")
+
+def _color_diferencia(valor: float):
+    if valor > 0:
+        return (239, 68, 68)    # rojo  (#EF4444)
+    if valor < 0:
+        return (245, 158, 11)   # ámbar (#F59E0B)
+    return (72, 232, 152)       # verde (#48E898)
+
+@app.post("/api/paloteo3/exportar-pdf")
+def exportar_pdf_paloteo3(
+    payload: schemas.ExportarPdfRequest,
+    current_user: models.Usuario = Depends(get_usuario_actual),
+):
+    os.makedirs(_PDF_DIR, exist_ok=True)
+    nombre_archivo = f"PALOTEO_{payload.id_operacion}.pdf"
+    ruta_pdf = os.path.join(_PDF_DIR, nombre_archivo)
+
+    ahora = datetime.now()
+    fecha_hora = ahora.strftime("%d/%m/%Y %H:%M:%S")
+
+    pdf = FPDF(orientation="P", unit="mm", format="A4")
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.add_page()
+    pdf.set_margins(20, 15, 20)
+
+    # — Encabezado: logo + título —
+    if os.path.exists(_LOGO_PATH):
+        pdf.image(_LOGO_PATH, x=20, y=12, h=14)
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.set_text_color(51, 51, 51)
+    pdf.set_xy(20, 13)
+    pdf.cell(0, 5, "Reporte de Diferencias", align="R")
+    pdf.set_xy(20, 18)
+    pdf.cell(0, 5, "Paloteo 3", align="R")
+
+    # línea divisoria
+    pdf.set_draw_color(200, 200, 200)
+    pdf.line(20, 28, 190, 28)
+    pdf.ln(20)
+
+    # — Metadata —
+    pdf.set_text_color(34, 34, 34)
+    meta = [
+        ("Generado:", fecha_hora),
+        ("Usuario:", payload.usuario),
+        ("Operativa:", str(payload.id_operacion)),
+        ("Barra:", str(payload.id_barra)),
+    ]
+    label_w, value_w, row_h = 24, 61, 6
+    meta_y0 = pdf.get_y()
+    for i, (etiqueta, valor) in enumerate(meta):
+        x = 20 + (label_w + value_w) * (i % 2)
+        y = meta_y0 + (i // 2) * row_h
+        pdf.set_xy(x, y)
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.cell(label_w, row_h, etiqueta)
+        pdf.set_font("Helvetica", "", 9)
+        pdf.cell(value_w, row_h, valor)
+    pdf.set_y(meta_y0 + (len(meta) // 2) * row_h + 4)
+    pdf.ln(6)
+
+    # — Tabla —
+    col_widths = [14, 22, 94, 22, 18]   # ID | Codigo | Producto | Dif.Unid | Dif.Onzas
+    headers   = ["ID", "CODIGO", "PRODUCTO", "DIF. UNID", "DIF. ONZAS"]
+    aligns    = ["R", "L", "L", "R", "R"]
+    row_h = 7
+
+    # cabecera de tabla
+    pdf.set_fill_color(242, 242, 242)
+    pdf.set_draw_color(204, 204, 204)
+    pdf.set_text_color(17, 17, 17)
+    pdf.set_font("Helvetica", "B", 8)
+    for w, h, a in zip(col_widths, headers, aligns):
+        pdf.cell(w, row_h, h, border=1, align=a, fill=True)
+    pdf.ln()
+
+    # filas de datos
+    pdf.set_font("Helvetica", "", 8)
+    for fila in payload.filas:
+        texto_unid = f"{'+' if fila.difUnidades > 0 else ''}{round(fila.difUnidades)}"
+        texto_oz   = f"{'+' if fila.difOnzas > 0 else ''}{fila.difOnzas:.2f} oz"
+        r_u, g_u, b_u = _color_diferencia(fila.difUnidades)
+        r_o, g_o, b_o = _color_diferencia(fila.difOnzas)
+
+        valores = [fila.idProducto, fila.codigo, fila.nombre, texto_unid, texto_oz]
+        colores = [None, None, None, (r_u, g_u, b_u), (r_o, g_o, b_o)]
+
+        for w, val, align, color in zip(col_widths, valores, aligns, colores):
+            if color:
+                pdf.set_text_color(*color)
+                pdf.set_font("Helvetica", "B", 8)
+            else:
+                pdf.set_text_color(17, 17, 17)
+                pdf.set_font("Helvetica", "", 8)
+            pdf.cell(w, row_h, str(val), border=1, align=align)
+        pdf.ln()
+
+    pdf.output(ruta_pdf)
+
+    return FileResponse(
+        path=ruta_pdf,
+        media_type="application/pdf",
+        filename=nombre_archivo,
+        headers={"Content-Disposition": f'attachment; filename="{nombre_archivo}"'},
+    )
+
+
 # --- SERVIDOR DE ARCHIVOS ESTÁTICOS (FRONTEND) ---
 # Montamos una carpeta llamada 'static' donde vivirá el HTML, CSS y JS
 app.mount("/assets", StaticFiles(directory="static"), name="assets")
