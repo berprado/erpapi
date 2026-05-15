@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from fastapi import FastAPI, Depends, HTTPException, status, Request
+from fastapi.responses import FileResponse, JSONResponse
 import hashlib
 import json
 from database import get_db
@@ -80,10 +81,24 @@ def _procesar_items_paloteo(
     id_inventario_pos: int,
     username_actual: str,
     fecha_actual: datetime,
+    es_correccion: bool = False,
 ):
     resultados_procesados = []
     productos_omitidos = []
+    productos_corregidos = []
     margen_error_balanza = 10.0
+
+    # En modo corrección, usamos actualización selectiva por producto para
+    # conservar fecha_mod en los ítems no modificados.
+    detalles_existentes_por_producto = {}
+    if es_correccion:
+        detalles_existentes = db.query(models.DetalleFisicoPOS).filter(
+            models.DetalleFisicoPOS.id_inventario_fisico == id_inventario_pos,
+            models.DetalleFisicoPOS.estado == 'HAB'
+        ).all()
+        detalles_existentes_por_producto = {
+            detalle.id_producto: detalle for detalle in detalles_existentes
+        }
 
     for item in payload.items:
         configs_producto = db.query(models.ProductoPesajeConfig).filter(
@@ -128,16 +143,36 @@ def _procesar_items_paloteo(
 
         onzas_redondeadas_pos = round(total_onzas * 2) / 2
 
-        nuevo_detalle_pos = models.DetalleFisicoPOS(
-            cantidad_unidad=item.botellas_cerradas,
-            cantidad_detalle=onzas_redondeadas_pos,
-            id_producto=item.id_producto,
-            id_inventario_fisico=id_inventario_pos,
-            usuario_reg=username_actual,
-            fecha_reg=fecha_actual.date(),
-            estado='HAB'
-        )
-        db.add(nuevo_detalle_pos)
+        if es_correccion and item.id_producto in detalles_existentes_por_producto:
+            detalle_existente = detalles_existentes_por_producto[item.id_producto]
+            cantidad_unidad_actual = float(detalle_existente.cantidad_unidad or 0)
+            cantidad_detalle_actual = float(detalle_existente.cantidad_detalle or 0)
+
+            hubo_cambio = (
+                cantidad_unidad_actual != float(item.botellas_cerradas)
+                or cantidad_detalle_actual != float(onzas_redondeadas_pos)
+            )
+
+            if hubo_cambio:
+                detalle_existente.cantidad_unidad = item.botellas_cerradas
+                detalle_existente.cantidad_detalle = onzas_redondeadas_pos
+                detalle_existente.usuario_reg = username_actual
+                detalle_existente.fecha_mod = fecha_actual.date()
+                productos_corregidos.append(item.id_producto)
+        else:
+            nuevo_detalle_pos = models.DetalleFisicoPOS(
+                cantidad_unidad=item.botellas_cerradas,
+                cantidad_detalle=onzas_redondeadas_pos,
+                id_producto=item.id_producto,
+                id_inventario_fisico=id_inventario_pos,
+                usuario_reg=username_actual,
+                fecha_reg=fecha_actual.date(),
+                fecha_mod=fecha_actual.date() if es_correccion else None,
+                estado='HAB'
+            )
+            db.add(nuevo_detalle_pos)
+            if es_correccion:
+                productos_corregidos.append(item.id_producto)
 
         registro_crudo = models.PaloteoRegistroCrudo(
             id_operacion=payload.id_operacion,
@@ -156,7 +191,7 @@ def _procesar_items_paloteo(
             "onzas_pos": onzas_redondeadas_pos
         })
 
-    return resultados_procesados, productos_omitidos
+    return resultados_procesados, productos_omitidos, productos_corregidos
 
 # --- ENDPOINTS ---
 @app.get("/api")
@@ -250,26 +285,60 @@ def verificar_operacion_activa(
             detail="No se encontró ninguna operación activa en el sistema."
         )
 
-    # 2. Evaluamos la regla de negocio: ¿Está en proceso de venta?
+    # 2. Evaluamos la regla de negocio según el estado_operacion
     if operacion_actual.estado_operacion == 22:
-        raise HTTPException(
+        # Estado: EN PROCESO (vendiendo)
+        return JSONResponse(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Aún hay ventas activas. Cambie el estado de la operativa a INICIO CIERRE en el POS para poder realizar el inventario."
+            content={
+                "detail": {
+                    "id_operacion": operacion_actual.id,
+                    "icon": "block",
+                    "titulo": f"OPERATIVA {operacion_actual.id}: EN PROCESO",
+                    "mensaje": "Inicia el cierre de la operativa para realizar el paloteo.",
+                    "status_class": "status-warning-icon"
+                }
+            }
         )
 
-    # 3. Luz Verde: ¿Está lista para cierre?
+    # 3. Estado CERRADO: Paloteo ya realizado
+    if operacion_actual.estado_operacion == 23:
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={
+                "detail": {
+                    "id_operacion": operacion_actual.id,
+                    "icon": "lock",
+                    "titulo": f"OPERATIVA {operacion_actual.id}: CERRADA",
+                    "mensaje": "El paloteo de esta operativa ya fue realizado.",
+                    "status_class": "status-info-icon"
+                }
+            }
+        )
+
+    # 4. Luz Verde: Estado INICIO CIERRE (24)
     if operacion_actual.estado_operacion == 24:
         return {
             "id_operacion": operacion_actual.id,
             "nombre": operacion_actual.nombre_operacion,
-            "titulo": f"Se inició el cierre de la operativa {operacion_actual.id}",
-            "mensaje": "Puedes registrar el Inventario Físico"
+            "icon": "check_circle",
+            "titulo": f"OPERATIVA {operacion_actual.id}: INICIO DE CIERRE",
+            "mensaje": "Puedes realizar el paloteo de esta operativa.",
+            "status_class": "success-check-icon"
         }
 
-    # 4. Si tiene otro estado distinto (ej. ya se cerró completamente)
-    raise HTTPException(
+    # 5. Si tiene otro estado distinto
+    return JSONResponse(
         status_code=status.HTTP_400_BAD_REQUEST,
-        detail=f"La operación no está en un estado válido para paloteo (Estado: {operacion_actual.estado_operacion})."
+        content={
+            "detail": {
+                "id_operacion": operacion_actual.id,
+                "icon": "warning",
+                "titulo": f"OPERATIVA {operacion_actual.id}: ESTADO NO VÁLIDO",
+                "mensaje": f"La operación no está en un estado válido para paloteo (Estado: {operacion_actual.estado_operacion}).",
+                "status_class": "status-warning-icon"
+            }
+        }
     )
     
 @app.post("/api/inventario/paloteo", response_model=schemas.PaloteoOperacionResponse)
@@ -316,12 +385,13 @@ def procesar_paloteo(
     db.add(nueva_cabecera_pos)
     db.flush()
 
-    resultados_procesados, productos_omitidos = _procesar_items_paloteo(
+    resultados_procesados, productos_omitidos, _ = _procesar_items_paloteo(
         db=db,
         payload=payload,
         id_inventario_pos=nueva_cabecera_pos.id,
         username_actual=username_actual,
         fecha_actual=fecha_actual,
+        es_correccion=False,
     )
 
     db.commit()
@@ -414,18 +484,18 @@ def corregir_paloteo(
     inventario.usuario_reg = username_actual
     inventario.fecha_reg = fecha_actual.date()
 
-    db.query(models.DetalleFisicoPOS).filter(
-        models.DetalleFisicoPOS.id_inventario_fisico == inventario.id,
-        models.DetalleFisicoPOS.estado == 'HAB'
-    ).delete(synchronize_session=False)
-
-    resultados_procesados, productos_omitidos = _procesar_items_paloteo(
+    resultados_procesados, productos_omitidos, productos_corregidos = _procesar_items_paloteo(
         db=db,
         payload=payload,
         id_inventario_pos=inventario.id,
         username_actual=username_actual,
         fecha_actual=fecha_actual,
+        es_correccion=True,
     )
+
+    # La cabecera se marca como modificada solo si hubo al menos un detalle corregido.
+    if productos_corregidos:
+        inventario.fecha_mod = fecha_actual.date()
 
     db.commit()
 
@@ -552,6 +622,123 @@ def obtener_productos_pendientes(
             })
 
     return list(productos_dict.values())
+
+# --- EXPORTACIÓN PDF PALOTEO 3 ---
+
+import os
+from fpdf import FPDF
+
+_PDF_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "pdfs")
+_LOGO_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "imgs", "backstage_horizontal_banner.png")
+
+def _color_diferencia(valor: float):
+    if valor > 0:
+        return (239, 68, 68)    # rojo  (#EF4444)
+    if valor < 0:
+        return (245, 158, 11)   # ámbar (#F59E0B)
+    return (72, 232, 152)       # verde (#48E898)
+
+@app.post("/api/paloteo3/exportar-pdf")
+def exportar_pdf_paloteo3(
+    payload: schemas.ExportarPdfRequest,
+    current_user: models.Usuario = Depends(get_usuario_actual),
+):
+    os.makedirs(_PDF_DIR, exist_ok=True)
+    nombre_archivo = f"PALOTEO_{payload.id_operacion}.pdf"
+    ruta_pdf = os.path.join(_PDF_DIR, nombre_archivo)
+
+    ahora = datetime.now()
+    fecha_hora = ahora.strftime("%d/%m/%Y %H:%M:%S")
+
+    pdf = FPDF(orientation="P", unit="mm", format="A4")
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.add_page()
+    pdf.set_margins(20, 15, 20)
+
+    # — Encabezado: logo + título —
+    if os.path.exists(_LOGO_PATH):
+        pdf.image(_LOGO_PATH, x=20, y=12, h=14)
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.set_text_color(51, 51, 51)
+    pdf.set_xy(20, 13)
+    pdf.cell(0, 5, "Reporte de Diferencias", align="R")
+    pdf.set_xy(20, 18)
+    pdf.cell(0, 5, "Paloteo 3", align="R")
+
+    # línea divisoria
+    pdf.set_draw_color(200, 200, 200)
+    pdf.line(20, 28, 190, 28)
+    pdf.ln(20)
+
+    # — Metadata —
+    pdf.set_text_color(34, 34, 34)
+    meta = [
+        ("Generado:", fecha_hora),
+        ("Usuario:", payload.usuario),
+        ("Operativa:", str(payload.id_operacion)),
+        ("Barra:", str(payload.id_barra)),
+    ]
+    label_w, value_w, row_h = 24, 61, 6
+    meta_y0 = pdf.get_y()
+    for i, (etiqueta, valor) in enumerate(meta):
+        x = 20 + (label_w + value_w) * (i % 2)
+        y = meta_y0 + (i // 2) * row_h
+        pdf.set_xy(x, y)
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.cell(label_w, row_h, etiqueta)
+        pdf.set_font("Helvetica", "", 9)
+        pdf.cell(value_w, row_h, valor)
+    pdf.set_y(meta_y0 + (len(meta) // 2) * row_h + 4)
+    pdf.ln(6)
+
+    # — Tabla —
+    col_widths = [14, 22, 94, 22, 18]   # ID | Codigo | Producto | Dif.Unid | Dif.Onzas
+    headers   = ["ID", "CODIGO", "PRODUCTO", "DIF. UNID", "DIF. ONZAS"]
+    aligns    = ["R", "L", "L", "R", "R"]
+    row_h = 7
+
+    # cabecera de tabla
+    pdf.set_fill_color(242, 242, 242)
+    pdf.set_draw_color(204, 204, 204)
+    pdf.set_text_color(17, 17, 17)
+    pdf.set_font("Helvetica", "B", 8)
+    for w, h, a in zip(col_widths, headers, aligns):
+        pdf.cell(w, row_h, h, border=1, align=a, fill=True)
+    pdf.ln()
+
+    # filas de datos
+    pdf.set_font("Helvetica", "", 8)
+    for idx, fila in enumerate(payload.filas):
+        texto_unid = f"{'+' if fila.difUnidades > 0 else ''}{round(fila.difUnidades)}"
+        texto_oz   = f"{'+' if fila.difOnzas > 0 else ''}{fila.difOnzas:.2f} oz"
+        r_u, g_u, b_u = _color_diferencia(fila.difUnidades)
+        r_o, g_o, b_o = _color_diferencia(fila.difOnzas)
+
+        fondo = (245, 245, 245) if idx % 2 == 1 else (255, 255, 255)
+        pdf.set_fill_color(*fondo)
+
+        valores = [fila.idProducto, fila.codigo, fila.nombre, texto_unid, texto_oz]
+        colores = [None, None, None, (r_u, g_u, b_u), (r_o, g_o, b_o)]
+
+        for w, val, align, color in zip(col_widths, valores, aligns, colores):
+            if color:
+                pdf.set_text_color(*color)
+                pdf.set_font("Helvetica", "B", 8)
+            else:
+                pdf.set_text_color(17, 17, 17)
+                pdf.set_font("Helvetica", "", 8)
+            pdf.cell(w, row_h, str(val), border=1, align=align, fill=True)
+        pdf.ln()
+
+    pdf.output(ruta_pdf)
+
+    return FileResponse(
+        path=ruta_pdf,
+        media_type="application/pdf",
+        filename=nombre_archivo,
+        headers={"Content-Disposition": f'attachment; filename="{nombre_archivo}"'},
+    )
+
 
 # --- SERVIDOR DE ARCHIVOS ESTÁTICOS (FRONTEND) ---
 # Montamos una carpeta llamada 'static' donde vivirá el HTML, CSS y JS

@@ -144,6 +144,24 @@
     </script>
 
     <style>
+        .ui-icon {
+            display: inline-block;
+            width: 1em;
+            height: 1em;
+            flex-shrink: 0;
+            vertical-align: middle;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .ui-icon-sm {
+            width: 0.95rem;
+            height: 0.95rem;
+        }
+
         /* Alinear iconos verticalmente */
         .material-symbols-outlined { vertical-align: middle; }
 
@@ -177,15 +195,6 @@
 
         /* Ajustes móviles para CTA y dialogo */
         @media (max-width: 640px) {
-            #submit-section {
-                position: sticky;
-                bottom: 92px;
-                z-index: 15;
-                background: linear-gradient(to top, rgba(13, 21, 21, 0.96), rgba(13, 21, 21, 0.82));
-                padding-top: var(--space-sm);
-                backdrop-filter: blur(6px);
-            }
-
             #observaciones-dialog .max-w-lg {
                 max-width: 100%;
             }
@@ -361,9 +370,9 @@
         }
         
         .badge-warning {
-            color: var(--semantic-warning);
-            background: rgba(245, 158, 11, 0.1);
-            border: 1px solid rgba(245, 158, 11, 0.3);
+            color: var(--semantic-danger);
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
         }
         
         .badge-danger {
@@ -376,22 +385,81 @@
         .btn-action {
             color: var(--semantic-action);
             border-color: var(--semantic-action);
+            background: rgba(72, 232, 152, 0.12);
+            box-shadow: 0 0 0 1px rgba(72, 232, 152, 0.28);
         }
         
         .btn-action:hover {
-            background: rgba(72, 232, 152, 0.1);
-            box-shadow: 0 0 8px rgba(72, 232, 152, 0.2);
+            background: rgba(72, 232, 152, 0.2);
+            box-shadow: 0 0 10px rgba(72, 232, 152, 0.28);
         }
         
-        .btn-highlight {
-            color: var(--semantic-highlight);
-            border-color: var(--semantic-highlight);
+        .btn-info {
+            color: var(--semantic-info);
+            border-color: rgba(45, 212, 255, 0.45);
+            background: transparent;
         }
         
-        .btn-highlight:hover {
-            background: rgba(224, 0, 120, 0.1);
-            box-shadow: 0 0 8px rgba(224, 0, 120, 0.2);
+        .btn-info:hover {
+            background: rgba(45, 212, 255, 0.1);
+            border-color: var(--semantic-info);
+            box-shadow: 0 0 8px rgba(45, 212, 255, 0.2);
         }
+        
+            /* Logo Wrapper compacto para Navbar */
+            .logo-wrapper-nav {
+                position: relative;
+                display: block;
+                flex: 0 1 11rem;
+                width: min(11rem, calc(100vw - 7rem));
+                aspect-ratio: 4 / 1;
+            }
+
+            @media (min-width: 640px) {
+                .logo-wrapper-nav {
+                    flex-basis: 12rem;
+                    width: 12rem;
+                }
+            }
+
+            .logo-wrapper-nav .logo-main,
+            .logo-wrapper-nav .glitch-layer {
+                display: block;
+                width: 100%;
+                height: 100%;
+                object-fit: contain;
+            }
+
+            /* Success Check Icon */
+            .success-check-icon {
+                color: var(--semantic-action) !important;
+                filter: drop-shadow(0 0 8px rgba(72, 232, 152, 0.5));
+                transition: filter 0.2s ease;
+            }
+        
+            .success-check-icon:hover {
+                filter: drop-shadow(0 0 12px rgba(72, 232, 152, 0.7));
+        }
+
+            .status-warning-icon {
+                color: var(--semantic-danger) !important;
+                filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.5));
+                transition: filter 0.2s ease;
+            }
+
+            .status-warning-icon:hover {
+                filter: drop-shadow(0 0 12px rgba(239, 68, 68, 0.7));
+            }
+
+            .status-checking-icon {
+                color: var(--primary-fixed-dim) !important;
+                filter: drop-shadow(0 0 8px rgba(0, 219, 233, 0.45));
+                transition: filter 0.2s ease;
+            }
+
+            .status-checking-icon:hover {
+                filter: drop-shadow(0 0 12px rgba(0, 219, 233, 0.7));
+            }
     </style>
 </head>
 <body class="bg-surface text-on-surface font-body-base antialiased min-h-screen dark">
@@ -427,7 +495,11 @@
                     <!-- Campo Usuario -->
                     <div>
                         <label class="block text-label-mono font-label-mono text-on-surface-variant tracking-widest mb-sm uppercase flex items-center gap-sm">
-                            <span class="material-symbols-outlined text-sm">badge</span>
+                            <svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M12 3l2.2 2.2 3.1-.4.4 3.1L20 10l-2.2 2  .4 3.1-3.1.4L12 18l-3.1-2.5-3.1-.4.4-3.1L4 10l2.2-2 .4-3.1 3.1.4z"></path>
+                                <path d="M12 9.25a1.75 1.75 0 1 1 0 3.5 1.75 1.75 0 0 1 0-3.5z"></path>
+                                <path d="M8.8 16c.9-1.45 2.02-2.18 3.2-2.18S14.3 14.55 15.2 16"></path>
+                            </svg>
                             Usuario POS
                         </label>
                         <input type="text" id="username" placeholder="usuario.pos" 
@@ -437,14 +509,22 @@
                     <!-- Campo Contraseña -->
                     <div>
                         <label class="block text-label-mono font-label-mono text-on-surface-variant tracking-widest mb-sm uppercase flex items-center gap-sm">
-                            <span class="material-symbols-outlined text-sm">lock</span>
+                            <svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" aria-hidden="true">
+                                <rect x="5" y="11" width="14" height="10" rx="2"></rect>
+                                <path d="M8 11V8a4 4 0 1 1 8 0v3"></path>
+                            </svg>
                             Contraseña
                         </label>
                         <div class="relative">
                             <input type="password" id="password" placeholder="••••••••" 
                                 class="w-full bg-surface-container-highest border-b-2 border-outline-variant px-sm py-sm text-primary placeholder-outline/50 focus:outline-none focus:border-b-2 focus:border-primary-fixed-dim focus:shadow-cyan-glow-focus transition-all font-data-tabular" required>
-                            <button type="button" class="absolute right-sm top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-primary-fixed-dim transition-colors">
-                                <span class="material-symbols-outlined text-sm">visibility</span>
+                            <button type="button" id="toggle-password" class="absolute right-sm top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-primary-fixed-dim transition-colors" aria-label="Mostrar u ocultar contraseña">
+                                <span data-password-icon>
+                                    <svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z"></path>
+                                        <circle cx="12" cy="12" r="2.5"></circle>
+                                    </svg>
+                                </span>
                             </button>
                         </div>
                     </div>
@@ -452,7 +532,11 @@
                     <!-- Botón Ingresar -->
                     <button type="submit" 
                         class="w-full bg-primary-container text-on-primary-fixed font-headline-md text-body-base py-md px-lg rounded-sharp flex items-center justify-center gap-sm mt-lg hover:brightness-110 active:scale-95 border border-[#ff008c] shadow-[0_0_12px_rgba(255,0,140,0.45),0_0_20px_rgba(0,240,255,0.35)] transition-all uppercase tracking-widest">
-                        <span class="material-symbols-outlined">login</span>
+                        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M10 17l5-5-5-5"></path>
+                            <path d="M15 12H4"></path>
+                            <path d="M20 4v16"></path>
+                        </svg>
                         Iniciar Sesión
                     </button>
                 </div>
@@ -484,36 +568,64 @@
     <div id="app-screen" class="hidden min-h-screen flex flex-col bg-surface">
         
         <!-- Navbar Superior -->
-        <nav class="bg-surface-container border-b border-outline-variant px-lg py-md flex justify-between items-center sticky top-0 z-20 shadow-lg">
-            <!-- Logo -->
-            <div class="flex items-center gap-sm">
-                <div class="w-10 h-10 rounded-sharp border border-primary-fixed flex justify-center items-center shadow-cyan-glow">
-                    <img alt="BackStage Icon" class="w-6 h-6" src="https://backstage.localto.net/mysql-realtime-fetching/assets/favicon/android-icon-512x512.png">
-                </div>
-                <div class="font-headline-md tracking-tighter uppercase">
-                    <span class="text-primary-fixed drop-shadow-[0_0_5px_rgba(0,219,233,0.8)]">BACK</span><span class="text-on-surface drop-shadow-[0_0_5px_rgba(220,228,229,0.8)]">STAGE</span>
-                </div>
+        <nav class="bg-surface-container border-b border-outline-variant px-lg h-14 sm:h-16 flex justify-between items-center sticky top-0 z-20 shadow-lg">
+            <!-- Logo con Glitch -->
+            <div class="logo-wrapper-nav">
+                <img alt="BackStage" class="logo-main" src="/assets/imgs/backstage_horizontal_banner.png">
+                <img alt="" class="glitch-layer glitch-red" src="/assets/imgs/backstage_horizontal_banner.png" aria-hidden="true">
+                <img alt="" class="glitch-layer glitch-cyan" src="/assets/imgs/backstage_horizontal_banner.png" aria-hidden="true">
+                <div class="scanlines"></div>
             </div>
             
-            <div class="flex items-center gap-md">
+            <div class="flex items-center gap-md shrink-0">
                 <span id="user-display" class="text-label-mono text-on-surface-variant font-semibold tracking-widest hidden sm:inline uppercase"></span>
                 <button id="btn-logout" class="flex items-center text-on-surface-variant hover:text-primary-fixed-dim transition-colors">
-                    <span class="material-symbols-outlined">logout</span>
+                    <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M14 7l5 5-5 5"></path>
+                        <path d="M19 12H8"></path>
+                        <path d="M4 4v16"></path>
+                    </svg>
                 </button>
             </div>
         </nav>
 
         <!-- Área de Contenido -->
-        <main class="flex-1 p-md pb-28 max-w-2xl mx-auto w-full" id="main-content">
+        <main class="flex-1 pb-28 overflow-y-auto" id="main-content">
+
+        <!-- ========== PANEL INVENTARIO (default) ========== -->
+        <div id="panel-inventario" class="tab-panel p-md max-w-2xl mx-auto w-full">
             
             <!-- Status de la Operación -->
             <div id="estado-operacion" class="bg-surface-container border border-outline-variant rounded-md p-md mb-lg shadow-lg flex items-center gap-md">
                 <div class="bg-surface-container-low p-sm rounded-sharp border border-outline-variant">
-                    <span class="material-symbols-outlined text-primary-fixed animate-pulse" id="estado-icon">hourglass_empty</span>
+                    <span class="inline-flex text-4xl text-primary-fixed animate-pulse status-checking-icon" id="estado-icon" aria-hidden="true">
+                        <svg class="ui-icon" viewBox="0 0 24 24">
+                            <path d="M7 3h10"></path>
+                            <path d="M7 21h10"></path>
+                            <path d="M8 3c0 4 4 4.5 4 9s-4 5-4 9"></path>
+                            <path d="M16 3c0 4-4 4.5-4 9s4 5 4 9"></path>
+                        </svg>
+                    </span>
                 </div>
-                <div>
+                <div class="flex-1">
                     <h3 id="estado-titulo" class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase">Verificando operativa...</h3>
                     <p class="text-xs text-on-surface-variant mt-xs" id="estado-texto">Conectando al servidor...</p>
+                    <div id="estado-resumen" class="hidden mt-md pt-md border-t border-outline-variant">
+                        <div class="grid grid-cols-3 gap-md text-center">
+                            <div>
+                                <p class="text-label-mono text-on-surface-variant tracking-widest uppercase text-[10px] mb-xs">Total</p>
+                                <p class="text-headline-md font-semibold text-primary-fixed" id="resumen-total">0</p>
+                            </div>
+                            <div>
+                                <p class="text-label-mono text-on-surface-variant tracking-widest uppercase text-[10px] mb-xs">Pesables</p>
+                                <p class="text-headline-md font-semibold text-secondary-fixed" id="resumen-pesables">0</p>
+                            </div>
+                            <div>
+                                <p class="text-label-mono text-on-surface-variant tracking-widest uppercase text-[10px] mb-xs">No Pesables</p>
+                                <p class="text-headline-md font-semibold text-tertiary-fixed" id="resumen-no-pesables">0</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             
@@ -522,13 +634,143 @@
                 <!-- JS inyectará las "tarjetas" aquí -->
             </div>
 
-            <!-- Acción principal: debajo de la última tarjeta -->
-            <div id="submit-section" class="hidden mt-lg">
-                <button id="btn-guardar" class="w-full bg-primary-container text-on-primary-fixed font-headline-md text-body-base py-md px-lg rounded-sharp flex items-center justify-center gap-sm hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest">
-                    <span class="material-symbols-outlined">save</span>
-                    Confirmar Inventario
+            <!-- Banner: modo corrección (se muestra cuando hay inventario previo cargado) -->
+            <div id="banner-correccion" class="hidden mt-md p-sm rounded-md border flex items-center gap-sm text-label-mono uppercase tracking-widest" style="background: color-mix(in srgb, var(--semantic-warning) 10%, transparent); border-color: var(--semantic-warning); color: var(--semantic-warning);">
+                <span class="material-symbols-outlined" style="font-size: 1.1rem;">edit_note</span>
+                <span>Modo Corrección ·</span>
+                <span id="banner-correccion-texto"></span>
+            </div>
+
+        </div><!-- /panel-inventario -->
+
+
+        <!-- ========== PANEL PALOTEO 3 ========== -->
+        <div id="panel-stock" class="tab-panel hidden p-md max-w-2xl mx-auto w-full">
+
+            <!-- Header -->
+            <div class="flex items-start justify-between mb-sm">
+                <div>
+                    <h2 class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase flex items-center gap-xs leading-none">
+                        <span class="material-symbols-outlined text-primary-fixed" style="font-size:1rem;">inventory_2</span>
+                        Paloteo 3
+                    </h2>
+                    <p class="text-[11px] text-on-surface-variant mt-[2px] leading-tight">Captura rápida de unidades y peso</p>
+                </div>
+            </div>
+
+            <!-- Buscador -->
+            <div class="relative mb-sm">
+                <span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-outline-variant" style="font-size:1rem;">search</span>
+                <input type="text" id="stock-search" placeholder="Buscar por ID, código o nombre..." class="w-full bg-surface-container border border-outline-variant rounded-md pl-10 pr-md py-sm text-sm text-on-surface placeholder-outline/40 focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-body-base">
+            </div>
+
+            <!-- Tabla PALOTEO 3 -->
+            <div class="bg-surface-container border border-outline-variant rounded-md overflow-hidden shadow-lg">
+
+                <!-- Header tabla -->
+                <div class="grid gap-xs px-sm py-sm border-b border-outline-variant bg-surface-container-low text-[10px] font-label-mono tracking-widest uppercase text-on-surface-variant" style="grid-template-columns: 3.25rem minmax(0, 1fr) 4rem 5.25rem;">
+                    <span class="text-right">Cód</span>
+                    <span>Nombre</span>
+                    <span class="text-right">Unid</span>
+                    <span class="text-right">Peso (g)</span>
+                </div>
+
+                <!-- Filas generadas por JS -->
+                <div id="stock-list" class="divide-y divide-outline-variant">
+                </div>
+            </div>
+
+            <!-- Estado vacío -->
+            <div id="stock-empty-state" class="hidden text-center text-on-surface-variant py-md font-body-base text-sm">
+                No hay productos consumidos para auditar hoy.
+            </div>
+
+            <div class="mt-sm">
+                <button id="stock-btn-guardar" type="button" class="w-full bg-primary-container text-on-primary-fixed py-sm px-sm rounded-sharp flex items-center justify-center gap-xs hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest text-[11px] font-label-mono font-semibold">
+                    <span class="material-symbols-outlined text-sm">save</span>
+                    Guardar Paloteo 3
                 </button>
             </div>
+
+        </div><!-- /panel-stock -->
+
+
+        <!-- ========== PANEL REPORTE ========== -->
+        <div id="panel-scan" class="tab-panel hidden p-md max-w-2xl mx-auto w-full">
+            <div class="flex items-start justify-between mb-sm">
+                <div>
+                    <h2 class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase flex items-center gap-xs leading-none">
+                        <span class="material-symbols-outlined text-primary-fixed" style="font-size:1rem;">summarize</span>
+                        Reporte
+                    </h2>
+                    <p class="text-[11px] text-on-surface-variant mt-[2px] leading-tight">Variaciones contra ideal</p>
+                </div>
+            </div>
+
+            <div class="bg-surface-container border border-outline-variant rounded-md overflow-hidden shadow-lg">
+                <div class="grid gap-xs px-sm py-sm border-b border-outline-variant bg-surface-container-low text-[10px] font-label-mono tracking-widest uppercase text-on-surface-variant" style="grid-template-columns: 3.25rem minmax(0, 1fr) 4.5rem 5.25rem;">
+                    <span class="text-right">Cód</span>
+                    <span>Nombre</span>
+                    <span class="text-right">Δ Unid</span>
+                    <span class="text-right">Δ Oz</span>
+                </div>
+                <div id="reporte-list" class="divide-y divide-outline-variant"></div>
+            </div>
+
+            <div id="reporte-empty-state" class="hidden text-center text-on-surface-variant py-md font-body-base text-sm">
+                No hay datos capturados en Paloteo 3 para generar reporte.
+            </div>
+
+            <div class="mt-sm">
+                <button id="reporte-btn-pdf" type="button" class="w-full bg-surface text-on-surface border border-outline-variant py-sm px-sm rounded-sharp flex items-center justify-center gap-xs uppercase tracking-widest text-[11px] font-label-mono font-semibold hover:border-primary-fixed-dim transition-colors">
+                    <span class="material-symbols-outlined text-sm">picture_as_pdf</span>
+                    Exportar PDF
+                </button>
+            </div>
+        </div><!-- /panel-scan -->
+
+
+        <!-- ========== PANEL LOGS: MODO CAPTURA 1x1 ========== -->
+        <div id="panel-logs" class="tab-panel hidden p-md max-w-2xl mx-auto w-full">
+            <div class="grid grid-cols-2 gap-sm mb-md text-center">
+                <div class="bg-surface-container-low border border-outline-variant rounded-md p-sm">
+                    <p class="text-[10px] text-on-surface-variant uppercase tracking-widest font-label-mono">Capturadas</p>
+                    <p id="captura-total-capturadas" class="text-lg font-semibold" style="color: var(--semantic-action)">0</p>
+                </div>
+                <div class="bg-surface-container-low border border-outline-variant rounded-md p-sm">
+                    <p class="text-[10px] text-on-surface-variant uppercase tracking-widest font-label-mono">Completado</p>
+                    <p id="captura-porcentaje" class="text-lg font-semibold text-primary-fixed">0%</p>
+                </div>
+            </div>
+
+            <div id="captura-card-container" class="space-y-4"></div>
+
+            <div class="mt-md grid grid-cols-2 gap-sm">
+                <button id="captura-btn-anterior" type="button" class="bg-surface border border-outline-variant text-on-surface rounded-sharp px-md py-sm uppercase tracking-widest text-label-mono flex items-center justify-center gap-xs hover:border-primary-fixed-dim transition-colors">
+                    <span class="material-symbols-outlined text-sm">arrow_back</span>
+                    Anterior
+                </button>
+                <button id="captura-btn-siguiente" type="button" class="bg-primary-container text-on-primary-fixed rounded-sharp px-md py-sm uppercase tracking-widest text-label-mono flex items-center justify-center gap-xs hover:brightness-110 transition-all">
+                    Siguiente
+                    <span class="material-symbols-outlined text-sm">arrow_forward</span>
+                </button>
+            </div>
+
+            <div id="captura-banner-info" class="mt-sm text-xs text-on-surface-variant font-body-base">
+                Desktop: Enter avanza cuando la tarjeta está completa. Móvil: usa el botón Siguiente.
+            </div>
+
+
+
+            <div class="mt-md">
+                <button id="captura-btn-finalizar" type="button" class="w-full bg-primary-container text-on-primary-fixed font-headline-md text-body-base py-sm px-md rounded-sharp flex items-center justify-center gap-sm hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest">
+                    <span class="material-symbols-outlined text-sm">done_all</span>
+                    Finalizar Captura y Enviar
+                </button>
+            </div>
+        </div><!-- /panel-logs -->
+
+
         </main>
 
         <!-- Diálogo opcional de observaciones previo al envío -->
@@ -536,18 +778,21 @@
             <div id="observaciones-overlay" class="absolute inset-0 bg-black/70"></div>
             <div class="relative z-10 min-h-screen flex items-center justify-center p-md">
                 <div class="w-full max-w-lg bg-surface-container border border-outline-variant rounded-md p-md shadow-lg">
-                    <h3 class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase mb-sm flex items-center gap-sm">
+                    <h3 id="observaciones-dialog-titulo" class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase mb-sm flex items-center gap-sm">
                         <span class="material-symbols-outlined text-sm">edit_note</span>
                         Observaciones del cierre (opcional)
                     </h3>
-                    <p class="text-sm text-on-surface-variant mb-md">Puedes dejar este campo en blanco y enviar de todas formas.</p>
+                    <p id="observaciones-dialog-ayuda" class="text-sm text-on-surface-variant mb-md">Puedes dejar este campo en blanco y enviar de todas formas.</p>
                     <textarea id="observaciones-paloteo" rows="3" placeholder="Ej: Faltó reportar la merma de una copa" class="w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface mb-md focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-body-base resize-none"></textarea>
                     <div class="flex flex-col sm:flex-row gap-sm">
                         <button id="btn-cancelar-observaciones" class="w-full sm:w-auto bg-surface text-on-surface border border-outline-variant py-sm px-md rounded-sharp uppercase tracking-widest text-label-mono hover:border-primary-fixed-dim transition-colors">
                             Volver
                         </button>
                         <button id="btn-enviar-inventario" class="w-full bg-primary-container text-on-primary-fixed font-headline-md text-body-base py-sm px-md rounded-sharp flex items-center justify-center gap-sm hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest">
-                            <span class="material-symbols-outlined">send</span>
+                            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M22 2L11 13"></path>
+                                <path d="M22 2L15 22l-4-9-9-4z"></path>
+                            </svg>
                             Enviar inventario
                         </button>
                     </div>
@@ -555,35 +800,131 @@
             </div>
         </div>
 
-        <!-- Bottom Navigation (4 Tabs) -->
-        <nav class="fixed bottom-0 w-full bg-surface-container border-t border-outline-variant px-0 py-0 flex justify-around items-stretch z-30 h-20">
-            <!-- Tab 1: STOCK -->
-            <button class="flex-1 flex flex-col items-center justify-center gap-xs text-on-surface-variant hover:text-primary-fixed-dim transition-colors border-b-2 border-outline-variant hover:border-primary-fixed-dim group active-tab" data-tab="stock">
-                <span class="material-symbols-outlined text-md group-hover:glow-cyan-intense">inventory_2</span>
-                <span class="text-[10px] font-label-mono tracking-widest uppercase font-semibold">Stock</span>
-            </button>
-            
-            <!-- Tab 2: SCAN -->
-            <button class="flex-1 flex flex-col items-center justify-center gap-xs text-on-surface-variant hover:text-primary-fixed-dim transition-colors border-b-2 border-outline-variant hover:border-primary-fixed-dim group" data-tab="scan">
-                <span class="material-symbols-outlined text-md">qr_code_scanner</span>
-                <span class="text-[10px] font-label-mono tracking-widest uppercase font-semibold">Scan</span>
-            </button>
-            
-            <!-- Tab 3: ALERTS -->
-            <button class="flex-1 flex flex-col items-center justify-center gap-xs text-on-surface-variant hover:text-primary-fixed-dim transition-colors border-b-2 border-outline-variant hover:border-primary-fixed-dim group" data-tab="alerts">
-                <span class="material-symbols-outlined text-md">notifications_active</span>
-                <span class="text-[10px] font-label-mono tracking-widest uppercase font-semibold">Alerts</span>
-            </button>
-            
-            <!-- Tab 4: LOGS -->
-            <button class="flex-1 flex flex-col items-center justify-center gap-xs text-on-surface-variant hover:text-primary-fixed-dim transition-colors border-b-2 border-outline-variant hover:border-primary-fixed-dim group" data-tab="logs">
-                <span class="material-symbols-outlined text-md">history</span>
-                <span class="text-[10px] font-label-mono tracking-widest uppercase font-semibold">Logs</span>
-            </button>
+        <!-- Modal: Crear Modelo de Botella -->
+        <div id="modelo-botella-dialog" class="fixed inset-0 hidden z-40">
+            <div id="modelo-botella-overlay" class="absolute inset-0 bg-black/70"></div>
+            <div class="relative z-10 min-h-screen flex items-center justify-center p-md">
+                <div class="w-full max-w-lg bg-surface-container border border-outline-variant rounded-md p-md shadow-lg">
+                    <h3 class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase mb-xs flex items-center gap-sm">
+                        <span class="material-symbols-outlined text-sm">liquor</span>
+                        Nuevo modelo de botella
+                    </h3>
+                    <p id="modelo-botella-subtitulo" class="text-xs text-on-surface-variant mb-md"></p>
+
+                    <div class="space-y-sm mb-md">
+                        <!-- Nombre del perfil -->
+                        <div>
+                            <label class="text-[10px] font-label-mono tracking-widest uppercase text-on-surface-variant block mb-xs">Nombre del modelo</label>
+                            <input id="mb-nombre" type="text" placeholder="Ej: BOTELLA ALTA"
+                                class="w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-body-base uppercase">
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-sm">
+                            <!-- Peso bruto -->
+                            <div>
+                                <label class="text-[10px] font-label-mono tracking-widest uppercase text-on-surface-variant block mb-xs">Peso bruto (g)</label>
+                                <input id="mb-peso-bruto" type="number" min="0" step="0.01" placeholder="Ej: 1200"
+                                    class="w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-data-tabular">
+                            </div>
+                            <!-- Tara -->
+                            <div>
+                                <label class="text-[10px] font-label-mono tracking-widest uppercase text-on-surface-variant block mb-xs">Tara (g)</label>
+                                <input id="mb-tara" type="number" min="0" step="0.01" placeholder="Ej: 420"
+                                    class="w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-data-tabular">
+                            </div>
+                            <!-- Gramos por onza -->
+                            <div>
+                                <label class="text-[10px] font-label-mono tracking-widest uppercase text-on-surface-variant block mb-xs">g / oz</label>
+                                <input id="mb-gramos-oz" type="number" min="0" step="0.0001" placeholder="29.5735"
+                                    class="w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-data-tabular">
+                            </div>
+                            <!-- Tolerancia -->
+                            <div>
+                                <label class="text-[10px] font-label-mono tracking-widest uppercase text-on-surface-variant block mb-xs">Tolerancia (oz)</label>
+                                <input id="mb-tolerancia" type="number" min="0" step="0.01" placeholder="0"
+                                    class="w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-data-tabular">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Error inline -->
+                    <p id="mb-error" class="hidden text-xs text-error mb-sm font-semibold"></p>
+
+                    <div class="flex flex-col sm:flex-row gap-sm">
+                        <button id="btn-cancelar-modelo" class="w-full sm:w-auto bg-surface text-on-surface border border-outline-variant py-sm px-md rounded-sharp uppercase tracking-widest text-label-mono hover:border-primary-fixed-dim transition-colors">
+                            Cancelar
+                        </button>
+                        <button id="btn-confirmar-modelo" class="w-full bg-primary-container text-on-primary-fixed font-headline-md text-body-base py-sm px-md rounded-sharp flex items-center justify-center gap-sm hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest">
+                            <span class="material-symbols-outlined text-sm">save</span>
+                            Guardar modelo
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal: Resultado / Confirmación genérico -->
+        <div id="resultado-dialog" class="fixed inset-0 hidden z-50">
+            <div id="resultado-overlay" class="absolute inset-0 bg-black/70"></div>
+            <div class="relative z-10 min-h-screen flex items-center justify-center p-md">
+                <div class="w-full max-w-lg bg-surface-container border border-outline-variant rounded-md p-md shadow-lg">
+                    <h3 id="resultado-titulo" class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase mb-sm flex items-center gap-sm">
+                        <span id="resultado-icono" class="material-symbols-outlined text-sm">info</span>
+                        <span id="resultado-titulo-texto">Resultado</span>
+                    </h3>
+                    <p id="resultado-mensaje" class="text-sm text-on-surface-variant mb-md whitespace-pre-line"></p>
+                    <!-- Botones para modo resultado (1 botón) -->
+                    <div id="resultado-btns-ok" class="flex justify-end">
+                        <button id="btn-resultado-ok" class="bg-primary-container text-on-primary-fixed font-headline-md text-body-base py-sm px-md rounded-sharp flex items-center justify-center gap-sm hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest">
+                            <span class="material-symbols-outlined text-sm">check</span>
+                            Aceptar
+                        </button>
+                    </div>
+                    <!-- Botones para modo confirmación (2 botones) -->
+                    <div id="resultado-btns-confirm" class="hidden flex flex-col sm:flex-row gap-sm">
+                        <button id="btn-resultado-cancelar" class="w-full sm:w-auto bg-surface text-on-surface border border-outline-variant py-sm px-md rounded-sharp uppercase tracking-widest text-label-mono hover:border-primary-fixed-dim transition-colors">
+                            Cancelar
+                        </button>
+                        <button id="btn-resultado-confirmar" class="w-full bg-primary-container text-on-primary-fixed font-headline-md text-body-base py-sm px-md rounded-sharp flex items-center justify-center gap-sm hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest">
+                            <span class="material-symbols-outlined text-sm">check</span>
+                            Sí, estoy seguro
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Navigation -->
+        <nav class="fixed bottom-0 left-0 w-full bg-surface-container border-t border-outline-variant z-30">
+            <div id="submit-section" class="h-[4.25rem] flex justify-around items-stretch">
+                <!-- Tab 1: PALOTEO 3 -->
+                <button class="flex-1 flex flex-col items-center justify-center gap-[2px] px-[2px] text-on-surface-variant hover:text-primary-fixed-dim transition-colors border-b-2 border-outline-variant hover:border-primary-fixed-dim group active-tab" data-tab="stock">
+                    <span class="material-symbols-outlined text-sm group-hover:glow-cyan-intense">inventory_2</span>
+                    <span class="text-[9px] font-label-mono tracking-[0.12em] uppercase font-semibold leading-none text-center">Paloteo 3</span>
+                </button>
+
+                <!-- Tab 2: PALOTEO 1 (acción principal) -->
+                <button id="btn-guardar" disabled aria-label="Paloteo 1" class="flex-1 flex flex-col items-center justify-center gap-[2px] px-[2px] transition-colors border-b-2 border-outline-variant text-on-surface-variant opacity-40 cursor-not-allowed">
+                    <span class="material-symbols-outlined text-sm">send</span>
+                    <span class="text-[9px] font-label-mono tracking-[0.12em] uppercase font-semibold leading-none text-center">Paloteo 1</span>
+                </button>
+
+                <!-- Tab 3: REPORTE -->
+                <button class="flex-1 flex flex-col items-center justify-center gap-[2px] px-[2px] text-on-surface-variant hover:text-primary-fixed-dim transition-colors border-b-2 border-outline-variant hover:border-primary-fixed-dim group" data-tab="scan">
+                    <span class="material-symbols-outlined text-sm">summarize</span>
+                    <span class="text-[9px] font-label-mono tracking-[0.12em] uppercase font-semibold leading-none text-center">Reporte</span>
+                </button>
+
+                <!-- Tab 4: PALOTEO 2 -->
+                <button class="flex-1 flex flex-col items-center justify-center gap-[2px] px-[2px] text-on-surface-variant hover:text-primary-fixed-dim transition-colors border-b-2 border-outline-variant hover:border-primary-fixed-dim group" data-tab="logs">
+                    <span class="material-symbols-outlined text-sm">history</span>
+                    <span class="text-[9px] font-label-mono tracking-[0.12em] uppercase font-semibold leading-none text-center">Paloteo 2</span>
+                </button>
+            </div>
         </nav>
     </div>
 
-    <script src="/assets/app.js?v=8.1"></script>
+    <script src="/assets/app.js?v=9.30"></script>
 
     <script>
         (function () {
@@ -597,10 +938,12 @@
                 return;
             }
 
-            Promise.race([
-                document.fonts.load('24px "Material Symbols Outlined"'),
-                new Promise((resolve) => setTimeout(resolve, 1800))
-            ]).finally(marcarIconosListos);
+            document.fonts
+                .load('24px "Material Symbols Outlined"')
+                .then(marcarIconosListos)
+                .catch(() => {
+                    // Si la fuente falla, mantenemos ocultas las ligaduras para evitar texto como "logout".
+                });
         })();
     </script>
 

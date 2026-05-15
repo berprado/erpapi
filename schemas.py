@@ -97,3 +97,17 @@ class PaloteoOperacionResponse(BaseModel):
     mensaje: str
     detalles: List[dict]
     productos_omitidos: List[int]
+
+
+class FilaDiferenciaPdf(BaseModel):
+    idProducto: str
+    codigo: str
+    nombre: str
+    difUnidades: float
+    difOnzas: float
+
+class ExportarPdfRequest(BaseModel):
+    id_operacion: int = Field(..., gt=0)
+    id_barra: int = Field(..., gt=0)
+    usuario: str
+    filas: List[FilaDiferenciaPdf] = Field(..., min_length=1)
