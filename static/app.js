@@ -1032,7 +1032,7 @@ function renderizarReportePaloteo3() {
 
     if (emptyState) emptyState.classList.add('hidden');
 
-    filas.forEach(fila => {
+    filas.forEach((fila, index) => {
         const colorUnid = fila.difUnidades > 0
             ? 'var(--semantic-danger)'
             : fila.difUnidades < 0
@@ -1049,9 +1049,10 @@ function renderizarReportePaloteo3() {
         const textoOz = `${fila.difOnzas > 0 ? '+' : ''}${fila.difOnzas.toFixed(2)} oz`;
 
         const row = document.createElement('div');
-        row.className = 'grid gap-xs px-sm py-xs items-center hover:bg-surface-container-highest transition-colors';
-        row.style.gridTemplateColumns = '3.25rem minmax(0, 1fr) 4.5rem 5.25rem';
+        row.className = 'grid gap-[2px] px-xs py-xs items-center hover:bg-surface-container-highest transition-colors';
+        row.style.gridTemplateColumns = '2rem 2.9rem minmax(0, 1fr) clamp(3.2rem, 14vw, 4.5rem) clamp(4rem, 17vw, 5.25rem)';
         row.innerHTML = `
+            <span class="text-data-tabular text-on-surface-variant text-right text-[10px] truncate pr-[2px]" title="${index + 1}">${index + 1}</span>
             <span class="text-data-tabular text-on-surface text-right text-xs truncate pr-[2px]" title="${escapeHtml(fila.codigo)}">${escapeHtml(fila.codigo)}</span>
             <span class="text-xs text-on-surface truncate" title="${escapeHtml(fila.nombre)}">${escapeHtml(fila.nombre)}</span>
             <span class="text-right text-xs font-semibold" style="color: ${colorUnid}">${textoUnid}</span>
