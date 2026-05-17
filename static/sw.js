@@ -4,7 +4,7 @@
 //             Network First para llamadas a la API.
 // ============================================================
 
-const CACHE_NAME = 'backstage-v9.52';
+const CACHE_NAME = 'backstage-v9.53';
 
 // Archivos que se pre-cachean al instalar la PWA
 const ASSETS_TO_CACHE = [
@@ -15,6 +15,8 @@ const ASSETS_TO_CACHE = [
     '/assets/icons/android-icon-192x192.png',
     '/assets/icons/android-icon-512x512.png',
     '/assets/icons/apple-icon-180x180.png',
+    '/assets/imgs/login_transp.png',
+    '/assets/imgs/backstage_horizontal_banner.png',
 ];
 
 // ── INSTALL: pre-cachear assets esenciales ──────────────────
