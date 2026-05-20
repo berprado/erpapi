@@ -181,6 +181,7 @@
         }
 
         input[type="number"] {
+            appearance: textfield;
             -moz-appearance: textfield;
         }
 
@@ -474,6 +475,12 @@
     </style>
 </head>
 <body class="bg-surface text-on-surface font-body-base antialiased min-h-screen dark">
+
+    <!-- Banner de operativa bloqueada -->
+    <div id="banner-operativa-bloqueada" class="hidden w-full bg-error-container text-on-error-container border-b-2 border-error shadow-lg flex items-center gap-md px-md py-sm z-50 fixed top-0 left-0 justify-center" role="alert" aria-live="assertive">
+        <span class="material-symbols-outlined text-2xl mr-sm">block</span>
+        <span id="banner-operativa-bloqueada-texto" class="font-label-mono text-sm sm:text-base"></span>
+    </div>
 
     <!-- ================= PANTALLA DE LOGIN ================= -->
     <div id="login-screen" class="min-h-screen flex flex-col justify-center items-center px-lg">
@@ -931,7 +938,7 @@
         </nav>
     </div>
 
-    <script src="/assets/app.js?v=9.55"></script>
+    <script src="/assets/app.js?v=9.58"></script>
 
     <script>
         (function () {

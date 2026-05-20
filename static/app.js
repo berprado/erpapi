@@ -6,6 +6,7 @@ const API_BASE = `${window.location.origin}/api`;
 let currentToken = localStorage.getItem('token') || null;
 let currentOperacionId = null;
 let currentIdInventarioPOS = null; // Guardamos el ID del inventario ya registrado para correcciones
+let operativaPermitePaloteo = false;
 const ID_BARRA_ACTUAL = 1; // Podemos hacerlo dinámico después
 let productosInventario = [];
 let modoEnvioOrigen = 'inventario';
@@ -480,12 +481,16 @@ function mostrarPantallaApp() {
 async function iniciarDashboard() {
     listaProductos.innerHTML = ''; // Limpiar lista
     productosInventario = [];
+    operativaPermitePaloteo = false;
     resetModoCaptura();
     modoEnvioOrigen = 'inventario';
     _deshabilitarBtnEnvio();
     actualizarBloqueoTabsPaloteo(true);
     observacionesDialog.classList.add('hidden');
     inputObservaciones.value = '';
+
+    // Ocultar banner de operativa bloqueada al iniciar
+    ocultarBannerOperativaBloqueada();
     
     const estadoIcon = document.getElementById('estado-icon');
     const estadoTexto = document.getElementById('estado-texto');
@@ -517,22 +522,25 @@ async function iniciarDashboard() {
             const detail = dataOp.detail && typeof dataOp.detail === 'object' ? dataOp.detail : {};
             const iconoError = detail.icon || 'block';
             const statusClass = detail.status_class || 'status-warning-icon';
-            
+
             estadoIcon.innerHTML = renderCriticalIcon(iconoError);
             estadoIcon.classList.remove('animate-pulse', 'text-primary-fixed', 'text-error', 'text-on-surface-variant', 'success-check-icon', 'status-checking-icon', 'status-warning-icon', 'status-info-icon');
             estadoIcon.classList.add(statusClass);
-            
+
             const estadoTituloErr = document.getElementById('estado-titulo');
             if (estadoTituloErr) {
                 estadoTituloErr.textContent = detail.titulo || "Operativa bloqueada";
             }
-            
+
             estadoTexto.textContent = detail.mensaje || "Debes iniciar el cierre de la operativa para realizar el paloteo";
+
+            mostrarBannerOperativaBloqueada(detail.mensaje || "La operativa está bloqueada. Debes iniciar el cierre de la operativa para habilitar el paloteo.");
             return; // Bloqueamos la ejecución aquí
         }
 
         // Luz Verde: Guardamos el ID de operación (estado 24)
         currentOperacionId = dataOp.id_operacion;
+        operativaPermitePaloteo = true;
         actualizarBloqueoTabsPaloteo(false);
         currentIdInventarioPOS = null; // Resetear el ID de inventario previo para nueva operativa
         ocultarBannerCorreccion(); // Ocultar banner de corrección hasta confirmar si hay inventario
@@ -540,6 +548,22 @@ async function iniciarDashboard() {
         estadoIcon.innerHTML = renderCriticalIcon(iconoExito);
         estadoIcon.classList.remove('animate-pulse', 'text-on-surface-variant', 'text-error', 'status-warning-icon', 'status-checking-icon', 'status-info-icon');
         estadoIcon.classList.add('success-check-icon');
+
+        ocultarBannerOperativaBloqueada();
+        // Banner de operativa bloqueada
+        function mostrarBannerOperativaBloqueada(mensaje) {
+            const banner = document.getElementById('banner-operativa-bloqueada');
+            const texto = document.getElementById('banner-operativa-bloqueada-texto');
+            if (banner && texto) {
+                texto.textContent = mensaje;
+                banner.classList.remove('hidden');
+            }
+        }
+
+        function ocultarBannerOperativaBloqueada() {
+            const banner = document.getElementById('banner-operativa-bloqueada');
+            if (banner) banner.classList.add('hidden');
+        }
         
         // Actualizar título y mensaje según respuesta del servidor
         const estadoTitulo = document.getElementById('estado-titulo');
@@ -612,15 +636,22 @@ function ocultarResumenProductos() {
 }
 
 function _habilitarBtnEnvio() {
+    if (!operativaPermitePaloteo) {
+        _deshabilitarBtnEnvio();
+        return;
+    }
+
     btnGuardar.disabled = false;
     btnGuardar.classList.remove('opacity-40', 'cursor-not-allowed', 'text-on-surface-variant');
     btnGuardar.classList.add('text-primary-fixed', 'hover:text-primary-fixed-dim', 'border-primary-fixed-dim', 'glow-cyan-intense');
+    if (btnEnviarInventario) btnEnviarInventario.disabled = false;
 }
 
 function _deshabilitarBtnEnvio() {
     btnGuardar.disabled = true;
     btnGuardar.classList.remove('text-primary-fixed', 'hover:text-primary-fixed-dim', 'border-primary-fixed-dim', 'glow-cyan-intense');
     btnGuardar.classList.add('opacity-40', 'cursor-not-allowed', 'text-on-surface-variant');
+    if (btnEnviarInventario) btnEnviarInventario.disabled = true;
 }
 
 function actualizarBloqueoTabsPaloteo(estaBloqueado) {
@@ -648,6 +679,18 @@ function actualizarBloqueoTabsPaloteo(estaBloqueado) {
         const tabActivo = document.querySelector('[data-tab].active-tab');
         if (tabActivo && tabsBloqueables.includes(tabActivo.dataset.tab)) {
             navegarATab('inventario');
+        }
+    }
+
+    if (btnEnviarInventario) {
+        btnEnviarInventario.disabled = estaBloqueado;
+        btnEnviarInventario.setAttribute('aria-disabled', estaBloqueado ? 'true' : 'false');
+        if (estaBloqueado) {
+            btnEnviarInventario.setAttribute('title', mensajeBloqueo);
+            btnEnviarInventario.setAttribute('aria-label', mensajeBloqueo);
+        } else {
+            btnEnviarInventario.removeAttribute('title');
+            btnEnviarInventario.removeAttribute('aria-label');
         }
     }
 }
@@ -1524,8 +1567,8 @@ async function enviarInventario(payload) {
             mensaje: 'No se pudo conectar con el servidor. Revisa tu conexión e intenta de nuevo.'
         });
     } finally {
-        btnGuardar.disabled = false;
-        btnEnviarInventario.disabled = false;
+        btnGuardar.disabled = !operativaPermitePaloteo;
+        btnEnviarInventario.disabled = !operativaPermitePaloteo;
         btnGuardar.innerHTML = textoOriginalConfirmar;
         btnEnviarInventario.innerHTML = textoOriginalEnviar;
     }
