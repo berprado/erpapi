@@ -475,6 +475,21 @@ function mostrarPantallaApp() {
     iniciarDashboard();
 }
 
+// Banner de operativa bloqueada
+function mostrarBannerOperativaBloqueada(mensaje) {
+    const banner = document.getElementById('banner-operativa-bloqueada');
+    const texto = document.getElementById('banner-operativa-bloqueada-texto');
+    if (banner && texto) {
+        texto.textContent = mensaje;
+        banner.classList.remove('hidden');
+    }
+}
+
+function ocultarBannerOperativaBloqueada() {
+    const banner = document.getElementById('banner-operativa-bloqueada');
+    if (banner) banner.classList.add('hidden');
+}
+
 // ==========================================
 // LÓGICA DE NEGOCIO (DASHBOARD)
 // ==========================================
@@ -550,20 +565,6 @@ async function iniciarDashboard() {
         estadoIcon.classList.add('success-check-icon');
 
         ocultarBannerOperativaBloqueada();
-        // Banner de operativa bloqueada
-        function mostrarBannerOperativaBloqueada(mensaje) {
-            const banner = document.getElementById('banner-operativa-bloqueada');
-            const texto = document.getElementById('banner-operativa-bloqueada-texto');
-            if (banner && texto) {
-                texto.textContent = mensaje;
-                banner.classList.remove('hidden');
-            }
-        }
-
-        function ocultarBannerOperativaBloqueada() {
-            const banner = document.getElementById('banner-operativa-bloqueada');
-            if (banner) banner.classList.add('hidden');
-        }
         
         // Actualizar título y mensaje según respuesta del servidor
         const estadoTitulo = document.getElementById('estado-titulo');
