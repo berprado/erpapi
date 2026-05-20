@@ -483,6 +483,7 @@ async function iniciarDashboard() {
     resetModoCaptura();
     modoEnvioOrigen = 'inventario';
     _deshabilitarBtnEnvio();
+    actualizarBloqueoTabsPaloteo(true);
     observacionesDialog.classList.add('hidden');
     inputObservaciones.value = '';
     
@@ -532,6 +533,7 @@ async function iniciarDashboard() {
 
         // Luz Verde: Guardamos el ID de operación (estado 24)
         currentOperacionId = dataOp.id_operacion;
+        actualizarBloqueoTabsPaloteo(false);
         currentIdInventarioPOS = null; // Resetear el ID de inventario previo para nueva operativa
         ocultarBannerCorreccion(); // Ocultar banner de corrección hasta confirmar si hay inventario
         const iconoExito = dataOp.icon || 'check_circle';
@@ -619,6 +621,35 @@ function _deshabilitarBtnEnvio() {
     btnGuardar.disabled = true;
     btnGuardar.classList.remove('text-primary-fixed', 'hover:text-primary-fixed-dim', 'border-primary-fixed-dim', 'glow-cyan-intense');
     btnGuardar.classList.add('opacity-40', 'cursor-not-allowed', 'text-on-surface-variant');
+}
+
+function actualizarBloqueoTabsPaloteo(estaBloqueado) {
+    const tabsBloqueables = ['logs', 'stock', 'scan'];
+    const mensajeBloqueo = 'Operativa bloqueada: inicia el cierre de la operativa para habilitar este módulo.';
+
+    tabsBloqueables.forEach((tabName) => {
+        const btn = document.querySelector(`[data-tab="${tabName}"]`);
+        if (!btn) return;
+
+        btn.disabled = estaBloqueado;
+        btn.setAttribute('aria-disabled', estaBloqueado ? 'true' : 'false');
+        if (estaBloqueado) {
+            btn.setAttribute('title', mensajeBloqueo);
+            btn.setAttribute('aria-label', mensajeBloqueo);
+        } else {
+            btn.removeAttribute('title');
+            btn.removeAttribute('aria-label');
+        }
+        btn.classList.toggle('opacity-40', estaBloqueado);
+        btn.classList.toggle('cursor-not-allowed', estaBloqueado);
+    });
+
+    if (estaBloqueado) {
+        const tabActivo = document.querySelector('[data-tab].active-tab');
+        if (tabActivo && tabsBloqueables.includes(tabActivo.dataset.tab)) {
+            navegarATab('inventario');
+        }
+    }
 }
 
 // ==========================================
