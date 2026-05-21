@@ -543,12 +543,6 @@
 </head>
 <body class="bg-surface text-on-surface font-body-base antialiased min-h-screen dark">
 
-    <!-- Banner de operativa bloqueada -->
-    <div id="banner-operativa-bloqueada" class="hidden w-full bg-error-container text-on-error-container border-b-2 border-error shadow-lg flex items-center gap-md px-md py-sm z-50 fixed top-0 left-0 justify-center" role="alert" aria-live="assertive">
-        <span class="material-symbols-outlined text-2xl mr-sm">block</span>
-        <span id="banner-operativa-bloqueada-texto" class="font-label-mono text-sm sm:text-base"></span>
-    </div>
-
     <!-- ================= PANTALLA DE LOGIN ================= -->
     <div id="login-screen" class="min-h-screen flex flex-col justify-center items-center px-lg">
         <div class="w-full max-w-sm">
@@ -1039,7 +1033,7 @@
         </div>
     </div>
 
-    <script src="/assets/app.js?v=9.60"></script>
+    <script src="/assets/app.js?v=9.61"></script>
 
     <script>
         (function () {
@@ -1084,7 +1078,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/assets/sw.js?v=9.60')
+                navigator.serviceWorker.register('/assets/sw.js?v=9.61')
                     .then(reg => console.log('[PWA] Service Worker registrado:', reg.scope))
                     .catch(err => console.error('[PWA] Error al registrar SW:', err));
             });

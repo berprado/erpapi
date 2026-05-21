@@ -569,21 +569,6 @@ function mostrarPantallaApp() {
     iniciarDashboard();
 }
 
-// Banner de operativa bloqueada
-function mostrarBannerOperativaBloqueada(mensaje) {
-    const banner = document.getElementById('banner-operativa-bloqueada');
-    const texto = document.getElementById('banner-operativa-bloqueada-texto');
-    if (banner && texto) {
-        texto.textContent = mensaje;
-        banner.classList.remove('hidden');
-    }
-}
-
-function ocultarBannerOperativaBloqueada() {
-    const banner = document.getElementById('banner-operativa-bloqueada');
-    if (banner) banner.classList.add('hidden');
-}
-
 // ==========================================
 // LÓGICA DE NEGOCIO (DASHBOARD)
 // ==========================================
@@ -598,9 +583,6 @@ async function iniciarDashboard() {
     observacionesDialog.classList.add('hidden');
     inputObservaciones.value = '';
 
-    // Ocultar banner de operativa bloqueada al iniciar
-    ocultarBannerOperativaBloqueada();
-    
     const estadoIcon = document.getElementById('estado-icon');
     const estadoTexto = document.getElementById('estado-texto');
     
@@ -642,8 +624,6 @@ async function iniciarDashboard() {
             }
 
             estadoTexto.textContent = detail.mensaje || "Debes iniciar el cierre de la operativa para realizar el paloteo";
-
-            mostrarBannerOperativaBloqueada(detail.mensaje || "La operativa está bloqueada. Debes iniciar el cierre de la operativa para habilitar el paloteo.");
             return; // Bloqueamos la ejecución aquí
         }
 
@@ -657,8 +637,6 @@ async function iniciarDashboard() {
         estadoIcon.innerHTML = renderCriticalIcon(iconoExito);
         estadoIcon.classList.remove('animate-pulse', 'text-on-surface-variant', 'text-error', 'status-warning-icon', 'status-checking-icon', 'status-info-icon');
         estadoIcon.classList.add('success-check-icon');
-
-        ocultarBannerOperativaBloqueada();
         
         // Actualizar título y mensaje según respuesta del servidor
         const estadoTitulo = document.getElementById('estado-titulo');
