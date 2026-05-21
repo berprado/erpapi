@@ -41,6 +41,32 @@ const capturaBtnSiguiente = document.getElementById('captura-btn-siguiente');
 const capturaBtnFinalizar = document.getElementById('captura-btn-finalizar');
 const stockBtnGuardar = document.getElementById('stock-btn-guardar');
 const reporteBtnPdf = document.getElementById('reporte-btn-pdf');
+const btnTopbarMenu = document.getElementById('btn-topbar-menu');
+const topbarMenuDropdown = document.getElementById('topbar-menu-dropdown');
+const dummyContentDialog = document.getElementById('dummy-content-dialog');
+const dummyContentOverlay = document.getElementById('dummy-content-overlay');
+const dummyContentTitle = document.getElementById('dummy-content-title');
+const dummyContentBody = document.getElementById('dummy-content-body');
+const btnCloseDummyContent = document.getElementById('btn-close-dummy-content');
+
+const dummyContentMap = {
+    guia: {
+        titulo: 'Guia Operativa Dummy',
+        lineas: [
+            'Bloque A: Validar inventario inicial y confirmar sensores de peso.',
+            'Bloque B: Ejecutar corte de prueba con dos referencias de botella.',
+            'Bloque C: Registrar observaciones del turno y continuar con paloteo.'
+        ]
+    },
+    boletin: {
+        titulo: 'Boletin Dummy',
+        lineas: [
+            'Novedad 01: Se habilita un tablero de metricas en fase de ensayo.',
+            'Novedad 02: Mejoras visuales planificadas para vistas de captura rapida.',
+            'Novedad 03: Se agrega canal interno para feedback operativo semanal.'
+        ]
+    }
+};
 
 function renderCriticalIcon(iconName, className = 'ui-icon') {
     const iconPaths = {
@@ -102,6 +128,38 @@ function escapeHtml(str) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
+}
+
+function cerrarMenuFlotanteTopbar() {
+    if (!topbarMenuDropdown || !btnTopbarMenu) return;
+    topbarMenuDropdown.classList.add('hidden');
+    btnTopbarMenu.setAttribute('aria-expanded', 'false');
+}
+
+function alternarMenuFlotanteTopbar() {
+    if (!topbarMenuDropdown || !btnTopbarMenu) return;
+    const estabaOculto = topbarMenuDropdown.classList.contains('hidden');
+    topbarMenuDropdown.classList.toggle('hidden');
+    btnTopbarMenu.setAttribute('aria-expanded', estabaOculto ? 'true' : 'false');
+}
+
+function cerrarContenidoDummy() {
+    if (!dummyContentDialog) return;
+    dummyContentDialog.classList.add('hidden');
+    dummyContentDialog.setAttribute('aria-hidden', 'true');
+}
+
+function abrirContenidoDummy(clave) {
+    const contenido = dummyContentMap[clave];
+    if (!contenido || !dummyContentDialog || !dummyContentTitle || !dummyContentBody) return;
+
+    dummyContentTitle.textContent = contenido.titulo;
+    dummyContentBody.innerHTML = contenido.lineas
+        .map((linea) => `<p>${escapeHtml(linea)}</p>`)
+        .join('');
+
+    dummyContentDialog.classList.remove('hidden');
+    dummyContentDialog.setAttribute('aria-hidden', 'false');
 }
 
 // Fix #27: Función centralizada para crear el HTML de un input de peso.
@@ -416,6 +474,42 @@ document.addEventListener('DOMContentLoaded', () => {
             type === 'password' ? 'visibility' : 'visibility_off',
             'ui-icon ui-icon-sm'
         );
+    });
+
+    if (btnTopbarMenu && topbarMenuDropdown) {
+        btnTopbarMenu.addEventListener('click', (event) => {
+            event.stopPropagation();
+            alternarMenuFlotanteTopbar();
+        });
+
+        topbarMenuDropdown.addEventListener('click', (event) => {
+            const trigger = event.target.closest('[data-dummy-link]');
+            if (!trigger) return;
+
+            cerrarMenuFlotanteTopbar();
+            abrirContenidoDummy(trigger.dataset.dummyLink);
+        });
+
+        document.addEventListener('click', (event) => {
+            if (!event.target.closest('.floating-menu-container')) {
+                cerrarMenuFlotanteTopbar();
+            }
+        });
+    }
+
+    if (dummyContentOverlay) {
+        dummyContentOverlay.addEventListener('click', cerrarContenidoDummy);
+    }
+
+    if (btnCloseDummyContent) {
+        btnCloseDummyContent.addEventListener('click', cerrarContenidoDummy);
+    }
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            cerrarMenuFlotanteTopbar();
+            cerrarContenidoDummy();
+        }
     });
 });
 
