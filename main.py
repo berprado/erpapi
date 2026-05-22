@@ -75,6 +75,16 @@ def _validar_operacion_inicio_cierre(db: Session, id_operacion: int) -> models.O
     return operacion
 
 
+def _obtener_onzas_por_botella_llena(db: Session, id_producto: int):
+    resultado = db.execute(
+        text("SELECT cantidad_detalle FROM alm_producto WHERE id = :id_producto LIMIT 1"),
+        {"id_producto": id_producto}
+    ).scalar()
+    if resultado is None:
+        return None
+    return float(resultado)
+
+
 def _procesar_items_paloteo(
     db: Session,
     payload: schemas.PaloteoRequest,
@@ -87,6 +97,7 @@ def _procesar_items_paloteo(
     productos_omitidos = []
     productos_corregidos = []
     margen_error_balanza = 10.0
+    onzas_max_por_producto = {}
 
     # En modo corrección, usamos actualización selectiva por producto para
     # conservar fecha_mod en los ítems no modificados.
@@ -101,6 +112,11 @@ def _procesar_items_paloteo(
         }
 
     for item in payload.items:
+        if item.id_producto not in onzas_max_por_producto:
+            onzas_max_por_producto[item.id_producto] = _obtener_onzas_por_botella_llena(db, item.id_producto)
+
+        onzas_max_producto = onzas_max_por_producto[item.id_producto]
+
         configs_producto = db.query(models.ProductoPesajeConfig).filter(
             models.ProductoPesajeConfig.id_producto_almacen == item.id_producto
         ).all()
@@ -135,11 +151,34 @@ def _procesar_items_paloteo(
 
                 gr_oz = float(perfil.gramos_por_oz)
                 tara = float(perfil.tara)
+                peso_bruto = float(perfil.peso_bruto)
                 peso_medido = float(abierta.peso)
+
+                if peso_bruto > 0 and peso_medido > peso_bruto:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=(
+                            f"Peso inválido para producto {item.id_producto}. "
+                            f"El peso medido ({peso_medido:.2f} g) supera el peso bruto del perfil "
+                            f"({peso_bruto:.2f} g)."
+                        )
+                    )
 
                 if peso_medido >= (tara - margen_error_balanza):
                     peso_liquido = max(0, peso_medido - tara)
-                    total_onzas += (peso_liquido / gr_oz)
+                    onzas_abierta = (peso_liquido / gr_oz)
+
+                    if onzas_max_producto is not None and onzas_max_producto > 0 and onzas_abierta > onzas_max_producto:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=(
+                                f"Capacidad excedida para producto {item.id_producto}. "
+                                f"La captura ({onzas_abierta:.2f} oz) supera la capacidad máxima "
+                                f"({onzas_max_producto:.2f} oz)."
+                            )
+                        )
+
+                    total_onzas += onzas_abierta
 
         onzas_redondeadas_pos = round(total_onzas * 2) / 2
 

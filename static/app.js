@@ -1367,13 +1367,13 @@ function cerrarDialogoObservaciones() {
 
 /**
  * Valida los campos de una tarjeta de producto.
- * Retorna: { camposVacios: [], erroresPeso: [], advertenciasOnzas: [] }
+ * Retorna: { camposVacios: [], erroresPeso: [], erroresCapacidad: [] }
  */
 function validarTarjeta(card) {
     const resultado = {
         camposVacios: [],
         erroresPeso: [],
-        advertenciasOnzas: [],
+        erroresCapacidad: [],
     };
 
     const pesable = parseInt(card.dataset.pesable, 10) === 1;
@@ -1416,14 +1416,14 @@ function validarTarjeta(card) {
                 resultado.erroresPeso.push({ pesoIngresado, pesoBruto, nombrePerfil });
             }
 
-            // Advertencia: onzas calculadas superan la capacidad de la botella
+            // Error duro: onzas calculadas superan la capacidad de la botella
             if (onzasMax > 0 && !isNaN(tara) && !isNaN(gramsPorOz) && gramsPorOz > 0) {
                 const margenError = 10.0;
                 if (pesoIngresado >= (tara - margenError)) {
                     const pesoLiquido = Math.max(0, pesoIngresado - tara);
                     const onzasCalculadas = pesoLiquido / gramsPorOz;
                     if (onzasCalculadas > onzasMax) {
-                        resultado.advertenciasOnzas.push({ onzasCalculadas, onzasMaximas: onzasMax, nombrePerfil });
+                        resultado.erroresCapacidad.push({ onzasCalculadas, onzasMaximas: onzasMax, nombrePerfil });
                     }
                 }
             }
@@ -1435,19 +1435,19 @@ function validarTarjeta(card) {
 
 /**
  * Ejecuta validaciones sobre un conjunto de tarjetas.
- * Orden: errores de peso (bloqueo duro) → onzas excedidas (advertencia) → campos vacíos (advertencia con relleno a 0).
+ * Orden: errores de peso/capacidad (bloqueo duro) → campos vacíos (advertencia con relleno a 0).
  * Retorna true si se puede continuar, false si el usuario cancela o hay error bloqueante.
  */
 async function ejecutarValidacionesGlobales(cards) {
     const erroresPeso = [];
-    const advertenciasOnzas = [];
+    const erroresCapacidad = [];
     const camposVaciosPorCard = [];
 
     cards.forEach(card => {
         const nombre = card.dataset.nombre;
         const res = validarTarjeta(card);
         if (res.erroresPeso.length > 0) erroresPeso.push({ nombre, detalles: res.erroresPeso });
-        if (res.advertenciasOnzas.length > 0) advertenciasOnzas.push({ nombre, detalles: res.advertenciasOnzas });
+        if (res.erroresCapacidad.length > 0) erroresCapacidad.push({ nombre, detalles: res.erroresCapacidad });
         if (res.camposVacios.length > 0) camposVaciosPorCard.push({ card, nombre, campos: res.camposVacios });
     });
 
@@ -1467,19 +1467,20 @@ async function ejecutarValidacionesGlobales(cards) {
         return false;
     }
 
-    // 2. Advertencia confirmable: onzas > capacidad por botella
-    if (advertenciasOnzas.length > 0) {
-        const lista = advertenciasOnzas.map(e => {
+    // 2. Bloqueo duro: onzas > capacidad por botella
+    if (erroresCapacidad.length > 0) {
+        const lista = erroresCapacidad.map(e => {
             const detalles = e.detalles.map(d =>
                 `  • ${d.nombrePerfil}: ${d.onzasCalculadas.toFixed(2)} oz (máx. ${d.onzasMaximas.toFixed(2)} oz)`
             ).join('\n');
             return `${e.nombre}:\n${detalles}`;
         }).join('\n\n');
-        const confirmar = await mostrarDialogoConfirmacion({
+        await mostrarDialogoResultado({
+            tipo: 'error',
             titulo: 'Capacidad de botella excedida',
-            mensaje: `El peso ingresado equivale a más onzas de las que cabe en la botella. ¿Confirmas que el valor es correcto?\n\n${lista}`,
+            mensaje: `El peso ingresado equivale a más onzas de las que caben en la botella. Corrige los valores antes de continuar:\n\n${lista}`,
         });
-        if (!confirmar) return false;
+        return false;
     }
 
     // 3. Advertencia confirmable: campos vacíos (se rellenan con 0 al confirmar)
@@ -1850,12 +1851,32 @@ function renderTarjetaCaptura(indice) {
     capturaCardContainer.innerHTML = '';
     const card = crearTarjetaProductoElement(producto, 'captura');
 
-    // Insertar contador de posición en la esquina superior derecha de la tarjeta
+    // Insertar navegación y contador centrados en el encabezado de la tarjeta.
     const total = capturaEstado.idsOrdenados.length;
-    const badgeContador = document.createElement('div');
-    badgeContador.className = 'flex items-center justify-end gap-xs mb-sm';
-    badgeContador.innerHTML = `<span class="text-[10px] font-label-mono text-on-surface-variant uppercase tracking-widest">Producto</span><span id="captura-indice-actual" class="text-sm font-semibold text-primary-fixed">${indice + 1}</span><span class="text-[10px] font-label-mono text-on-surface-variant">de</span><span id="captura-indice-total" class="text-sm font-semibold text-primary-fixed">${total}</span>`;
-    card.insertBefore(badgeContador, card.firstChild);
+    const headerCaptura = document.createElement('div');
+    headerCaptura.className = 'mb-sm grid grid-cols-[5rem_1fr_5rem] items-center gap-xs';
+
+    const botonAnterior = document.createElement('button');
+    botonAnterior.type = 'button';
+    botonAnterior.className = 'w-full h-9 bg-surface border border-outline-variant text-on-surface rounded-sharp px-xs uppercase tracking-[0.08em] text-[10px] font-label-mono flex items-center justify-center gap-[2px] hover:border-primary-fixed-dim transition-colors';
+    botonAnterior.innerHTML = '<span class="material-symbols-outlined text-[16px]">arrow_back</span> Prev';
+
+    const botonSiguiente = document.createElement('button');
+    botonSiguiente.type = 'button';
+    botonSiguiente.className = 'w-full h-9 bg-primary-container text-on-primary-fixed rounded-sharp px-xs uppercase tracking-[0.08em] text-[10px] font-label-mono flex items-center justify-center gap-[2px] hover:brightness-110 transition-all';
+    botonSiguiente.innerHTML = 'Sigt <span class="material-symbols-outlined text-[16px]">arrow_forward</span>';
+
+    botonAnterior.addEventListener('click', () => navegarCaptura(-1));
+    botonSiguiente.addEventListener('click', () => navegarCaptura(1));
+
+    const contador = document.createElement('div');
+    contador.className = 'flex items-center justify-center gap-1 text-center leading-none';
+    contador.innerHTML = `<span class="text-[9px] sm:text-[10px] font-label-mono text-on-surface-variant uppercase tracking-[0.12em]">Prod</span><span id="captura-indice-actual" class="text-[12px] sm:text-sm font-semibold text-primary-fixed tabular-nums">${indice + 1}</span><span class="text-[9px] sm:text-[10px] font-label-mono text-on-surface-variant uppercase tracking-[0.12em]">/</span><span id="captura-indice-total" class="text-[12px] sm:text-sm font-semibold text-primary-fixed tabular-nums">${total}</span>`;
+
+    headerCaptura.appendChild(botonAnterior);
+    headerCaptura.appendChild(contador);
+    headerCaptura.appendChild(botonSiguiente);
+    card.insertBefore(headerCaptura, card.firstChild);
 
     capturaCardContainer.appendChild(card);
 

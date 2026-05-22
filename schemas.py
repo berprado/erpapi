@@ -47,6 +47,13 @@ class PaloteoRequest(BaseModel):
     observaciones: Optional[str] = Field(None, description="Nota opcional del bartender") # NUEVO
     items: List[PaloteoItem] = Field(..., min_length=1)
 
+    @field_validator('items')
+    def validar_items_unicos(cls, items):
+        ids = [item.id_producto for item in items]
+        if len(ids) != len(set(ids)):
+            raise ValueError("No se permiten productos duplicados en items.")
+        return items
+
 class PerfilPesaje(BaseModel):
     id: Optional[int] = None
     nombre_perfil: str
