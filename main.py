@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from fastapi import FastAPI, Depends, HTTPException, status, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 import hashlib
 import json
 from database import get_db
@@ -667,7 +667,6 @@ def obtener_productos_pendientes(
 import os
 from fpdf import FPDF
 
-_PDF_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "pdfs")
 _LOGO_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "imgs", "backstage_horizontal_banner.png")
 
 def _color_diferencia(valor: float):
@@ -682,7 +681,6 @@ def exportar_pdf_paloteo3(
     payload: schemas.ExportarPdfRequest,
     current_user: models.Usuario = Depends(get_usuario_actual),
 ):
-    os.makedirs(_PDF_DIR, exist_ok=True)
     tipo_reporte = payload.tipo_reporte
     if tipo_reporte == 'ingreso':
         sufijo_archivo = '_INGRESO'
@@ -698,7 +696,6 @@ def exportar_pdf_paloteo3(
         subtitulo_reporte = 'Paloteo 3'
 
     nombre_archivo = f"PALOTEO_{payload.id_operacion}{sufijo_archivo}.pdf"
-    ruta_pdf = os.path.join(_PDF_DIR, nombre_archivo)
 
     ahora = datetime.now()
     fecha_hora = ahora.strftime("%d/%m/%Y %H:%M:%S")
@@ -791,12 +788,11 @@ def exportar_pdf_paloteo3(
             pdf.cell(w, row_h, str(val), border=1, align=align, fill=True)
         pdf.ln()
 
-    pdf.output(ruta_pdf)
+    pdf_bytes = bytes(pdf.output())
 
-    return FileResponse(
-        path=ruta_pdf,
+    return Response(
+        content=pdf_bytes,
         media_type="application/pdf",
-        filename=nombre_archivo,
         headers={"Content-Disposition": f'attachment; filename="{nombre_archivo}"'},
     )
 

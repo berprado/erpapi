@@ -1250,6 +1250,8 @@ function actualizarUIOrdenReporte() {
         btn.textContent = `${textoBase}${flecha}`;
         btn.classList.toggle('text-primary-fixed', esActivo);
         btn.classList.toggle('text-on-surface-variant', !esActivo);
+        btn.classList.toggle('font-bold', esActivo);
+        btn.classList.toggle('font-medium', !esActivo);
     });
 }
 
@@ -1307,18 +1309,27 @@ function renderizarReportePaloteo3() {
         const row = document.createElement('div');
         row.className = 'grid gap-[2px] px-xs py-xs items-center hover:bg-surface-container-highest transition-colors';
         row.style.gridTemplateColumns = '2rem 2.9rem minmax(0, 1fr) clamp(3.2rem, 14vw, 4.5rem) clamp(4rem, 17vw, 5.25rem)';
+        const codigoUpper = String(fila.codigo ?? '').toUpperCase();
+        const nombreUpper = String(fila.nombre ?? '').toUpperCase();
         row.innerHTML = `
-            <span class="text-data-tabular text-on-surface-variant text-right text-[10px] truncate pr-[2px]" title="${escapeHtml(String(fila.idProducto))}">${escapeHtml(String(fila.idProducto))}</span>
-            <span class="text-data-tabular text-on-surface text-right text-xs truncate pr-[2px]" title="${escapeHtml(fila.codigo)}">${escapeHtml(fila.codigo)}</span>
-            <span class="text-xs text-on-surface truncate" title="${escapeHtml(fila.nombre)}">${escapeHtml(fila.nombre)}</span>
-            <span class="text-right text-xs font-semibold" style="color: ${colorUnid}">${textoUnid}</span>
-            <span class="text-right text-xs font-semibold" style="color: ${colorOz}">${textoOz}</span>
+            <span class="text-data-tabular text-on-surface-variant text-right text-[11px] font-medium truncate pr-[2px]" title="${escapeHtml(String(fila.idProducto))}">${escapeHtml(String(fila.idProducto))}</span>
+            <span class="text-data-tabular text-on-surface text-right text-[11px] font-medium truncate pr-[2px]" title="${escapeHtml(codigoUpper)}">${escapeHtml(codigoUpper)}</span>
+            <span class="text-[12px] sm:text-[13px] font-semibold text-on-surface truncate uppercase" title="${escapeHtml(nombreUpper)}">${escapeHtml(nombreUpper)}</span>
+            <span class="text-right text-[11px] font-semibold" style="color: ${colorUnid}">${textoUnid}</span>
+            <span class="text-right text-[11px] font-semibold" style="color: ${colorOz}">${textoOz}</span>
         `;
         reporteList.appendChild(row);
     });
 }
 
 async function exportarReportePaloteo3Pdf() {
+    const textoOriginalBtnPdf = reporteBtnPdf ? reporteBtnPdf.innerHTML : '';
+    if (reporteBtnPdf) {
+        reporteBtnPdf.disabled = true;
+        reporteBtnPdf.setAttribute('aria-busy', 'true');
+        reporteBtnPdf.innerHTML = `${renderCriticalIcon('refresh', 'ui-icon animate-spin-ccw')} Generando PDF...`;
+    }
+
     const todasLasFilas = obtenerFilasReporteProcesadas();
     const filas = todasLasFilas.filter(f => (f.difUnidades ?? 0) !== 0 || (f.difOnzas ?? 0) !== 0);
     const tipoReporte = reporteEstado.filtro === 'ingreso'
@@ -1327,31 +1338,30 @@ async function exportarReportePaloteo3Pdf() {
             ? 'salida'
             : 'general';
 
-    if (!filas.length) {
-        const mensaje = todasLasFilas.length === 0
-            ? 'No hay productos cargados en Paloteo 3.'
-            : 'Todos los productos coinciden con el inventario ideal. No hay diferencias que reportar.';
-        await mostrarDialogoResultado({ tipo: 'warning', titulo: 'Sin diferencias para exportar', mensaje });
-        return;
-    }
-
-    const payload = {
-        id_operacion: currentOperacionId,
-        id_barra: ID_BARRA_ACTUAL,
-        usuario: localStorage.getItem('nombres') || 'No identificado',
-        tipo_reporte: tipoReporte,
-        filas: filas.map(f => ({
-            idProducto: f.idProducto,
-            codigo: f.codigo,
-            nombre: f.nombre,
-            difUnidades: f.difUnidades,
-            difOnzas: f.difOnzas,
-        })),
-    };
-
-    let resp;
     try {
-        resp = await fetch('/api/paloteo3/exportar-pdf', {
+        if (!filas.length) {
+            const mensaje = todasLasFilas.length === 0
+                ? 'No hay productos cargados en Paloteo 3.'
+                : 'Todos los productos coinciden con el inventario ideal. No hay diferencias que reportar.';
+            await mostrarDialogoResultado({ tipo: 'warning', titulo: 'Sin diferencias para exportar', mensaje });
+            return;
+        }
+
+        const payload = {
+            id_operacion: currentOperacionId,
+            id_barra: ID_BARRA_ACTUAL,
+            usuario: localStorage.getItem('nombres') || 'No identificado',
+            tipo_reporte: tipoReporte,
+            filas: filas.map(f => ({
+                idProducto: f.idProducto,
+                codigo: f.codigo,
+                nombre: f.nombre,
+                difUnidades: f.difUnidades,
+                difOnzas: f.difOnzas,
+            })),
+        };
+
+        const resp = await fetch('/api/paloteo3/exportar-pdf', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1359,30 +1369,36 @@ async function exportarReportePaloteo3Pdf() {
             },
             body: JSON.stringify(payload),
         });
+
+        if (!resp.ok) {
+            await mostrarDialogoResultado({ tipo: 'error', titulo: 'Error al generar PDF', mensaje: `El servidor respondió con error ${resp.status}.` });
+            return;
+        }
+
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const sufijoDescarga = tipoReporte === 'ingreso'
+            ? '_INGRESO'
+            : tipoReporte === 'salida'
+                ? '_SALIDA'
+                : '';
+        a.download = `PALOTEO_${currentOperacionId}${sufijoDescarga}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
     } catch (_) {
         await mostrarDialogoResultado({ tipo: 'error', titulo: 'Error de red', mensaje: 'No se pudo conectar con el servidor para generar el PDF.' });
         return;
+    } finally {
+        if (reporteBtnPdf) {
+            reporteBtnPdf.disabled = false;
+            reporteBtnPdf.removeAttribute('aria-busy');
+            reporteBtnPdf.innerHTML = textoOriginalBtnPdf;
+        }
     }
-
-    if (!resp.ok) {
-        await mostrarDialogoResultado({ tipo: 'error', titulo: 'Error al generar PDF', mensaje: `El servidor respondió con error ${resp.status}.` });
-        return;
-    }
-
-    const blob = await resp.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const sufijoDescarga = tipoReporte === 'ingreso'
-        ? '_INGRESO'
-        : tipoReporte === 'salida'
-            ? '_SALIDA'
-            : '';
-    a.download = `PALOTEO_${currentOperacionId}${sufijoDescarga}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
 }
 
 function syncFilaPaloteo3ConInventario(row) {
@@ -1711,8 +1727,8 @@ async function enviarInventario(payload) {
     try {
         btnGuardar.disabled = true;
         btnEnviarInventario.disabled = true;
-        btnGuardar.innerHTML = `${renderCriticalIcon('refresh', 'ui-icon animate-spin')} Procesando...`;
-        btnEnviarInventario.innerHTML = `${renderCriticalIcon('refresh', 'ui-icon animate-spin')} Enviando...`;
+        btnGuardar.innerHTML = `${renderCriticalIcon('refresh', 'ui-icon animate-spin-ccw')} Procesando...`;
+        btnEnviarInventario.innerHTML = `${renderCriticalIcon('refresh', 'ui-icon animate-spin-ccw')} Enviando...`;
 
         // Decidir si hacer POST (crear) o PUT (corregir)
         const esCorreccion = currentIdInventarioPOS !== null;
