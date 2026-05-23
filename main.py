@@ -672,9 +672,9 @@ _LOGO_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", 
 
 def _color_diferencia(valor: float):
     if valor > 0:
-        return (239, 68, 68)    # rojo  (#EF4444)
-    if valor < 0:
         return (245, 158, 11)   # ámbar (#F59E0B)
+    if valor < 0:
+        return (239, 68, 68)    # rojo  (#EF4444)
     return (72, 232, 152)       # verde (#48E898)
 
 @app.post("/api/paloteo3/exportar-pdf")

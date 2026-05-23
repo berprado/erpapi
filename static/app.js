@@ -1181,15 +1181,15 @@ function renderizarReportePaloteo3() {
 
     filas.forEach((fila, index) => {
         const colorUnid = fila.difUnidades > 0
-            ? 'var(--semantic-danger)'
+            ? 'var(--semantic-warning)'
             : fila.difUnidades < 0
-                ? 'var(--semantic-warning)'
+                ? 'var(--semantic-danger)'
                 : 'var(--semantic-action)';
 
         const colorOz = fila.difOnzas > 0
-            ? 'var(--semantic-danger)'
+            ? 'var(--semantic-warning)'
             : fila.difOnzas < 0
-                ? 'var(--semantic-warning)'
+                ? 'var(--semantic-danger)'
                 : 'var(--semantic-action)';
 
         const textoUnid = `${fila.difUnidades > 0 ? '+' : ''}${Math.round(fila.difUnidades)}`;
@@ -2115,7 +2115,7 @@ function formatearDiferencia(diferencia, isOz = false) {
     }
 
     const val = isOz ? diferencia.toFixed(2) : Math.round(diferencia);
-    return `<span class="text-data-tabular font-semibold" style="color: var(--semantic-danger)">+${val} ${sufijo}</span>`;
+    return `<span class="text-data-tabular font-semibold" style="color: var(--semantic-warning)">+${val} ${sufijo}</span>`;
 }
 
 // Recalcula una tarjeta y actualiza PAQ/BARRA, DET/BARRA y sus diferencias contra el sistema
