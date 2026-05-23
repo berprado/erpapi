@@ -683,7 +683,21 @@ def exportar_pdf_paloteo3(
     current_user: models.Usuario = Depends(get_usuario_actual),
 ):
     os.makedirs(_PDF_DIR, exist_ok=True)
-    nombre_archivo = f"PALOTEO_{payload.id_operacion}.pdf"
+    tipo_reporte = payload.tipo_reporte
+    if tipo_reporte == 'ingreso':
+        sufijo_archivo = '_INGRESO'
+        titulo_reporte = 'INGRESO POR AJUSTE'
+        subtitulo_reporte = 'Ajuste Ingreso'
+    elif tipo_reporte == 'salida':
+        sufijo_archivo = '_SALIDA'
+        titulo_reporte = 'SALIDA POR AJUSTE'
+        subtitulo_reporte = 'Ajuste Salida'
+    else:
+        sufijo_archivo = ''
+        titulo_reporte = 'REPORTE DE DIFERENCIAS'
+        subtitulo_reporte = 'Paloteo 3'
+
+    nombre_archivo = f"PALOTEO_{payload.id_operacion}{sufijo_archivo}.pdf"
     ruta_pdf = os.path.join(_PDF_DIR, nombre_archivo)
 
     ahora = datetime.now()
@@ -700,9 +714,9 @@ def exportar_pdf_paloteo3(
     pdf.set_font("Helvetica", "B", 10)
     pdf.set_text_color(51, 51, 51)
     pdf.set_xy(20, 13)
-    pdf.cell(0, 5, "Reporte de Diferencias", align="R")
+    pdf.cell(0, 5, titulo_reporte, align="R")
     pdf.set_xy(20, 18)
-    pdf.cell(0, 5, "Paloteo 3", align="R")
+    pdf.cell(0, 5, subtitulo_reporte, align="R")
 
     # línea divisoria
     pdf.set_draw_color(200, 200, 200)
@@ -748,16 +762,24 @@ def exportar_pdf_paloteo3(
     # filas de datos
     pdf.set_font("Helvetica", "", 8)
     for idx, fila in enumerate(payload.filas):
-        texto_unid = f"{'+' if fila.difUnidades > 0 else ''}{round(fila.difUnidades)}"
-        texto_oz   = f"{'+' if fila.difOnzas > 0 else ''}{fila.difOnzas:.2f} oz"
-        r_u, g_u, b_u = _color_diferencia(fila.difUnidades)
-        r_o, g_o, b_o = _color_diferencia(fila.difOnzas)
+        texto_unid = ""
+        texto_oz = ""
+        color_unid = None
+        color_oz = None
+
+        if fila.difUnidades is not None:
+            texto_unid = f"{'+' if fila.difUnidades > 0 else ''}{round(fila.difUnidades)}"
+            color_unid = _color_diferencia(fila.difUnidades)
+
+        if fila.difOnzas is not None:
+            texto_oz = f"{'+' if fila.difOnzas > 0 else ''}{fila.difOnzas:.2f} oz"
+            color_oz = _color_diferencia(fila.difOnzas)
 
         fondo = (245, 245, 245) if idx % 2 == 1 else (255, 255, 255)
         pdf.set_fill_color(*fondo)
 
         valores = [fila.idProducto, fila.codigo, fila.nombre, texto_unid, texto_oz]
-        colores = [None, None, None, (r_u, g_u, b_u), (r_o, g_o, b_o)]
+        colores = [None, None, None, color_unid, color_oz]
 
         for w, val, align, color in zip(col_widths, valores, aligns, colores):
             if color:

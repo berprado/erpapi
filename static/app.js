@@ -11,6 +11,12 @@ const ID_BARRA_ACTUAL = 1; // Podemos hacerlo dinámico después
 let productosInventario = [];
 let modoEnvioOrigen = 'inventario';
 
+const reporteEstado = {
+    filtro: 'todos',
+    sortBy: null,
+    sortDir: 'asc',
+};
+
 const capturaEstado = {
     inicializado: false,
     indice: 0,
@@ -41,6 +47,10 @@ const capturaBtnSiguiente = document.getElementById('captura-btn-siguiente');
 const capturaBtnFinalizar = document.getElementById('captura-btn-finalizar');
 const stockBtnGuardar = document.getElementById('stock-btn-guardar');
 const reporteBtnPdf = document.getElementById('reporte-btn-pdf');
+const reporteFiltroTodosBtn = document.getElementById('reporte-filtro-todos');
+const reporteFiltroIngresoBtn = document.getElementById('reporte-filtro-ingreso');
+const reporteFiltroSalidaBtn = document.getElementById('reporte-filtro-salida');
+const reporteSortBtns = Array.from(document.querySelectorAll('[data-reporte-sort]'));
 const btnTopbarMenu = document.getElementById('btn-topbar-menu');
 const topbarMenuDropdown = document.getElementById('topbar-menu-dropdown');
 const dummyContentDialog = document.getElementById('dummy-content-dialog');
@@ -1164,15 +1174,106 @@ function obtenerFilasReportePaloteo3() {
     return filas;
 }
 
+function aplicarEstadoReporte(filasBase) {
+    const filasFiltradas = filasBase.filter((fila) => {
+        if (reporteEstado.filtro === 'ingreso') {
+            return fila.difUnidades > 0 || fila.difOnzas > 0;
+        }
+        if (reporteEstado.filtro === 'salida') {
+            return fila.difUnidades < 0 || fila.difOnzas < 0;
+        }
+        return true;
+    }).map((fila) => {
+        const clon = { ...fila };
+        if (reporteEstado.filtro === 'ingreso') {
+            clon.difUnidades = clon.difUnidades > 0 ? clon.difUnidades : null;
+            clon.difOnzas = clon.difOnzas > 0 ? clon.difOnzas : null;
+        }
+        if (reporteEstado.filtro === 'salida') {
+            clon.difUnidades = clon.difUnidades < 0 ? clon.difUnidades : null;
+            clon.difOnzas = clon.difOnzas < 0 ? clon.difOnzas : null;
+        }
+        return clon;
+    });
+
+    if (reporteEstado.sortBy) {
+        filasFiltradas.sort((a, b) => {
+            let comparacion = 0;
+            if (reporteEstado.sortBy === 'idProducto') {
+                comparacion = (parseInt(a.idProducto, 10) || 0) - (parseInt(b.idProducto, 10) || 0);
+            } else if (reporteEstado.sortBy === 'codigo') {
+                comparacion = String(a.codigo || '').localeCompare(String(b.codigo || ''), 'es', { sensitivity: 'base' });
+            } else if (reporteEstado.sortBy === 'nombre') {
+                comparacion = String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es', { sensitivity: 'base' });
+            }
+
+            if (comparacion === 0) {
+                comparacion = (parseInt(a.idProducto, 10) || 0) - (parseInt(b.idProducto, 10) || 0);
+            }
+
+            return reporteEstado.sortDir === 'asc' ? comparacion : -comparacion;
+        });
+    }
+
+    return filasFiltradas;
+}
+
+function obtenerFilasReporteProcesadas() {
+    return aplicarEstadoReporte(obtenerFilasReportePaloteo3());
+}
+
+function actualizarUIFiltrosReporte() {
+    const estilos = [
+        { btn: reporteFiltroTodosBtn, activo: reporteEstado.filtro === 'todos' },
+        { btn: reporteFiltroIngresoBtn, activo: reporteEstado.filtro === 'ingreso' },
+        { btn: reporteFiltroSalidaBtn, activo: reporteEstado.filtro === 'salida' },
+    ];
+
+    estilos.forEach(({ btn, activo }) => {
+        if (!btn) return;
+        btn.classList.toggle('bg-primary-container', activo);
+        btn.classList.toggle('text-black', activo);
+        btn.classList.toggle('border-primary-fixed-dim', activo);
+        btn.classList.toggle('bg-surface', !activo);
+        btn.classList.toggle('text-on-surface', !activo);
+        btn.classList.toggle('border-outline-variant', !activo);
+    });
+}
+
+function actualizarUIOrdenReporte() {
+    reporteSortBtns.forEach((btn) => {
+        const sortKey = btn.dataset.reporteSort;
+        const esActivo = reporteEstado.sortBy === sortKey;
+        const flecha = esActivo ? (reporteEstado.sortDir === 'asc' ? ' ↑' : ' ↓') : '';
+        const textoBase = btn.dataset.baseLabel || btn.textContent.replace(' ↑', '').replace(' ↓', '');
+        btn.dataset.baseLabel = textoBase;
+        btn.textContent = `${textoBase}${flecha}`;
+        btn.classList.toggle('text-primary-fixed', esActivo);
+        btn.classList.toggle('text-on-surface-variant', !esActivo);
+    });
+}
+
 function renderizarReportePaloteo3() {
     const reporteList = document.getElementById('reporte-list');
     const emptyState = document.getElementById('reporte-empty-state');
     if (!reporteList) return;
 
-    const filas = obtenerFilasReportePaloteo3();
+    const filas = obtenerFilasReporteProcesadas();
     reporteList.innerHTML = '';
 
+    actualizarUIFiltrosReporte();
+    actualizarUIOrdenReporte();
+
     if (!filas.length) {
+        if (emptyState) {
+            if (reporteEstado.filtro === 'ingreso') {
+                emptyState.textContent = 'No hay productos con ingreso por ajuste.';
+            } else if (reporteEstado.filtro === 'salida') {
+                emptyState.textContent = 'No hay productos con salida por ajuste.';
+            } else {
+                emptyState.textContent = 'No hay datos capturados en Paloteo 3 para generar reporte.';
+            }
+        }
         if (emptyState) emptyState.classList.remove('hidden');
         return;
     }
@@ -1180,26 +1281,34 @@ function renderizarReportePaloteo3() {
     if (emptyState) emptyState.classList.add('hidden');
 
     filas.forEach((fila, index) => {
-        const colorUnid = fila.difUnidades > 0
+        const colorUnid = fila.difUnidades == null
+            ? 'var(--on-surface-variant)'
+            : fila.difUnidades > 0
             ? 'var(--semantic-warning)'
             : fila.difUnidades < 0
                 ? 'var(--semantic-danger)'
                 : 'var(--semantic-action)';
 
-        const colorOz = fila.difOnzas > 0
+        const colorOz = fila.difOnzas == null
+            ? 'var(--on-surface-variant)'
+            : fila.difOnzas > 0
             ? 'var(--semantic-warning)'
             : fila.difOnzas < 0
                 ? 'var(--semantic-danger)'
                 : 'var(--semantic-action)';
 
-        const textoUnid = `${fila.difUnidades > 0 ? '+' : ''}${Math.round(fila.difUnidades)}`;
-        const textoOz = `${fila.difOnzas > 0 ? '+' : ''}${fila.difOnzas.toFixed(2)} oz`;
+        const textoUnid = fila.difUnidades == null
+            ? ''
+            : `${fila.difUnidades > 0 ? '+' : ''}${Math.round(fila.difUnidades)}`;
+        const textoOz = fila.difOnzas == null
+            ? ''
+            : `${fila.difOnzas > 0 ? '+' : ''}${fila.difOnzas.toFixed(2)} oz`;
 
         const row = document.createElement('div');
         row.className = 'grid gap-[2px] px-xs py-xs items-center hover:bg-surface-container-highest transition-colors';
         row.style.gridTemplateColumns = '2rem 2.9rem minmax(0, 1fr) clamp(3.2rem, 14vw, 4.5rem) clamp(4rem, 17vw, 5.25rem)';
         row.innerHTML = `
-            <span class="text-data-tabular text-on-surface-variant text-right text-[10px] truncate pr-[2px]" title="${index + 1}">${index + 1}</span>
+            <span class="text-data-tabular text-on-surface-variant text-right text-[10px] truncate pr-[2px]" title="${escapeHtml(String(fila.idProducto))}">${escapeHtml(String(fila.idProducto))}</span>
             <span class="text-data-tabular text-on-surface text-right text-xs truncate pr-[2px]" title="${escapeHtml(fila.codigo)}">${escapeHtml(fila.codigo)}</span>
             <span class="text-xs text-on-surface truncate" title="${escapeHtml(fila.nombre)}">${escapeHtml(fila.nombre)}</span>
             <span class="text-right text-xs font-semibold" style="color: ${colorUnid}">${textoUnid}</span>
@@ -1210,8 +1319,13 @@ function renderizarReportePaloteo3() {
 }
 
 async function exportarReportePaloteo3Pdf() {
-    const todasLasFilas = obtenerFilasReportePaloteo3();
-    const filas = todasLasFilas.filter(f => f.difUnidades !== 0 || f.difOnzas !== 0);
+    const todasLasFilas = obtenerFilasReporteProcesadas();
+    const filas = todasLasFilas.filter(f => (f.difUnidades ?? 0) !== 0 || (f.difOnzas ?? 0) !== 0);
+    const tipoReporte = reporteEstado.filtro === 'ingreso'
+        ? 'ingreso'
+        : reporteEstado.filtro === 'salida'
+            ? 'salida'
+            : 'general';
 
     if (!filas.length) {
         const mensaje = todasLasFilas.length === 0
@@ -1225,6 +1339,7 @@ async function exportarReportePaloteo3Pdf() {
         id_operacion: currentOperacionId,
         id_barra: ID_BARRA_ACTUAL,
         usuario: localStorage.getItem('nombres') || 'No identificado',
+        tipo_reporte: tipoReporte,
         filas: filas.map(f => ({
             idProducto: f.idProducto,
             codigo: f.codigo,
@@ -1258,7 +1373,12 @@ async function exportarReportePaloteo3Pdf() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `PALOTEO_${currentOperacionId}.pdf`;
+    const sufijoDescarga = tipoReporte === 'ingreso'
+        ? '_INGRESO'
+        : tipoReporte === 'salida'
+            ? '_SALIDA'
+            : '';
+    a.download = `PALOTEO_${currentOperacionId}${sufijoDescarga}.pdf`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -2222,5 +2342,43 @@ function inicializarCalculos() {
 if (reporteBtnPdf) {
     reporteBtnPdf.addEventListener('click', async () => {
         await exportarReportePaloteo3Pdf();
+    });
+}
+
+if (reporteFiltroTodosBtn) {
+    reporteFiltroTodosBtn.addEventListener('click', () => {
+        reporteEstado.filtro = 'todos';
+        renderizarReportePaloteo3();
+    });
+}
+
+if (reporteFiltroIngresoBtn) {
+    reporteFiltroIngresoBtn.addEventListener('click', () => {
+        reporteEstado.filtro = 'ingreso';
+        renderizarReportePaloteo3();
+    });
+}
+
+if (reporteFiltroSalidaBtn) {
+    reporteFiltroSalidaBtn.addEventListener('click', () => {
+        reporteEstado.filtro = 'salida';
+        renderizarReportePaloteo3();
+    });
+}
+
+if (reporteSortBtns.length > 0) {
+    reporteSortBtns.forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const sortBy = btn.dataset.reporteSort;
+            if (!sortBy) return;
+
+            if (reporteEstado.sortBy === sortBy) {
+                reporteEstado.sortDir = reporteEstado.sortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                reporteEstado.sortBy = sortBy;
+                reporteEstado.sortDir = 'asc';
+            }
+            renderizarReportePaloteo3();
+        });
     });
 }

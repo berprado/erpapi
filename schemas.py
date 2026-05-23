@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, field_validator
-from typing import List, Optional
+from typing import List, Optional, Literal
 
 # Esquema para lo que la API va a RECIBIR del cliente
 class UsuarioLogin(BaseModel):
@@ -110,11 +110,12 @@ class FilaDiferenciaPdf(BaseModel):
     idProducto: str
     codigo: str
     nombre: str
-    difUnidades: float
-    difOnzas: float
+    difUnidades: Optional[float] = None
+    difOnzas: Optional[float] = None
 
 class ExportarPdfRequest(BaseModel):
     id_operacion: int = Field(..., gt=0)
     id_barra: int = Field(..., gt=0)
     usuario: str
+    tipo_reporte: Literal['general', 'ingreso', 'salida'] = 'general'
     filas: List[FilaDiferenciaPdf] = Field(..., min_length=1)

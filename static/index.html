@@ -810,11 +810,17 @@
                 </div>
             </div>
 
+            <div class="mb-sm flex flex-wrap gap-xs">
+                <button id="reporte-filtro-todos" type="button" class="reporte-filtro-btn bg-primary-container text-black border border-primary-fixed-dim px-sm py-[6px] rounded-sharp text-[10px] font-label-mono uppercase tracking-widest">Todos</button>
+                <button id="reporte-filtro-ingreso" type="button" class="reporte-filtro-btn bg-surface border border-outline-variant text-on-surface px-sm py-[6px] rounded-sharp text-[10px] font-label-mono uppercase tracking-widest">Ingreso (+)</button>
+                <button id="reporte-filtro-salida" type="button" class="reporte-filtro-btn bg-surface border border-outline-variant text-on-surface px-sm py-[6px] rounded-sharp text-[10px] font-label-mono uppercase tracking-widest">Salida (-)</button>
+            </div>
+
             <div class="bg-surface-container border border-outline-variant rounded-md overflow-hidden shadow-lg">
                 <div class="grid gap-[2px] px-xs py-sm border-b border-outline-variant bg-surface-container-low text-[10px] font-label-mono tracking-widest uppercase text-on-surface-variant" style="grid-template-columns: 2rem 2.9rem minmax(0, 1fr) clamp(3.2rem, 14vw, 4.5rem) clamp(4rem, 17vw, 5.25rem);">
-                    <span class="text-right">Num</span>
-                    <span class="text-right">Cód</span>
-                    <span>Nombre</span>
+                    <button type="button" data-reporte-sort="idProducto" class="reporte-sort-btn text-right">ID</button>
+                    <button type="button" data-reporte-sort="codigo" class="reporte-sort-btn text-right">Cód</button>
+                    <button type="button" data-reporte-sort="nombre" class="reporte-sort-btn text-left">Nombre</button>
                     <span class="text-right">Δ Unid</span>
                     <span class="text-right">Δ Oz</span>
                 </div>
@@ -1017,7 +1023,7 @@
         </div>
     </div>
 
-    <script src="/assets/app.js?v=9.71"></script>
+    <script src="/assets/app.js?v=9.74"></script>
 
     <script>
         (function () {
@@ -1062,7 +1068,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/assets/sw.js?v=9.71')
+                navigator.serviceWorker.register('/assets/sw.js?v=9.74')
                     .then(reg => console.log('[PWA] Service Worker registrado:', reg.scope))
                     .catch(err => console.error('[PWA] Error al registrar SW:', err));
             });
