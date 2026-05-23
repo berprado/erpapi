@@ -839,7 +839,7 @@
             <div class="mb-md flex justify-center">
                 <button id="captura-btn-finalizar" type="button" class="w-full h-10 bg-primary-container text-black px-sm rounded-sharp flex items-center justify-center gap-xs hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest text-[11px] font-label-mono font-semibold disabled:opacity-50 disabled:cursor-not-allowed">
                     <span class="material-symbols-outlined text-sm">done_all</span>
-                    Finalizar Captura y Enviar
+                    Registrar Paloteo
                 </button>
             </div>
 
@@ -1017,7 +1017,7 @@
         </div>
     </div>
 
-    <script src="/assets/app.js?v=9.68"></script>
+    <script src="/assets/app.js?v=9.70"></script>
 
     <script>
         (function () {
@@ -1062,7 +1062,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/assets/sw.js?v=9.68')
+                navigator.serviceWorker.register('/assets/sw.js?v=9.70')
                     .then(reg => console.log('[PWA] Service Worker registrado:', reg.scope))
                     .catch(err => console.error('[PWA] Error al registrar SW:', err));
             });

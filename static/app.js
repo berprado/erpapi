@@ -1854,23 +1854,25 @@ function renderTarjetaCaptura(indice) {
     // Insertar navegación y contador centrados en el encabezado de la tarjeta.
     const total = capturaEstado.idsOrdenados.length;
     const headerCaptura = document.createElement('div');
-    headerCaptura.className = 'mb-sm grid grid-cols-[5rem_1fr_5rem] items-center gap-xs';
+    headerCaptura.className = 'mb-sm w-full grid grid-cols-3 items-center gap-xs';
+
+    const claseBotonCapturaCompacto = 'w-full h-9 bg-surface border border-outline-variant text-on-surface rounded-sharp px-xs uppercase tracking-[0.08em] text-[10px] font-label-mono flex items-center justify-center gap-[2px] hover:border-primary-fixed-dim hover:text-primary-fixed transition-colors';
 
     const botonAnterior = document.createElement('button');
     botonAnterior.type = 'button';
-    botonAnterior.className = 'w-full h-9 bg-surface border border-outline-variant text-on-surface rounded-sharp px-xs uppercase tracking-[0.08em] text-[10px] font-label-mono flex items-center justify-center gap-[2px] hover:border-primary-fixed-dim transition-colors';
+    botonAnterior.className = `${claseBotonCapturaCompacto} w-[4.75rem] justify-self-start`;
     botonAnterior.innerHTML = '<span class="material-symbols-outlined text-[16px]">arrow_back</span> Prev';
 
     const botonSiguiente = document.createElement('button');
     botonSiguiente.type = 'button';
-    botonSiguiente.className = 'w-full h-9 bg-primary-container text-on-primary-fixed rounded-sharp px-xs uppercase tracking-[0.08em] text-[10px] font-label-mono flex items-center justify-center gap-[2px] hover:brightness-110 transition-all';
+    botonSiguiente.className = `${claseBotonCapturaCompacto} w-[4.75rem] justify-self-end`;
     botonSiguiente.innerHTML = 'Sigt <span class="material-symbols-outlined text-[16px]">arrow_forward</span>';
 
     botonAnterior.addEventListener('click', () => navegarCaptura(-1));
     botonSiguiente.addEventListener('click', () => navegarCaptura(1));
 
     const contador = document.createElement('div');
-    contador.className = 'flex items-center justify-center gap-1 text-center leading-none';
+    contador.className = 'justify-self-center flex items-center justify-center gap-1 text-center leading-none min-w-max';
     contador.innerHTML = `<span class="text-[9px] sm:text-[10px] font-label-mono text-on-surface-variant uppercase tracking-[0.12em]">Prod</span><span id="captura-indice-actual" class="text-[12px] sm:text-sm font-semibold text-primary-fixed tabular-nums">${indice + 1}</span><span class="text-[9px] sm:text-[10px] font-label-mono text-on-surface-variant uppercase tracking-[0.12em]">/</span><span id="captura-indice-total" class="text-[12px] sm:text-sm font-semibold text-primary-fixed tabular-nums">${total}</span>`;
 
     headerCaptura.appendChild(botonAnterior);
@@ -2064,12 +2066,24 @@ document.addEventListener('keydown', (event) => {
     const panelLogsVisible = !document.getElementById('panel-logs').classList.contains('hidden');
     if (!panelLogsVisible) return;
 
-    if (event.ctrlKey && event.key === 'ArrowRight') {
+    if (!esDesktopParaCaptura()) return;
+
+    const elementoActivo = document.activeElement;
+    const focoEnCampoEditable = elementoActivo && (
+        elementoActivo.tagName === 'INPUT'
+        || elementoActivo.tagName === 'TEXTAREA'
+        || elementoActivo.tagName === 'SELECT'
+        || elementoActivo.isContentEditable
+    );
+
+    if (focoEnCampoEditable) return;
+
+    if (event.key === 'ArrowRight') {
         event.preventDefault();
         navegarCaptura(1);
     }
 
-    if (event.ctrlKey && event.key === 'ArrowLeft') {
+    if (event.key === 'ArrowLeft') {
         event.preventDefault();
         navegarCaptura(-1);
     }
