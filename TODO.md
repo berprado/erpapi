@@ -44,14 +44,14 @@
 
 ## 📌 Pendiente de Validaciones de Cantidades y Pesos (Paloteo 1, 2 y 3)
 
-- [ ] **Alinear validaciones Frontend/Backend para pesos físicos máximos**
-  - Implementar en backend la misma regla de bloqueo duro que ya existe en frontend para `peso > peso_bruto` por perfil.
+- [x] **Alinear validaciones Frontend/Backend para pesos fisicos maximos**
+  - Implementado: bloqueo duro en backend y frontend para `peso > peso_bruto` por perfil.
 
-- [ ] **Definir y aplicar regla de sobrecapacidad de onzas por botella en backend**
-  - Actualmente en frontend es advertencia confirmable; falta una regla explícita del lado servidor para mantener consistencia.
+- [x] **Definir y aplicar regla de sobrecapacidad de onzas por botella en backend**
+  - Implementado: sobrecapacidad de onzas se trata como error bloqueante en backend y frontend.
 
-- [ ] **Validar unicidad de `id_producto` en `items` del payload de paloteo**
-  - Evitar duplicados en creación/corrección que puedan producir resultados no deterministas.
+- [x] **Validar unicidad de `id_producto` en `items` del payload de paloteo**
+  - Implementado en schema de request para evitar duplicados en creacion/correccion.
 
 - [ ] **Revisar consistencia funcional de PALOTEO 3 vs PALOTEO 1/2**
   - PALOTEO 3 captura un solo peso por producto, mientras PALOTEO 1/2 soportan múltiples abiertas y perfiles.
