@@ -157,7 +157,7 @@ Reglas de correccion actuales:
 
 | Metodo | Ruta | Descripcion |
 |---|---|---|
-| `POST` | `/api/paloteo3/exportar-pdf` | Genera y descarga PDF del reporte de diferencias |
+| `POST` | `/api/paloteo3/exportar-pdf` | Genera y descarga PDF del reporte (general, ingreso o salida) |
 
 Body ejemplo de exportacion:
 
@@ -166,6 +166,7 @@ Body ejemplo de exportacion:
   "id_operacion": 42,
   "id_barra": 1,
   "usuario": "PEREZ MAMANI, JUAN",
+  "tipo_reporte": "general",
   "filas": [
     {
       "idProducto": "101",
@@ -177,6 +178,38 @@ Body ejemplo de exportacion:
   ]
 }
 ```
+
+`tipo_reporte` admite: `general`, `ingreso`, `salida`.
+
+---
+
+## Validaciones Activas (Frontend + Backend)
+
+En el flujo de inventario fisico/paloteo se aplican estas validaciones clave:
+
+1. No se permiten valores negativos en unidades o pesos.
+2. Se exige unicidad de `id_producto` en `items` del payload.
+3. Para pesables, se bloquea cuando `peso_medido > peso_bruto` del perfil seleccionado.
+4. Para pesables, se bloquea cuando las onzas calculadas exceden `onzas_por_botella_llena`.
+5. Campos vacios se confirman explicitamente y, si el usuario acepta, se completan en `0`.
+
+---
+
+## REPORTE (Paloteo 3)
+
+Funciones implementadas en la vista REPORTE:
+
+1. Filtro por tipo de ajuste: `Todos`, `Ingreso (+)`, `Salida (-)`.
+2. Ordenamiento por columnas: `ID`, `COD`, `PRODUCTO`.
+3. Coloreo semantico de diferencias:
+  - `0`: verde
+  - negativo: rojo
+  - positivo: amarillo
+4. Exportacion PDF coherente con filtro activo:
+  - `PALOTEO_<id>.pdf`
+  - `PALOTEO_<id>_INGRESO.pdf`
+  - `PALOTEO_<id>_SALIDA.pdf`
+5. Generacion de PDF en memoria (sin escritura a disco) para evitar errores intermitentes en Windows.
 
 ---
 

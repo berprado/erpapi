@@ -11,6 +11,12 @@ const ID_BARRA_ACTUAL = 1; // Podemos hacerlo dinámico después
 let productosInventario = [];
 let modoEnvioOrigen = 'inventario';
 
+const reporteEstado = {
+    filtro: 'todos',
+    sortBy: null,
+    sortDir: 'asc',
+};
+
 const capturaEstado = {
     inicializado: false,
     indice: 0,
@@ -41,6 +47,36 @@ const capturaBtnSiguiente = document.getElementById('captura-btn-siguiente');
 const capturaBtnFinalizar = document.getElementById('captura-btn-finalizar');
 const stockBtnGuardar = document.getElementById('stock-btn-guardar');
 const reporteBtnPdf = document.getElementById('reporte-btn-pdf');
+const reporteFiltroTodosBtn = document.getElementById('reporte-filtro-todos');
+const reporteFiltroIngresoBtn = document.getElementById('reporte-filtro-ingreso');
+const reporteFiltroSalidaBtn = document.getElementById('reporte-filtro-salida');
+const reporteSortBtns = Array.from(document.querySelectorAll('[data-reporte-sort]'));
+const btnTopbarMenu = document.getElementById('btn-topbar-menu');
+const topbarMenuDropdown = document.getElementById('topbar-menu-dropdown');
+const dummyContentDialog = document.getElementById('dummy-content-dialog');
+const dummyContentOverlay = document.getElementById('dummy-content-overlay');
+const dummyContentTitle = document.getElementById('dummy-content-title');
+const dummyContentBody = document.getElementById('dummy-content-body');
+const btnCloseDummyContent = document.getElementById('btn-close-dummy-content');
+
+const dummyContentMap = {
+    guia: {
+        titulo: 'Guia Operativa Dummy',
+        lineas: [
+            'Bloque A: Validar inventario inicial y confirmar sensores de peso.',
+            'Bloque B: Ejecutar corte de prueba con dos referencias de botella.',
+            'Bloque C: Registrar observaciones del turno y continuar con paloteo.'
+        ]
+    },
+    boletin: {
+        titulo: 'Boletin Dummy',
+        lineas: [
+            'Novedad 01: Se habilita un tablero de metricas en fase de ensayo.',
+            'Novedad 02: Mejoras visuales planificadas para vistas de captura rapida.',
+            'Novedad 03: Se agrega canal interno para feedback operativo semanal.'
+        ]
+    }
+};
 
 function renderCriticalIcon(iconName, className = 'ui-icon') {
     const iconPaths = {
@@ -102,6 +138,38 @@ function escapeHtml(str) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
+}
+
+function cerrarMenuFlotanteTopbar() {
+    if (!topbarMenuDropdown || !btnTopbarMenu) return;
+    topbarMenuDropdown.classList.add('hidden');
+    btnTopbarMenu.setAttribute('aria-expanded', 'false');
+}
+
+function alternarMenuFlotanteTopbar() {
+    if (!topbarMenuDropdown || !btnTopbarMenu) return;
+    const estabaOculto = topbarMenuDropdown.classList.contains('hidden');
+    topbarMenuDropdown.classList.toggle('hidden');
+    btnTopbarMenu.setAttribute('aria-expanded', estabaOculto ? 'true' : 'false');
+}
+
+function cerrarContenidoDummy() {
+    if (!dummyContentDialog) return;
+    dummyContentDialog.classList.add('hidden');
+    dummyContentDialog.setAttribute('aria-hidden', 'true');
+}
+
+function abrirContenidoDummy(clave) {
+    const contenido = dummyContentMap[clave];
+    if (!contenido || !dummyContentDialog || !dummyContentTitle || !dummyContentBody) return;
+
+    dummyContentTitle.textContent = contenido.titulo;
+    dummyContentBody.innerHTML = contenido.lineas
+        .map((linea) => `<p>${escapeHtml(linea)}</p>`)
+        .join('');
+
+    dummyContentDialog.classList.remove('hidden');
+    dummyContentDialog.setAttribute('aria-hidden', 'false');
 }
 
 // Fix #27: Función centralizada para crear el HTML de un input de peso.
@@ -417,6 +485,42 @@ document.addEventListener('DOMContentLoaded', () => {
             'ui-icon ui-icon-sm'
         );
     });
+
+    if (btnTopbarMenu && topbarMenuDropdown) {
+        btnTopbarMenu.addEventListener('click', (event) => {
+            event.stopPropagation();
+            alternarMenuFlotanteTopbar();
+        });
+
+        topbarMenuDropdown.addEventListener('click', (event) => {
+            const trigger = event.target.closest('[data-dummy-link]');
+            if (!trigger) return;
+
+            cerrarMenuFlotanteTopbar();
+            abrirContenidoDummy(trigger.dataset.dummyLink);
+        });
+
+        document.addEventListener('click', (event) => {
+            if (!event.target.closest('.floating-menu-container')) {
+                cerrarMenuFlotanteTopbar();
+            }
+        });
+    }
+
+    if (dummyContentOverlay) {
+        dummyContentOverlay.addEventListener('click', cerrarContenidoDummy);
+    }
+
+    if (btnCloseDummyContent) {
+        btnCloseDummyContent.addEventListener('click', cerrarContenidoDummy);
+    }
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            cerrarMenuFlotanteTopbar();
+            cerrarContenidoDummy();
+        }
+    });
 });
 
 // ==========================================
@@ -475,21 +579,6 @@ function mostrarPantallaApp() {
     iniciarDashboard();
 }
 
-// Banner de operativa bloqueada
-function mostrarBannerOperativaBloqueada(mensaje) {
-    const banner = document.getElementById('banner-operativa-bloqueada');
-    const texto = document.getElementById('banner-operativa-bloqueada-texto');
-    if (banner && texto) {
-        texto.textContent = mensaje;
-        banner.classList.remove('hidden');
-    }
-}
-
-function ocultarBannerOperativaBloqueada() {
-    const banner = document.getElementById('banner-operativa-bloqueada');
-    if (banner) banner.classList.add('hidden');
-}
-
 // ==========================================
 // LÓGICA DE NEGOCIO (DASHBOARD)
 // ==========================================
@@ -504,9 +593,6 @@ async function iniciarDashboard() {
     observacionesDialog.classList.add('hidden');
     inputObservaciones.value = '';
 
-    // Ocultar banner de operativa bloqueada al iniciar
-    ocultarBannerOperativaBloqueada();
-    
     const estadoIcon = document.getElementById('estado-icon');
     const estadoTexto = document.getElementById('estado-texto');
     
@@ -548,8 +634,6 @@ async function iniciarDashboard() {
             }
 
             estadoTexto.textContent = detail.mensaje || "Debes iniciar el cierre de la operativa para realizar el paloteo";
-
-            mostrarBannerOperativaBloqueada(detail.mensaje || "La operativa está bloqueada. Debes iniciar el cierre de la operativa para habilitar el paloteo.");
             return; // Bloqueamos la ejecución aquí
         }
 
@@ -563,8 +647,6 @@ async function iniciarDashboard() {
         estadoIcon.innerHTML = renderCriticalIcon(iconoExito);
         estadoIcon.classList.remove('animate-pulse', 'text-on-surface-variant', 'text-error', 'status-warning-icon', 'status-checking-icon', 'status-info-icon');
         estadoIcon.classList.add('success-check-icon');
-
-        ocultarBannerOperativaBloqueada();
         
         // Actualizar título y mensaje según respuesta del servidor
         const estadoTitulo = document.getElementById('estado-titulo');
@@ -1092,15 +1174,108 @@ function obtenerFilasReportePaloteo3() {
     return filas;
 }
 
+function aplicarEstadoReporte(filasBase) {
+    const filasFiltradas = filasBase.filter((fila) => {
+        if (reporteEstado.filtro === 'ingreso') {
+            return fila.difUnidades > 0 || fila.difOnzas > 0;
+        }
+        if (reporteEstado.filtro === 'salida') {
+            return fila.difUnidades < 0 || fila.difOnzas < 0;
+        }
+        return true;
+    }).map((fila) => {
+        const clon = { ...fila };
+        if (reporteEstado.filtro === 'ingreso') {
+            clon.difUnidades = clon.difUnidades > 0 ? clon.difUnidades : null;
+            clon.difOnzas = clon.difOnzas > 0 ? clon.difOnzas : null;
+        }
+        if (reporteEstado.filtro === 'salida') {
+            clon.difUnidades = clon.difUnidades < 0 ? clon.difUnidades : null;
+            clon.difOnzas = clon.difOnzas < 0 ? clon.difOnzas : null;
+        }
+        return clon;
+    });
+
+    if (reporteEstado.sortBy) {
+        filasFiltradas.sort((a, b) => {
+            let comparacion = 0;
+            if (reporteEstado.sortBy === 'idProducto') {
+                comparacion = (parseInt(a.idProducto, 10) || 0) - (parseInt(b.idProducto, 10) || 0);
+            } else if (reporteEstado.sortBy === 'codigo') {
+                comparacion = String(a.codigo || '').localeCompare(String(b.codigo || ''), 'es', { sensitivity: 'base' });
+            } else if (reporteEstado.sortBy === 'nombre') {
+                comparacion = String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es', { sensitivity: 'base' });
+            }
+
+            if (comparacion === 0) {
+                comparacion = (parseInt(a.idProducto, 10) || 0) - (parseInt(b.idProducto, 10) || 0);
+            }
+
+            return reporteEstado.sortDir === 'asc' ? comparacion : -comparacion;
+        });
+    }
+
+    return filasFiltradas;
+}
+
+function obtenerFilasReporteProcesadas() {
+    return aplicarEstadoReporte(obtenerFilasReportePaloteo3());
+}
+
+function actualizarUIFiltrosReporte() {
+    const estilos = [
+        { btn: reporteFiltroTodosBtn, activo: reporteEstado.filtro === 'todos' },
+        { btn: reporteFiltroIngresoBtn, activo: reporteEstado.filtro === 'ingreso' },
+        { btn: reporteFiltroSalidaBtn, activo: reporteEstado.filtro === 'salida' },
+    ];
+
+    estilos.forEach(({ btn, activo }) => {
+        if (!btn) return;
+        btn.classList.toggle('bg-primary-container', activo);
+        btn.classList.toggle('text-black', activo);
+        btn.classList.toggle('border-primary-fixed-dim', activo);
+        btn.classList.toggle('bg-surface', !activo);
+        btn.classList.toggle('text-on-surface', !activo);
+        btn.classList.toggle('border-outline-variant', !activo);
+    });
+}
+
+function actualizarUIOrdenReporte() {
+    reporteSortBtns.forEach((btn) => {
+        const sortKey = btn.dataset.reporteSort;
+        const esActivo = reporteEstado.sortBy === sortKey;
+        const flecha = esActivo ? (reporteEstado.sortDir === 'asc' ? ' ↑' : ' ↓') : '';
+        const textoBase = btn.dataset.baseLabel || btn.textContent.replace(' ↑', '').replace(' ↓', '');
+        btn.dataset.baseLabel = textoBase;
+        btn.textContent = `${textoBase}${flecha}`;
+        btn.classList.toggle('text-primary-fixed', esActivo);
+        btn.classList.toggle('text-on-surface-variant', !esActivo);
+        btn.classList.toggle('font-bold', esActivo);
+        btn.classList.toggle('font-medium', !esActivo);
+    });
+}
+
 function renderizarReportePaloteo3() {
     const reporteList = document.getElementById('reporte-list');
     const emptyState = document.getElementById('reporte-empty-state');
     if (!reporteList) return;
 
-    const filas = obtenerFilasReportePaloteo3();
+    const filas = obtenerFilasReporteProcesadas();
     reporteList.innerHTML = '';
 
+    actualizarUIFiltrosReporte();
+    actualizarUIOrdenReporte();
+
     if (!filas.length) {
+        if (emptyState) {
+            if (reporteEstado.filtro === 'ingreso') {
+                emptyState.textContent = 'No hay productos con ingreso por ajuste.';
+            } else if (reporteEstado.filtro === 'salida') {
+                emptyState.textContent = 'No hay productos con salida por ajuste.';
+            } else {
+                emptyState.textContent = 'No hay datos capturados en Paloteo 3 para generar reporte.';
+            }
+        }
         if (emptyState) emptyState.classList.remove('hidden');
         return;
     }
@@ -1108,63 +1283,85 @@ function renderizarReportePaloteo3() {
     if (emptyState) emptyState.classList.add('hidden');
 
     filas.forEach((fila, index) => {
-        const colorUnid = fila.difUnidades > 0
-            ? 'var(--semantic-danger)'
+        const colorUnid = fila.difUnidades == null
+            ? 'var(--on-surface-variant)'
+            : fila.difUnidades > 0
+            ? 'var(--semantic-warning)'
             : fila.difUnidades < 0
-                ? 'var(--semantic-warning)'
+                ? 'var(--semantic-danger)'
                 : 'var(--semantic-action)';
 
-        const colorOz = fila.difOnzas > 0
-            ? 'var(--semantic-danger)'
+        const colorOz = fila.difOnzas == null
+            ? 'var(--on-surface-variant)'
+            : fila.difOnzas > 0
+            ? 'var(--semantic-warning)'
             : fila.difOnzas < 0
-                ? 'var(--semantic-warning)'
+                ? 'var(--semantic-danger)'
                 : 'var(--semantic-action)';
 
-        const textoUnid = `${fila.difUnidades > 0 ? '+' : ''}${Math.round(fila.difUnidades)}`;
-        const textoOz = `${fila.difOnzas > 0 ? '+' : ''}${fila.difOnzas.toFixed(2)} oz`;
+        const textoUnid = fila.difUnidades == null
+            ? ''
+            : `${fila.difUnidades > 0 ? '+' : ''}${Math.round(fila.difUnidades)}`;
+        const textoOz = fila.difOnzas == null
+            ? ''
+            : `${fila.difOnzas > 0 ? '+' : ''}${fila.difOnzas.toFixed(2)} oz`;
 
         const row = document.createElement('div');
         row.className = 'grid gap-[2px] px-xs py-xs items-center hover:bg-surface-container-highest transition-colors';
         row.style.gridTemplateColumns = '2rem 2.9rem minmax(0, 1fr) clamp(3.2rem, 14vw, 4.5rem) clamp(4rem, 17vw, 5.25rem)';
+        const codigoUpper = String(fila.codigo ?? '').toUpperCase();
+        const nombreUpper = String(fila.nombre ?? '').toUpperCase();
         row.innerHTML = `
-            <span class="text-data-tabular text-on-surface-variant text-right text-[10px] truncate pr-[2px]" title="${index + 1}">${index + 1}</span>
-            <span class="text-data-tabular text-on-surface text-right text-xs truncate pr-[2px]" title="${escapeHtml(fila.codigo)}">${escapeHtml(fila.codigo)}</span>
-            <span class="text-xs text-on-surface truncate" title="${escapeHtml(fila.nombre)}">${escapeHtml(fila.nombre)}</span>
-            <span class="text-right text-xs font-semibold" style="color: ${colorUnid}">${textoUnid}</span>
-            <span class="text-right text-xs font-semibold" style="color: ${colorOz}">${textoOz}</span>
+            <span class="text-data-tabular text-on-surface-variant text-right text-[11px] font-medium truncate pr-[2px]" title="${escapeHtml(String(fila.idProducto))}">${escapeHtml(String(fila.idProducto))}</span>
+            <span class="text-data-tabular text-on-surface text-right text-[11px] font-medium truncate pr-[2px]" title="${escapeHtml(codigoUpper)}">${escapeHtml(codigoUpper)}</span>
+            <span class="text-[12px] sm:text-[13px] font-semibold text-on-surface truncate uppercase" title="${escapeHtml(nombreUpper)}">${escapeHtml(nombreUpper)}</span>
+            <span class="text-right text-[11px] font-semibold" style="color: ${colorUnid}">${textoUnid}</span>
+            <span class="text-right text-[11px] font-semibold" style="color: ${colorOz}">${textoOz}</span>
         `;
         reporteList.appendChild(row);
     });
 }
 
 async function exportarReportePaloteo3Pdf() {
-    const todasLasFilas = obtenerFilasReportePaloteo3();
-    const filas = todasLasFilas.filter(f => f.difUnidades !== 0 || f.difOnzas !== 0);
-
-    if (!filas.length) {
-        const mensaje = todasLasFilas.length === 0
-            ? 'No hay productos cargados en Paloteo 3.'
-            : 'Todos los productos coinciden con el inventario ideal. No hay diferencias que reportar.';
-        await mostrarDialogoResultado({ tipo: 'warning', titulo: 'Sin diferencias para exportar', mensaje });
-        return;
+    const textoOriginalBtnPdf = reporteBtnPdf ? reporteBtnPdf.innerHTML : '';
+    if (reporteBtnPdf) {
+        reporteBtnPdf.disabled = true;
+        reporteBtnPdf.setAttribute('aria-busy', 'true');
+        reporteBtnPdf.innerHTML = `${renderCriticalIcon('refresh', 'ui-icon animate-spin-ccw')} Generando PDF...`;
     }
 
-    const payload = {
-        id_operacion: currentOperacionId,
-        id_barra: ID_BARRA_ACTUAL,
-        usuario: localStorage.getItem('nombres') || 'No identificado',
-        filas: filas.map(f => ({
-            idProducto: f.idProducto,
-            codigo: f.codigo,
-            nombre: f.nombre,
-            difUnidades: f.difUnidades,
-            difOnzas: f.difOnzas,
-        })),
-    };
+    const todasLasFilas = obtenerFilasReporteProcesadas();
+    const filas = todasLasFilas.filter(f => (f.difUnidades ?? 0) !== 0 || (f.difOnzas ?? 0) !== 0);
+    const tipoReporte = reporteEstado.filtro === 'ingreso'
+        ? 'ingreso'
+        : reporteEstado.filtro === 'salida'
+            ? 'salida'
+            : 'general';
 
-    let resp;
     try {
-        resp = await fetch('/api/paloteo3/exportar-pdf', {
+        if (!filas.length) {
+            const mensaje = todasLasFilas.length === 0
+                ? 'No hay productos cargados en Paloteo 3.'
+                : 'Todos los productos coinciden con el inventario ideal. No hay diferencias que reportar.';
+            await mostrarDialogoResultado({ tipo: 'warning', titulo: 'Sin diferencias para exportar', mensaje });
+            return;
+        }
+
+        const payload = {
+            id_operacion: currentOperacionId,
+            id_barra: ID_BARRA_ACTUAL,
+            usuario: localStorage.getItem('nombres') || 'No identificado',
+            tipo_reporte: tipoReporte,
+            filas: filas.map(f => ({
+                idProducto: f.idProducto,
+                codigo: f.codigo,
+                nombre: f.nombre,
+                difUnidades: f.difUnidades,
+                difOnzas: f.difOnzas,
+            })),
+        };
+
+        const resp = await fetch('/api/paloteo3/exportar-pdf', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1172,25 +1369,36 @@ async function exportarReportePaloteo3Pdf() {
             },
             body: JSON.stringify(payload),
         });
+
+        if (!resp.ok) {
+            await mostrarDialogoResultado({ tipo: 'error', titulo: 'Error al generar PDF', mensaje: `El servidor respondió con error ${resp.status}.` });
+            return;
+        }
+
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const sufijoDescarga = tipoReporte === 'ingreso'
+            ? '_INGRESO'
+            : tipoReporte === 'salida'
+                ? '_SALIDA'
+                : '';
+        a.download = `PALOTEO_${currentOperacionId}${sufijoDescarga}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
     } catch (_) {
         await mostrarDialogoResultado({ tipo: 'error', titulo: 'Error de red', mensaje: 'No se pudo conectar con el servidor para generar el PDF.' });
         return;
+    } finally {
+        if (reporteBtnPdf) {
+            reporteBtnPdf.disabled = false;
+            reporteBtnPdf.removeAttribute('aria-busy');
+            reporteBtnPdf.innerHTML = textoOriginalBtnPdf;
+        }
     }
-
-    if (!resp.ok) {
-        await mostrarDialogoResultado({ tipo: 'error', titulo: 'Error al generar PDF', mensaje: `El servidor respondió con error ${resp.status}.` });
-        return;
-    }
-
-    const blob = await resp.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `PALOTEO_${currentOperacionId}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
 }
 
 function syncFilaPaloteo3ConInventario(row) {
@@ -1295,13 +1503,13 @@ function cerrarDialogoObservaciones() {
 
 /**
  * Valida los campos de una tarjeta de producto.
- * Retorna: { camposVacios: [], erroresPeso: [], advertenciasOnzas: [] }
+ * Retorna: { camposVacios: [], erroresPeso: [], erroresCapacidad: [] }
  */
 function validarTarjeta(card) {
     const resultado = {
         camposVacios: [],
         erroresPeso: [],
-        advertenciasOnzas: [],
+        erroresCapacidad: [],
     };
 
     const pesable = parseInt(card.dataset.pesable, 10) === 1;
@@ -1344,14 +1552,14 @@ function validarTarjeta(card) {
                 resultado.erroresPeso.push({ pesoIngresado, pesoBruto, nombrePerfil });
             }
 
-            // Advertencia: onzas calculadas superan la capacidad de la botella
+            // Error duro: onzas calculadas superan la capacidad de la botella
             if (onzasMax > 0 && !isNaN(tara) && !isNaN(gramsPorOz) && gramsPorOz > 0) {
                 const margenError = 10.0;
                 if (pesoIngresado >= (tara - margenError)) {
                     const pesoLiquido = Math.max(0, pesoIngresado - tara);
                     const onzasCalculadas = pesoLiquido / gramsPorOz;
                     if (onzasCalculadas > onzasMax) {
-                        resultado.advertenciasOnzas.push({ onzasCalculadas, onzasMaximas: onzasMax, nombrePerfil });
+                        resultado.erroresCapacidad.push({ onzasCalculadas, onzasMaximas: onzasMax, nombrePerfil });
                     }
                 }
             }
@@ -1363,19 +1571,19 @@ function validarTarjeta(card) {
 
 /**
  * Ejecuta validaciones sobre un conjunto de tarjetas.
- * Orden: errores de peso (bloqueo duro) → onzas excedidas (advertencia) → campos vacíos (advertencia con relleno a 0).
+ * Orden: errores de peso/capacidad (bloqueo duro) → campos vacíos (advertencia con relleno a 0).
  * Retorna true si se puede continuar, false si el usuario cancela o hay error bloqueante.
  */
 async function ejecutarValidacionesGlobales(cards) {
     const erroresPeso = [];
-    const advertenciasOnzas = [];
+    const erroresCapacidad = [];
     const camposVaciosPorCard = [];
 
     cards.forEach(card => {
         const nombre = card.dataset.nombre;
         const res = validarTarjeta(card);
         if (res.erroresPeso.length > 0) erroresPeso.push({ nombre, detalles: res.erroresPeso });
-        if (res.advertenciasOnzas.length > 0) advertenciasOnzas.push({ nombre, detalles: res.advertenciasOnzas });
+        if (res.erroresCapacidad.length > 0) erroresCapacidad.push({ nombre, detalles: res.erroresCapacidad });
         if (res.camposVacios.length > 0) camposVaciosPorCard.push({ card, nombre, campos: res.camposVacios });
     });
 
@@ -1395,19 +1603,20 @@ async function ejecutarValidacionesGlobales(cards) {
         return false;
     }
 
-    // 2. Advertencia confirmable: onzas > capacidad por botella
-    if (advertenciasOnzas.length > 0) {
-        const lista = advertenciasOnzas.map(e => {
+    // 2. Bloqueo duro: onzas > capacidad por botella
+    if (erroresCapacidad.length > 0) {
+        const lista = erroresCapacidad.map(e => {
             const detalles = e.detalles.map(d =>
                 `  • ${d.nombrePerfil}: ${d.onzasCalculadas.toFixed(2)} oz (máx. ${d.onzasMaximas.toFixed(2)} oz)`
             ).join('\n');
             return `${e.nombre}:\n${detalles}`;
         }).join('\n\n');
-        const confirmar = await mostrarDialogoConfirmacion({
+        await mostrarDialogoResultado({
+            tipo: 'error',
             titulo: 'Capacidad de botella excedida',
-            mensaje: `El peso ingresado equivale a más onzas de las que cabe en la botella. ¿Confirmas que el valor es correcto?\n\n${lista}`,
+            mensaje: `El peso ingresado equivale a más onzas de las que caben en la botella. Corrige los valores antes de continuar:\n\n${lista}`,
         });
-        if (!confirmar) return false;
+        return false;
     }
 
     // 3. Advertencia confirmable: campos vacíos (se rellenan con 0 al confirmar)
@@ -1518,8 +1727,8 @@ async function enviarInventario(payload) {
     try {
         btnGuardar.disabled = true;
         btnEnviarInventario.disabled = true;
-        btnGuardar.innerHTML = `${renderCriticalIcon('refresh', 'ui-icon animate-spin')} Procesando...`;
-        btnEnviarInventario.innerHTML = `${renderCriticalIcon('refresh', 'ui-icon animate-spin')} Enviando...`;
+        btnGuardar.innerHTML = `${renderCriticalIcon('refresh', 'ui-icon animate-spin-ccw')} Procesando...`;
+        btnEnviarInventario.innerHTML = `${renderCriticalIcon('refresh', 'ui-icon animate-spin-ccw')} Enviando...`;
 
         // Decidir si hacer POST (crear) o PUT (corregir)
         const esCorreccion = currentIdInventarioPOS !== null;
@@ -1778,12 +1987,34 @@ function renderTarjetaCaptura(indice) {
     capturaCardContainer.innerHTML = '';
     const card = crearTarjetaProductoElement(producto, 'captura');
 
-    // Insertar contador de posición en la esquina superior derecha de la tarjeta
+    // Insertar navegación y contador centrados en el encabezado de la tarjeta.
     const total = capturaEstado.idsOrdenados.length;
-    const badgeContador = document.createElement('div');
-    badgeContador.className = 'flex items-center justify-end gap-xs mb-sm';
-    badgeContador.innerHTML = `<span class="text-[10px] font-label-mono text-on-surface-variant uppercase tracking-widest">Producto</span><span id="captura-indice-actual" class="text-sm font-semibold text-primary-fixed">${indice + 1}</span><span class="text-[10px] font-label-mono text-on-surface-variant">de</span><span id="captura-indice-total" class="text-sm font-semibold text-primary-fixed">${total}</span>`;
-    card.insertBefore(badgeContador, card.firstChild);
+    const headerCaptura = document.createElement('div');
+    headerCaptura.className = 'mb-sm w-full grid grid-cols-3 items-center gap-xs';
+
+    const claseBotonCapturaCompacto = 'w-full h-9 bg-surface border border-outline-variant text-on-surface rounded-sharp px-xs uppercase tracking-[0.08em] text-[10px] font-label-mono flex items-center justify-center gap-[2px] hover:border-primary-fixed-dim hover:text-primary-fixed transition-colors';
+
+    const botonAnterior = document.createElement('button');
+    botonAnterior.type = 'button';
+    botonAnterior.className = `${claseBotonCapturaCompacto} w-[4.75rem] justify-self-start`;
+    botonAnterior.innerHTML = '<span class="material-symbols-outlined text-[16px]">arrow_back</span> Prev';
+
+    const botonSiguiente = document.createElement('button');
+    botonSiguiente.type = 'button';
+    botonSiguiente.className = `${claseBotonCapturaCompacto} w-[4.75rem] justify-self-end`;
+    botonSiguiente.innerHTML = 'Sigt <span class="material-symbols-outlined text-[16px]">arrow_forward</span>';
+
+    botonAnterior.addEventListener('click', () => navegarCaptura(-1));
+    botonSiguiente.addEventListener('click', () => navegarCaptura(1));
+
+    const contador = document.createElement('div');
+    contador.className = 'justify-self-center flex items-center justify-center gap-1 text-center leading-none min-w-max';
+    contador.innerHTML = `<span class="text-[9px] sm:text-[10px] font-label-mono text-on-surface-variant uppercase tracking-[0.12em]">Prod</span><span id="captura-indice-actual" class="text-[12px] sm:text-sm font-semibold text-primary-fixed tabular-nums">${indice + 1}</span><span class="text-[9px] sm:text-[10px] font-label-mono text-on-surface-variant uppercase tracking-[0.12em]">/</span><span id="captura-indice-total" class="text-[12px] sm:text-sm font-semibold text-primary-fixed tabular-nums">${total}</span>`;
+
+    headerCaptura.appendChild(botonAnterior);
+    headerCaptura.appendChild(contador);
+    headerCaptura.appendChild(botonSiguiente);
+    card.insertBefore(headerCaptura, card.firstChild);
 
     capturaCardContainer.appendChild(card);
 
@@ -1971,12 +2202,24 @@ document.addEventListener('keydown', (event) => {
     const panelLogsVisible = !document.getElementById('panel-logs').classList.contains('hidden');
     if (!panelLogsVisible) return;
 
-    if (event.ctrlKey && event.key === 'ArrowRight') {
+    if (!esDesktopParaCaptura()) return;
+
+    const elementoActivo = document.activeElement;
+    const focoEnCampoEditable = elementoActivo && (
+        elementoActivo.tagName === 'INPUT'
+        || elementoActivo.tagName === 'TEXTAREA'
+        || elementoActivo.tagName === 'SELECT'
+        || elementoActivo.isContentEditable
+    );
+
+    if (focoEnCampoEditable) return;
+
+    if (event.key === 'ArrowRight') {
         event.preventDefault();
         navegarCaptura(1);
     }
 
-    if (event.ctrlKey && event.key === 'ArrowLeft') {
+    if (event.key === 'ArrowLeft') {
         event.preventDefault();
         navegarCaptura(-1);
     }
@@ -2008,7 +2251,7 @@ function formatearDiferencia(diferencia, isOz = false) {
     }
 
     const val = isOz ? diferencia.toFixed(2) : Math.round(diferencia);
-    return `<span class="text-data-tabular font-semibold" style="color: var(--semantic-danger)">+${val} ${sufijo}</span>`;
+    return `<span class="text-data-tabular font-semibold" style="color: var(--semantic-warning)">+${val} ${sufijo}</span>`;
 }
 
 // Recalcula una tarjeta y actualiza PAQ/BARRA, DET/BARRA y sus diferencias contra el sistema
@@ -2115,5 +2358,43 @@ function inicializarCalculos() {
 if (reporteBtnPdf) {
     reporteBtnPdf.addEventListener('click', async () => {
         await exportarReportePaloteo3Pdf();
+    });
+}
+
+if (reporteFiltroTodosBtn) {
+    reporteFiltroTodosBtn.addEventListener('click', () => {
+        reporteEstado.filtro = 'todos';
+        renderizarReportePaloteo3();
+    });
+}
+
+if (reporteFiltroIngresoBtn) {
+    reporteFiltroIngresoBtn.addEventListener('click', () => {
+        reporteEstado.filtro = 'ingreso';
+        renderizarReportePaloteo3();
+    });
+}
+
+if (reporteFiltroSalidaBtn) {
+    reporteFiltroSalidaBtn.addEventListener('click', () => {
+        reporteEstado.filtro = 'salida';
+        renderizarReportePaloteo3();
+    });
+}
+
+if (reporteSortBtns.length > 0) {
+    reporteSortBtns.forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const sortBy = btn.dataset.reporteSort;
+            if (!sortBy) return;
+
+            if (reporteEstado.sortBy === sortBy) {
+                reporteEstado.sortDir = reporteEstado.sortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                reporteEstado.sortBy = sortBy;
+                reporteEstado.sortDir = 'asc';
+            }
+            renderizarReportePaloteo3();
+        });
     });
 }

@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from fastapi import FastAPI, Depends, HTTPException, status, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 import hashlib
 import json
 from database import get_db
@@ -75,6 +75,16 @@ def _validar_operacion_inicio_cierre(db: Session, id_operacion: int) -> models.O
     return operacion
 
 
+def _obtener_onzas_por_botella_llena(db: Session, id_producto: int):
+    resultado = db.execute(
+        text("SELECT cantidad_detalle FROM alm_producto WHERE id = :id_producto LIMIT 1"),
+        {"id_producto": id_producto}
+    ).scalar()
+    if resultado is None:
+        return None
+    return float(resultado)
+
+
 def _procesar_items_paloteo(
     db: Session,
     payload: schemas.PaloteoRequest,
@@ -87,6 +97,7 @@ def _procesar_items_paloteo(
     productos_omitidos = []
     productos_corregidos = []
     margen_error_balanza = 10.0
+    onzas_max_por_producto = {}
 
     # En modo corrección, usamos actualización selectiva por producto para
     # conservar fecha_mod en los ítems no modificados.
@@ -101,6 +112,11 @@ def _procesar_items_paloteo(
         }
 
     for item in payload.items:
+        if item.id_producto not in onzas_max_por_producto:
+            onzas_max_por_producto[item.id_producto] = _obtener_onzas_por_botella_llena(db, item.id_producto)
+
+        onzas_max_producto = onzas_max_por_producto[item.id_producto]
+
         configs_producto = db.query(models.ProductoPesajeConfig).filter(
             models.ProductoPesajeConfig.id_producto_almacen == item.id_producto
         ).all()
@@ -135,11 +151,34 @@ def _procesar_items_paloteo(
 
                 gr_oz = float(perfil.gramos_por_oz)
                 tara = float(perfil.tara)
+                peso_bruto = float(perfil.peso_bruto)
                 peso_medido = float(abierta.peso)
+
+                if peso_bruto > 0 and peso_medido > peso_bruto:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=(
+                            f"Peso inválido para producto {item.id_producto}. "
+                            f"El peso medido ({peso_medido:.2f} g) supera el peso bruto del perfil "
+                            f"({peso_bruto:.2f} g)."
+                        )
+                    )
 
                 if peso_medido >= (tara - margen_error_balanza):
                     peso_liquido = max(0, peso_medido - tara)
-                    total_onzas += (peso_liquido / gr_oz)
+                    onzas_abierta = (peso_liquido / gr_oz)
+
+                    if onzas_max_producto is not None and onzas_max_producto > 0 and onzas_abierta > onzas_max_producto:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=(
+                                f"Capacidad excedida para producto {item.id_producto}. "
+                                f"La captura ({onzas_abierta:.2f} oz) supera la capacidad máxima "
+                                f"({onzas_max_producto:.2f} oz)."
+                            )
+                        )
+
+                    total_onzas += onzas_abierta
 
         onzas_redondeadas_pos = round(total_onzas * 2) / 2
 
@@ -628,14 +667,13 @@ def obtener_productos_pendientes(
 import os
 from fpdf import FPDF
 
-_PDF_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "pdfs")
 _LOGO_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "imgs", "backstage_horizontal_banner.png")
 
 def _color_diferencia(valor: float):
     if valor > 0:
-        return (239, 68, 68)    # rojo  (#EF4444)
-    if valor < 0:
         return (245, 158, 11)   # ámbar (#F59E0B)
+    if valor < 0:
+        return (239, 68, 68)    # rojo  (#EF4444)
     return (72, 232, 152)       # verde (#48E898)
 
 @app.post("/api/paloteo3/exportar-pdf")
@@ -643,9 +681,21 @@ def exportar_pdf_paloteo3(
     payload: schemas.ExportarPdfRequest,
     current_user: models.Usuario = Depends(get_usuario_actual),
 ):
-    os.makedirs(_PDF_DIR, exist_ok=True)
-    nombre_archivo = f"PALOTEO_{payload.id_operacion}.pdf"
-    ruta_pdf = os.path.join(_PDF_DIR, nombre_archivo)
+    tipo_reporte = payload.tipo_reporte
+    if tipo_reporte == 'ingreso':
+        sufijo_archivo = '_INGRESO'
+        titulo_reporte = 'INGRESO POR AJUSTE'
+        subtitulo_reporte = 'Ajuste Ingreso'
+    elif tipo_reporte == 'salida':
+        sufijo_archivo = '_SALIDA'
+        titulo_reporte = 'SALIDA POR AJUSTE'
+        subtitulo_reporte = 'Ajuste Salida'
+    else:
+        sufijo_archivo = ''
+        titulo_reporte = 'REPORTE DE DIFERENCIAS'
+        subtitulo_reporte = 'Paloteo 3'
+
+    nombre_archivo = f"PALOTEO_{payload.id_operacion}{sufijo_archivo}.pdf"
 
     ahora = datetime.now()
     fecha_hora = ahora.strftime("%d/%m/%Y %H:%M:%S")
@@ -661,9 +711,9 @@ def exportar_pdf_paloteo3(
     pdf.set_font("Helvetica", "B", 10)
     pdf.set_text_color(51, 51, 51)
     pdf.set_xy(20, 13)
-    pdf.cell(0, 5, "Reporte de Diferencias", align="R")
+    pdf.cell(0, 5, titulo_reporte, align="R")
     pdf.set_xy(20, 18)
-    pdf.cell(0, 5, "Paloteo 3", align="R")
+    pdf.cell(0, 5, subtitulo_reporte, align="R")
 
     # línea divisoria
     pdf.set_draw_color(200, 200, 200)
@@ -709,16 +759,24 @@ def exportar_pdf_paloteo3(
     # filas de datos
     pdf.set_font("Helvetica", "", 8)
     for idx, fila in enumerate(payload.filas):
-        texto_unid = f"{'+' if fila.difUnidades > 0 else ''}{round(fila.difUnidades)}"
-        texto_oz   = f"{'+' if fila.difOnzas > 0 else ''}{fila.difOnzas:.2f} oz"
-        r_u, g_u, b_u = _color_diferencia(fila.difUnidades)
-        r_o, g_o, b_o = _color_diferencia(fila.difOnzas)
+        texto_unid = ""
+        texto_oz = ""
+        color_unid = None
+        color_oz = None
+
+        if fila.difUnidades is not None:
+            texto_unid = f"{'+' if fila.difUnidades > 0 else ''}{round(fila.difUnidades)}"
+            color_unid = _color_diferencia(fila.difUnidades)
+
+        if fila.difOnzas is not None:
+            texto_oz = f"{'+' if fila.difOnzas > 0 else ''}{fila.difOnzas:.2f} oz"
+            color_oz = _color_diferencia(fila.difOnzas)
 
         fondo = (245, 245, 245) if idx % 2 == 1 else (255, 255, 255)
         pdf.set_fill_color(*fondo)
 
         valores = [fila.idProducto, fila.codigo, fila.nombre, texto_unid, texto_oz]
-        colores = [None, None, None, (r_u, g_u, b_u), (r_o, g_o, b_o)]
+        colores = [None, None, None, color_unid, color_oz]
 
         for w, val, align, color in zip(col_widths, valores, aligns, colores):
             if color:
@@ -730,12 +788,11 @@ def exportar_pdf_paloteo3(
             pdf.cell(w, row_h, str(val), border=1, align=align, fill=True)
         pdf.ln()
 
-    pdf.output(ruta_pdf)
+    pdf_bytes = bytes(pdf.output())
 
-    return FileResponse(
-        path=ruta_pdf,
+    return Response(
+        content=pdf_bytes,
         media_type="application/pdf",
-        filename=nombre_archivo,
         headers={"Content-Disposition": f'attachment; filename="{nombre_archivo}"'},
     )
 

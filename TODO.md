@@ -41,3 +41,21 @@
 
 - [ ] **Revisar si `engine` se necesita en algún módulo futuro**
   - Actualmente fue removido de `main.py` por no usarse.
+
+## 📌 Pendiente de Validaciones de Cantidades y Pesos (Paloteo 1, 2 y 3)
+
+- [x] **Alinear validaciones Frontend/Backend para pesos fisicos maximos**
+  - Implementado: bloqueo duro en backend y frontend para `peso > peso_bruto` por perfil.
+
+- [x] **Definir y aplicar regla de sobrecapacidad de onzas por botella en backend**
+  - Implementado: sobrecapacidad de onzas se trata como error bloqueante en backend y frontend.
+
+- [x] **Validar unicidad de `id_producto` en `items` del payload de paloteo**
+  - Implementado en schema de request para evitar duplicados en creacion/correccion.
+
+- [ ] **Revisar consistencia funcional de PALOTEO 3 vs PALOTEO 1/2**
+  - PALOTEO 3 captura un solo peso por producto, mientras PALOTEO 1/2 soportan múltiples abiertas y perfiles.
+  - Definir si es decisión funcional o si debe unificarse el modelo de captura.
+
+- [ ] **Mejorar precarga de corrección para múltiples botellas abiertas**
+  - Actualmente se repone solo el primer peso/perfil; evaluar restauración completa de todas las entradas capturadas.

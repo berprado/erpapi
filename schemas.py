@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, field_validator
-from typing import List, Optional
+from typing import List, Optional, Literal
 
 # Esquema para lo que la API va a RECIBIR del cliente
 class UsuarioLogin(BaseModel):
@@ -46,6 +46,13 @@ class PaloteoRequest(BaseModel):
     id_barra: int = Field(..., gt=0, description="ID de la barra donde se hace el físico")
     observaciones: Optional[str] = Field(None, description="Nota opcional del bartender") # NUEVO
     items: List[PaloteoItem] = Field(..., min_length=1)
+
+    @field_validator('items')
+    def validar_items_unicos(cls, items):
+        ids = [item.id_producto for item in items]
+        if len(ids) != len(set(ids)):
+            raise ValueError("No se permiten productos duplicados en items.")
+        return items
 
 class PerfilPesaje(BaseModel):
     id: Optional[int] = None
@@ -103,11 +110,12 @@ class FilaDiferenciaPdf(BaseModel):
     idProducto: str
     codigo: str
     nombre: str
-    difUnidades: float
-    difOnzas: float
+    difUnidades: Optional[float] = None
+    difOnzas: Optional[float] = None
 
 class ExportarPdfRequest(BaseModel):
     id_operacion: int = Field(..., gt=0)
     id_barra: int = Field(..., gt=0)
     usuario: str
+    tipo_reporte: Literal['general', 'ingreso', 'salida'] = 'general'
     filas: List[FilaDiferenciaPdf] = Field(..., min_length=1)

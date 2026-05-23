@@ -162,6 +162,15 @@
             height: 0.95rem;
         }
 
+        @keyframes spin-counterclockwise {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(-360deg); }
+        }
+
+        .animate-spin-ccw {
+            animation: spin-counterclockwise 1s linear infinite;
+        }
+
         /* Alinear iconos verticalmente */
         .material-symbols-outlined { vertical-align: middle; }
 
@@ -203,6 +212,73 @@
             filter: none;
             transform: none;
             box-shadow: none;
+        }
+
+        .floating-menu-container {
+            position: relative;
+        }
+
+        .floating-menu-dropdown {
+            position: absolute;
+            top: calc(100% + 0.5rem);
+            left: 0;
+            min-width: 14rem;
+            background: var(--surface-container-high);
+            border: 1px solid var(--outline-variant);
+            box-shadow: 0 14px 28px rgba(0, 0, 0, 0.32), 0 0 0 1px rgba(0, 219, 233, 0.08) inset;
+            border-radius: 0.5rem;
+            padding: 0.35rem;
+            z-index: 45;
+        }
+
+        .floating-menu-item {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 0.55rem;
+            padding: 0.55rem 0.65rem;
+            border-radius: 0.35rem;
+            color: var(--on-surface-variant);
+            font-size: 0.72rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            font-weight: 600;
+            transition: background-color 0.2s ease, color 0.2s ease;
+        }
+
+        .floating-menu-item:hover,
+        .floating-menu-item:focus-visible {
+            color: var(--primary-fixed-dim);
+            background: color-mix(in srgb, var(--primary-fixed-dim) 12%, transparent);
+        }
+
+        .floating-menu-item .material-symbols-outlined {
+            font-size: 1rem;
+        }
+
+        .topbar-icon-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 2.15rem;
+            height: 2.15rem;
+            border-radius: 0.45rem;
+            border: 1px solid transparent;
+            color: var(--on-surface-variant);
+            background: transparent;
+            transition: border-color 0.2s ease, color 0.2s ease, background-color 0.2s ease;
+        }
+
+        .topbar-icon-btn:hover,
+        .topbar-icon-btn:focus-visible {
+            color: var(--primary-fixed-dim);
+            border-color: var(--outline-variant);
+            background: color-mix(in srgb, var(--primary-fixed-dim) 9%, transparent);
+        }
+
+        #dummy-content-dialog .dummy-content-body {
+            max-height: min(62vh, 420px);
+            overflow: auto;
         }
 
         /* Ajustes móviles para CTA y dialogo */
@@ -476,12 +552,6 @@
 </head>
 <body class="bg-surface text-on-surface font-body-base antialiased min-h-screen dark">
 
-    <!-- Banner de operativa bloqueada -->
-    <div id="banner-operativa-bloqueada" class="hidden w-full bg-error-container text-on-error-container border-b-2 border-error shadow-lg flex items-center gap-md px-md py-sm z-50 fixed top-0 left-0 justify-center" role="alert" aria-live="assertive">
-        <span class="material-symbols-outlined text-2xl mr-sm">block</span>
-        <span id="banner-operativa-bloqueada-texto" class="font-label-mono text-sm sm:text-base"></span>
-    </div>
-
     <!-- ================= PANTALLA DE LOGIN ================= -->
     <div id="login-screen" class="min-h-screen flex flex-col justify-center items-center px-lg">
         <div class="w-full max-w-sm">
@@ -587,12 +657,30 @@
         
         <!-- Navbar Superior -->
         <nav class="bg-surface-container border-b border-outline-variant px-lg h-14 sm:h-16 flex justify-between items-center sticky top-0 z-20 shadow-lg">
-            <!-- Logo con Glitch -->
-            <div class="logo-wrapper-nav">
-                <img alt="BackStage" class="logo-main" src="/assets/imgs/backstage_horizontal_banner.png">
-                <img alt="" class="glitch-layer glitch-red" src="/assets/imgs/backstage_horizontal_banner.png" aria-hidden="true">
-                <img alt="" class="glitch-layer glitch-cyan" src="/assets/imgs/backstage_horizontal_banner.png" aria-hidden="true">
-                <div class="scanlines"></div>
+            <div class="flex items-center gap-md min-w-0">
+                <div class="floating-menu-container shrink-0">
+                    <button id="btn-topbar-menu" type="button" class="topbar-icon-btn" aria-label="Abrir menu" aria-haspopup="true" aria-expanded="false">
+                        <span class="material-symbols-outlined text-base">menu</span>
+                    </button>
+                    <div id="topbar-menu-dropdown" class="floating-menu-dropdown hidden" role="menu" aria-label="Menu rapido">
+                        <button type="button" class="floating-menu-item" data-dummy-link="guia" role="menuitem">
+                            <span class="material-symbols-outlined">article</span>
+                            Guia Operativa Dummy
+                        </button>
+                        <button type="button" class="floating-menu-item" data-dummy-link="boletin" role="menuitem">
+                            <span class="material-symbols-outlined">campaign</span>
+                            Boletin Dummy
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Logo con Glitch -->
+                <div class="logo-wrapper-nav min-w-0">
+                    <img alt="BackStage" class="logo-main" src="/assets/imgs/backstage_horizontal_banner.png">
+                    <img alt="" class="glitch-layer glitch-red" src="/assets/imgs/backstage_horizontal_banner.png" aria-hidden="true">
+                    <img alt="" class="glitch-layer glitch-cyan" src="/assets/imgs/backstage_horizontal_banner.png" aria-hidden="true">
+                    <div class="scanlines"></div>
+                </div>
             </div>
             
             <div class="flex items-center gap-md shrink-0">
@@ -731,13 +819,19 @@
                 </div>
             </div>
 
+            <div class="mb-sm flex flex-wrap gap-xs">
+                <button id="reporte-filtro-todos" type="button" class="reporte-filtro-btn bg-primary-container text-black border border-primary-fixed-dim px-sm py-[6px] rounded-sharp text-[10px] font-label-mono uppercase tracking-widest">Todos</button>
+                <button id="reporte-filtro-ingreso" type="button" class="reporte-filtro-btn bg-surface border border-outline-variant text-on-surface px-sm py-[6px] rounded-sharp text-[10px] font-label-mono uppercase tracking-widest">Ingreso (+)</button>
+                <button id="reporte-filtro-salida" type="button" class="reporte-filtro-btn bg-surface border border-outline-variant text-on-surface px-sm py-[6px] rounded-sharp text-[10px] font-label-mono uppercase tracking-widest">Salida (-)</button>
+            </div>
+
             <div class="bg-surface-container border border-outline-variant rounded-md overflow-hidden shadow-lg">
-                <div class="grid gap-[2px] px-xs py-sm border-b border-outline-variant bg-surface-container-low text-[10px] font-label-mono tracking-widest uppercase text-on-surface-variant" style="grid-template-columns: 2rem 2.9rem minmax(0, 1fr) clamp(3.2rem, 14vw, 4.5rem) clamp(4rem, 17vw, 5.25rem);">
-                    <span class="text-right">Num</span>
-                    <span class="text-right">Cód</span>
-                    <span>Nombre</span>
-                    <span class="text-right">Δ Unid</span>
-                    <span class="text-right">Δ Oz</span>
+                <div class="grid gap-[2px] px-xs py-sm border-b border-outline-variant bg-surface-container-low text-[10px] font-label-mono font-semibold tracking-[0.12em] uppercase text-on-surface-variant" style="grid-template-columns: 2rem 2.9rem minmax(0, 1fr) clamp(3.2rem, 14vw, 4.5rem) clamp(4rem, 17vw, 5.25rem);">
+                    <button type="button" data-reporte-sort="idProducto" class="reporte-sort-btn text-left font-medium">ID</button>
+                    <button type="button" data-reporte-sort="codigo" class="reporte-sort-btn text-left font-medium">COD</button>
+                    <button type="button" data-reporte-sort="nombre" class="reporte-sort-btn text-left font-medium">PRODUCTO</button>
+                    <span class="text-left">DELTA UNID</span>
+                    <span class="text-left">DELTA OZ</span>
                 </div>
                 <div id="reporte-list" class="divide-y divide-outline-variant"></div>
             </div>
@@ -757,31 +851,15 @@
 
         <!-- ========== PANEL LOGS: MODO CAPTURA 1x1 ========== -->
         <div id="panel-logs" class="tab-panel hidden p-md max-w-2xl mx-auto w-full">
+            <div class="mb-md flex justify-center">
+                <button id="captura-btn-finalizar" type="button" class="w-full h-10 bg-primary-container text-black px-sm rounded-sharp flex items-center justify-center gap-xs hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest text-[11px] font-label-mono font-semibold disabled:opacity-50 disabled:cursor-not-allowed">
+                    <span class="material-symbols-outlined text-sm">done_all</span>
+                    Registrar Paloteo
+                </button>
+            </div>
+
             <div id="captura-card-container" class="space-y-4"></div>
 
-            <div class="mt-md grid grid-cols-2 gap-sm">
-                <button id="captura-btn-anterior" type="button" class="bg-surface border border-outline-variant text-on-surface rounded-sharp px-md py-sm uppercase tracking-widest text-label-mono flex items-center justify-center gap-xs hover:border-primary-fixed-dim transition-colors">
-                    <span class="material-symbols-outlined text-sm">arrow_back</span>
-                    Anterior
-                </button>
-                <button id="captura-btn-siguiente" type="button" class="bg-primary-container text-on-primary-fixed rounded-sharp px-md py-sm uppercase tracking-widest text-label-mono flex items-center justify-center gap-xs hover:brightness-110 transition-all">
-                    Siguiente
-                    <span class="material-symbols-outlined text-sm">arrow_forward</span>
-                </button>
-            </div>
-
-            <div id="captura-banner-info" class="mt-sm text-xs text-on-surface-variant font-body-base">
-                Desktop: Enter avanza cuando la tarjeta está completa. Móvil: usa el botón Siguiente.
-            </div>
-
-
-
-            <div class="mt-md">
-                <button id="captura-btn-finalizar" type="button" class="w-full bg-primary-container text-black h-10 px-sm rounded-sharp flex items-center justify-center gap-xs hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest text-[11px] font-label-mono font-semibold disabled:opacity-50 disabled:cursor-not-allowed">
-                    <span class="material-symbols-outlined text-sm">done_all</span>
-                    Finalizar Captura y Enviar
-                </button>
-            </div>
         </div><!-- /panel-logs -->
 
 
@@ -936,9 +1014,25 @@
                 </button>
             </div>
         </nav>
+
+        <!-- Modal: Contenido dummy accesible desde menu hamburguesa -->
+        <div id="dummy-content-dialog" class="hidden fixed inset-0 z-50" aria-hidden="true">
+            <div id="dummy-content-overlay" class="absolute inset-0 bg-black/70 backdrop-blur-[2px]"></div>
+            <div class="relative z-10 h-full flex items-center justify-center p-md">
+                <div class="w-full max-w-lg bg-surface-container border border-outline-variant rounded-md shadow-2xl">
+                    <div class="px-md py-sm border-b border-outline-variant flex items-center justify-between">
+                        <h3 id="dummy-content-title" class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase">Contenido</h3>
+                        <button id="btn-close-dummy-content" type="button" class="topbar-icon-btn" aria-label="Cerrar contenido dummy">
+                            <span class="material-symbols-outlined text-base">close</span>
+                        </button>
+                    </div>
+                    <div class="dummy-content-body px-md py-md text-sm text-on-surface-variant leading-relaxed space-y-sm" id="dummy-content-body"></div>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <script src="/assets/app.js?v=9.59"></script>
+    <script src="/assets/app.js?v=9.83"></script>
 
     <script>
         (function () {
@@ -983,7 +1077,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/assets/sw.js')
+                navigator.serviceWorker.register('/assets/sw.js?v=9.83')
                     .then(reg => console.log('[PWA] Service Worker registrado:', reg.scope))
                     .catch(err => console.error('[PWA] Error al registrar SW:', err));
             });
