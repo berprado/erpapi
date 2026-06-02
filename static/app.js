@@ -1223,6 +1223,7 @@ function crearFilaPaloteo3(producto) {
     const idealUnidades = parseFloat(producto.stock_ideal_unidades) || 0;
     const idealOnzas = parseFloat(producto.stock_ideal_onzas) || 0;
     const capturado = obtenerValoresCapturadosPaloteo3(producto.id_producto);
+    const esPesable = parseInt(producto.pesable, 10) === 1;
     row.dataset.idealUnidades = String(idealUnidades);
     row.dataset.idealOnzas = String(idealOnzas);
     row.dataset.tara = String(tara);
@@ -1236,7 +1237,7 @@ function crearFilaPaloteo3(producto) {
                 <span class="text-xs text-on-surface truncate" title="${escapeHtml(producto.nombre || '')}">${escapeHtml(producto.nombre || '')}</span>
             </div>
 
-            <!-- Segunda línea: inputs unidades y peso con botones integrados (compacto para móvil) -->
+            <!-- Segunda línea: input de unidades y, si aplica, peso con botones integrados -->
             <div class="col-span-full flex gap-sm text-xs">
                 <!-- Unidades con botones +/- -->
                 <div class="flex items-center gap-1 flex-1">
@@ -1246,13 +1247,14 @@ function crearFilaPaloteo3(producto) {
                     <button type="button" class="stock-btn-inc-unid flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded flex items-center justify-center text-on-surface hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors font-semibold leading-none" data-id-producto="${producto.id_producto}" title="Sumar">+</button>
                 </div>
 
+                ${esPesable ? `
                 <!-- Peso con botones +/- -->
                 <div class="flex items-center gap-1 flex-1">
                     <span class="material-symbols-outlined text-on-surface-variant" style="font-size:1.1rem;" title="Peso">balance</span>
                     <input type="number" min="0" step="0.1" value="${escapeHtml(capturado.peso)}" class="stock-input-peso w-14 text-center bg-surface border border-outline-variant rounded px-1 py-1 text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors" placeholder="0">
                     <button type="button" class="stock-btn-dec-peso flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded flex items-center justify-center text-on-surface hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors font-semibold leading-none" data-id-producto="${producto.id_producto}" title="Restar">−</button>
                     <button type="button" class="stock-btn-inc-peso flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded flex items-center justify-center text-on-surface hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors font-semibold leading-none" data-id-producto="${producto.id_producto}" title="Sumar">+</button>
-                </div>
+                </div>` : ''}
             </div>
         </div>
     `;
@@ -1290,13 +1292,13 @@ function crearFilaPaloteo3(producto) {
         ajustarValor(inputUnidades, true, false);
     });
 
-    if (btnDecPeso) btnDecPeso.addEventListener('click', (e) => {
+    if (btnDecPeso && inputPeso) btnDecPeso.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
         ajustarValor(inputPeso, false, true);
     });
 
-    if (btnIncPeso) btnIncPeso.addEventListener('click', (e) => {
+    if (btnIncPeso && inputPeso) btnIncPeso.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
         ajustarValor(inputPeso, true, true);
