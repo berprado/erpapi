@@ -747,6 +747,10 @@
                 <span id="banner-correccion-texto"></span>
             </div>
 
+            <div id="autosave-status" class="mt-sm text-label-mono text-[10px] tracking-widest uppercase text-on-surface-variant">
+                Autosave inactivo: esperando operativa en INICIO CIERRE.
+            </div>
+
             <!-- Botón de envío de Paloteo 1 -->
             <button id="btn-guardar-inventario" type="button" disabled class="mt-md w-full bg-primary-container text-black h-10 px-sm rounded-sharp flex items-center justify-center gap-xs hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest text-[11px] font-label-mono font-semibold cursor-not-allowed disabled:opacity-50">
                 <span class="material-symbols-outlined text-sm">send</span>
@@ -1032,7 +1036,7 @@
         </div>
     </div>
 
-    <script src="/assets/app.js?v=9.85"></script>
+    <script src="/assets/app.js?v=9.86"></script>
 
     <script>
         (function () {
@@ -1077,7 +1081,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/assets/sw.js?v=9.85')
+                navigator.serviceWorker.register('/assets/sw.js?v=9.86')
                     .then(reg => console.log('[PWA] Service Worker registrado:', reg.scope))
                     .catch(err => console.error('[PWA] Error al registrar SW:', err));
             });
