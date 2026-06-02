@@ -1326,6 +1326,11 @@ function renderizarPaloteo3(productos) {
     renderizarReportePaloteo3();
 }
 
+function refrescarPaloteo3DesdeInventario() {
+    if (!productosInventario || productosInventario.length === 0) return;
+    renderizarPaloteo3(productosInventario);
+}
+
 function obtenerFilasReportePaloteo3() {
     const filas = [];
     const margenError = 10.0;
@@ -2145,6 +2150,7 @@ function syncCapturaConInventario() {
         capturaEstado.completos.delete(idProducto);
     }
 
+    refrescarPaloteo3DesdeInventario();
     scheduleAutosave();
 }
 
@@ -2521,6 +2527,7 @@ function recalcularTarjeta(card) {
 listaProductos.addEventListener('input', (e) => {
     if (e.target.classList.contains('input-cerradas') || e.target.classList.contains('input-peso')) {
         recalcularTarjeta(e.target.closest('.product-card'));
+        refrescarPaloteo3DesdeInventario();
         scheduleAutosave();
     }
 });
@@ -2528,6 +2535,7 @@ listaProductos.addEventListener('input', (e) => {
 listaProductos.addEventListener('change', (e) => {
     if (e.target.classList.contains('select-perfil')) {
         recalcularTarjeta(e.target.closest('.product-card'));
+        refrescarPaloteo3DesdeInventario();
         scheduleAutosave();
     }
 });
@@ -2538,6 +2546,7 @@ listaProductos.addEventListener('click', (e) => {
         const idProducto = parseInt(btnAdd.dataset.idProducto, 10);
         if (!isNaN(idProducto)) {
             agregarInputPeso(idProducto);
+            refrescarPaloteo3DesdeInventario();
             scheduleAutosave();
         }
         return;
