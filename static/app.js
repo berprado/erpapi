@@ -11,6 +11,18 @@ const ID_BARRA_ACTUAL = 1; // Podemos hacerlo dinámico después
 let productosInventario = [];
 let modoEnvioOrigen = 'inventario';
 
+// ==========================================
+// AUTOSAVE: CONFIGURACION Y ESTADO
+// ==========================================
+const AUTOSAVE_SCHEMA_VERSION = '1.0';
+const AUTOSAVE_DEBOUNCE_MS = 900;
+const AUTOSAVE_INTERVAL_MS = 20000;
+const AUTOSAVE_KEY_PREFIX = `backstage:paloteo:draft:v${AUTOSAVE_SCHEMA_VERSION}`;
+
+let autosaveDebounceTimer = null;
+let autosaveIntervalId = null;
+let autosaveLastHash = '';
+
 const reporteEstado = {
     filtro: 'todos',
     sortBy: null,
@@ -58,6 +70,7 @@ const dummyContentOverlay = document.getElementById('dummy-content-overlay');
 const dummyContentTitle = document.getElementById('dummy-content-title');
 const dummyContentBody = document.getElementById('dummy-content-body');
 const btnCloseDummyContent = document.getElementById('btn-close-dummy-content');
+const autosaveStatus = document.getElementById('autosave-status');
 
 const dummyContentMap = {
     guia: {
@@ -77,6 +90,171 @@ const dummyContentMap = {
         ]
     }
 };
+
+function _obtenerUsuarioAutosave() {
+    return localStorage.getItem('nombres') || 'anonimo';
+}
+
+function _obtenerClaveAutosave() {
+    if (!currentOperacionId) return null;
+    return `${AUTOSAVE_KEY_PREFIX}:${ID_BARRA_ACTUAL}:${currentOperacionId}:${_obtenerUsuarioAutosave()}`;
+}
+
+function _actualizarEstadoAutosave(tipo, mensaje) {
+    if (!autosaveStatus) return;
+
+    autosaveStatus.classList.remove('text-on-surface-variant', 'text-primary-fixed', 'text-error', 'text-tertiary-fixed');
+    if (tipo === 'saved') autosaveStatus.classList.add('text-primary-fixed');
+    else if (tipo === 'error') autosaveStatus.classList.add('text-error');
+    else if (tipo === 'pending') autosaveStatus.classList.add('text-tertiary-fixed');
+    else autosaveStatus.classList.add('text-on-surface-variant');
+
+    autosaveStatus.textContent = mensaje;
+}
+
+function _snapshotAutosaveActual() {
+    if (!currentOperacionId) return null;
+
+    const cards = document.querySelectorAll('#lista-productos .product-card');
+    if (!cards.length) return null;
+
+    const items = Array.from(cards).map((card) => {
+        const idProducto = parseInt(card.dataset.id, 10);
+        const valores = leerValoresCard(card);
+        return {
+            id_producto: idProducto,
+            cerradas: valores.cerradas ?? '',
+            pesos: valores.pesos ?? [],
+        };
+    }).filter((item) => !Number.isNaN(item.id_producto));
+
+    return {
+        schema_version: AUTOSAVE_SCHEMA_VERSION,
+        id_operacion: currentOperacionId,
+        id_barra: ID_BARRA_ACTUAL,
+        id_inventario_pos: currentIdInventarioPOS,
+        observaciones: inputObservaciones ? inputObservaciones.value : '',
+        saved_at: new Date().toISOString(),
+        items,
+    };
+}
+
+function _hashAutosave(snapshot) {
+    return JSON.stringify({
+        id_operacion: snapshot.id_operacion,
+        id_barra: snapshot.id_barra,
+        id_inventario_pos: snapshot.id_inventario_pos,
+        observaciones: snapshot.observaciones,
+        items: snapshot.items,
+    });
+}
+
+function flushAutosave(modo = 'manual') {
+    if (!operativaPermitePaloteo || !currentOperacionId) return;
+
+    const snapshot = _snapshotAutosaveActual();
+    if (!snapshot) return;
+
+    const hash = _hashAutosave(snapshot);
+    if (hash === autosaveLastHash && modo !== 'force') return;
+
+    const key = _obtenerClaveAutosave();
+    if (!key) return;
+
+    try {
+        localStorage.setItem(key, JSON.stringify(snapshot));
+        autosaveLastHash = hash;
+        const hora = new Date().toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' });
+        _actualizarEstadoAutosave('saved', `Borrador guardado automaticamente a las ${hora}.`);
+    } catch (error) {
+        _actualizarEstadoAutosave('error', 'No se pudo guardar el borrador automatico en este dispositivo.');
+        console.error('Autosave error:', error);
+    }
+}
+
+function scheduleAutosave() {
+    if (!operativaPermitePaloteo || !currentOperacionId) return;
+
+    _actualizarEstadoAutosave('pending', 'Guardando borrador...');
+
+    if (autosaveDebounceTimer) {
+        clearTimeout(autosaveDebounceTimer);
+    }
+
+    autosaveDebounceTimer = setTimeout(() => {
+        flushAutosave('debounce');
+    }, AUTOSAVE_DEBOUNCE_MS);
+}
+
+function startAutosaveInterval() {
+    if (autosaveIntervalId) {
+        clearInterval(autosaveIntervalId);
+    }
+    autosaveIntervalId = setInterval(() => {
+        flushAutosave('interval');
+    }, AUTOSAVE_INTERVAL_MS);
+}
+
+function stopAutosaveInterval() {
+    if (autosaveIntervalId) {
+        clearInterval(autosaveIntervalId);
+        autosaveIntervalId = null;
+    }
+    if (autosaveDebounceTimer) {
+        clearTimeout(autosaveDebounceTimer);
+        autosaveDebounceTimer = null;
+    }
+}
+
+function clearAutosaveDraft() {
+    const key = _obtenerClaveAutosave();
+    if (!key) return;
+
+    localStorage.removeItem(key);
+    autosaveLastHash = '';
+    _actualizarEstadoAutosave('idle', 'Sin borrador pendiente.');
+}
+
+function hydrateAutosaveDraft() {
+    const key = _obtenerClaveAutosave();
+    if (!key) return;
+
+    const raw = localStorage.getItem(key);
+    if (!raw) {
+        _actualizarEstadoAutosave('idle', 'Sin borrador local previo para esta operativa.');
+        return;
+    }
+
+    try {
+        const snapshot = JSON.parse(raw);
+        if (!snapshot || snapshot.id_operacion !== currentOperacionId || snapshot.id_barra !== ID_BARRA_ACTUAL) {
+            return;
+        }
+
+        if (snapshot.id_inventario_pos && !currentIdInventarioPOS) {
+            currentIdInventarioPOS = snapshot.id_inventario_pos;
+        }
+
+        (snapshot.items || []).forEach((item) => {
+            const card = document.querySelector(`#lista-productos .product-card[data-id="${item.id_producto}"]`);
+            if (!card) return;
+            aplicarValoresCard(card, {
+                cerradas: item.cerradas,
+                pesos: item.pesos || [],
+            });
+        });
+
+        if (inputObservaciones && snapshot.observaciones && !inputObservaciones.value) {
+            inputObservaciones.value = snapshot.observaciones;
+        }
+
+        autosaveLastHash = _hashAutosave(snapshot);
+        _actualizarEstadoAutosave('saved', 'Borrador local recuperado correctamente.');
+    } catch (error) {
+        _actualizarEstadoAutosave('error', 'El borrador local esta corrupto y no se pudo recuperar.');
+        console.error('Autosave hydration error:', error);
+    }
+}
 
 function renderCriticalIcon(iconName, className = 'ui-icon') {
     const iconPaths = {
@@ -586,6 +764,8 @@ async function iniciarDashboard() {
     listaProductos.innerHTML = ''; // Limpiar lista
     productosInventario = [];
     operativaPermitePaloteo = false;
+    stopAutosaveInterval();
+    _actualizarEstadoAutosave('idle', 'Autosave inactivo: esperando operativa en INICIO CIERRE.');
     resetModoCaptura();
     modoEnvioOrigen = 'inventario';
     _deshabilitarBtnEnvio();
@@ -634,6 +814,7 @@ async function iniciarDashboard() {
             }
 
             estadoTexto.textContent = detail.mensaje || "Debes iniciar el cierre de la operativa para realizar el paloteo";
+            _actualizarEstadoAutosave('idle', 'Autosave bloqueado: operativa fuera de INICIO CIERRE.');
             return; // Bloqueamos la ejecución aquí
         }
 
@@ -685,8 +866,12 @@ async function cargarProductos() {
             // NUEVO: Verificar si ya existe inventario registrado y pre-cargar valores
             await cargarInventarioExistente();
 
+            // Recuperar borrador local (si existe) sobre la base oficial del backend.
+            hydrateAutosaveDraft();
+
             // Renderizar PALOTEO 3 después de cargar datos existentes para mantener un solo origen de datos
             renderizarPaloteo3(productos);
+            startAutosaveInterval();
         } else {
             productosInventario = [];
             listaProductos.innerHTML = `<div class="text-center text-on-surface-variant py-lg font-body-base">No hay productos consumidos para auditar hoy.</div>`;
@@ -697,6 +882,7 @@ async function cargarProductos() {
         console.error("Error cargando productos", error);
         mostrarEstadoVacioPaloteo3();
         ocultarResumenProductos();
+        _actualizarEstadoAutosave('error', 'Autosave en espera por fallo de carga de productos.');
     }
 }
 
@@ -1037,6 +1223,7 @@ function crearFilaPaloteo3(producto) {
     const idealUnidades = parseFloat(producto.stock_ideal_unidades) || 0;
     const idealOnzas = parseFloat(producto.stock_ideal_onzas) || 0;
     const capturado = obtenerValoresCapturadosPaloteo3(producto.id_producto);
+    const esPesable = parseInt(producto.pesable, 10) === 1;
     row.dataset.idealUnidades = String(idealUnidades);
     row.dataset.idealOnzas = String(idealOnzas);
     row.dataset.tara = String(tara);
@@ -1050,7 +1237,7 @@ function crearFilaPaloteo3(producto) {
                 <span class="text-xs text-on-surface truncate" title="${escapeHtml(producto.nombre || '')}">${escapeHtml(producto.nombre || '')}</span>
             </div>
 
-            <!-- Segunda línea: inputs unidades y peso con botones integrados (compacto para móvil) -->
+            <!-- Segunda línea: input de unidades y, si aplica, peso con botones integrados -->
             <div class="col-span-full flex gap-sm text-xs">
                 <!-- Unidades con botones +/- -->
                 <div class="flex items-center gap-1 flex-1">
@@ -1060,13 +1247,14 @@ function crearFilaPaloteo3(producto) {
                     <button type="button" class="stock-btn-inc-unid flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded flex items-center justify-center text-on-surface hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors font-semibold leading-none" data-id-producto="${producto.id_producto}" title="Sumar">+</button>
                 </div>
 
+                ${esPesable ? `
                 <!-- Peso con botones +/- -->
                 <div class="flex items-center gap-1 flex-1">
                     <span class="material-symbols-outlined text-on-surface-variant" style="font-size:1.1rem;" title="Peso">balance</span>
                     <input type="number" min="0" step="0.1" value="${escapeHtml(capturado.peso)}" class="stock-input-peso w-14 text-center bg-surface border border-outline-variant rounded px-1 py-1 text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors" placeholder="0">
                     <button type="button" class="stock-btn-dec-peso flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded flex items-center justify-center text-on-surface hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors font-semibold leading-none" data-id-producto="${producto.id_producto}" title="Restar">−</button>
                     <button type="button" class="stock-btn-inc-peso flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded flex items-center justify-center text-on-surface hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors font-semibold leading-none" data-id-producto="${producto.id_producto}" title="Sumar">+</button>
-                </div>
+                </div>` : ''}
             </div>
         </div>
     `;
@@ -1104,13 +1292,13 @@ function crearFilaPaloteo3(producto) {
         ajustarValor(inputUnidades, true, false);
     });
 
-    if (btnDecPeso) btnDecPeso.addEventListener('click', (e) => {
+    if (btnDecPeso && inputPeso) btnDecPeso.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
         ajustarValor(inputPeso, false, true);
     });
 
-    if (btnIncPeso) btnIncPeso.addEventListener('click', (e) => {
+    if (btnIncPeso && inputPeso) btnIncPeso.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
         ajustarValor(inputPeso, true, true);
@@ -1136,6 +1324,11 @@ function renderizarPaloteo3(productos) {
     });
 
     renderizarReportePaloteo3();
+}
+
+function refrescarPaloteo3DesdeInventario() {
+    if (!productosInventario || productosInventario.length === 0) return;
+    renderizarPaloteo3(productosInventario);
 }
 
 function obtenerFilasReportePaloteo3() {
@@ -1426,6 +1619,7 @@ function syncFilaPaloteo3ConInventario(row) {
     }
 
     recalcularTarjeta(card);
+    scheduleAutosave();
 }
 
 function syncTodasFilasPaloteo3ConInventario() {
@@ -1753,6 +1947,8 @@ async function enviarInventario(payload) {
             if (!esCorreccion) {
                 currentIdInventarioPOS = result.id_inventario_pos;
             }
+
+            clearAutosaveDraft();
             
             const accion = esCorreccion ? '¡Inventario Corregido!' : '¡Inventario Guardado!';
             inputObservaciones.value = '';
@@ -1953,6 +2149,9 @@ function syncCapturaConInventario() {
     } else {
         capturaEstado.completos.delete(idProducto);
     }
+
+    refrescarPaloteo3DesdeInventario();
+    scheduleAutosave();
 }
 
 function actualizarResumenCaptura() {
@@ -2092,6 +2291,17 @@ if (stockList) {
     });
 }
 
+// Persistir borrador al segundo plano o cierre abrupto de pestaña.
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+        flushAutosave('visibility');
+    }
+});
+
+window.addEventListener('pagehide', () => {
+    flushAutosave('pagehide');
+});
+
 if (stockBtnGuardar) {
     stockBtnGuardar.addEventListener('click', async () => {
         // Sincroniza la captura de PALOTEO 3 con el origen único de datos antes de validar/enviar.
@@ -2138,6 +2348,7 @@ if (capturaCardContainer) {
                 capturaEstado.completos.delete(idActual);
             }
             actualizarResumenCaptura();
+            scheduleAutosave();
         }
     });
 
@@ -2147,6 +2358,7 @@ if (capturaCardContainer) {
             recalcularTarjeta(card);
             syncCapturaConInventario();
             actualizarResumenCaptura();
+            scheduleAutosave();
         }
     });
 
@@ -2157,6 +2369,7 @@ if (capturaCardContainer) {
             agregarInputPesoEnCard(card);
             recalcularTarjeta(card);
             syncCapturaConInventario();
+            scheduleAutosave();
             return;
         }
 
@@ -2176,6 +2389,7 @@ if (capturaCardContainer) {
                 recalcularTarjeta(card);
                 syncCapturaConInventario();
                 actualizarResumenCaptura();
+                scheduleAutosave();
             }, 20);
         }
     });
@@ -2313,12 +2527,16 @@ function recalcularTarjeta(card) {
 listaProductos.addEventListener('input', (e) => {
     if (e.target.classList.contains('input-cerradas') || e.target.classList.contains('input-peso')) {
         recalcularTarjeta(e.target.closest('.product-card'));
+        refrescarPaloteo3DesdeInventario();
+        scheduleAutosave();
     }
 });
 
 listaProductos.addEventListener('change', (e) => {
     if (e.target.classList.contains('select-perfil')) {
         recalcularTarjeta(e.target.closest('.product-card'));
+        refrescarPaloteo3DesdeInventario();
+        scheduleAutosave();
     }
 });
 
@@ -2328,6 +2546,8 @@ listaProductos.addEventListener('click', (e) => {
         const idProducto = parseInt(btnAdd.dataset.idProducto, 10);
         if (!isNaN(idProducto)) {
             agregarInputPeso(idProducto);
+            refrescarPaloteo3DesdeInventario();
+            scheduleAutosave();
         }
         return;
     }
@@ -2345,7 +2565,10 @@ listaProductos.addEventListener('click', (e) => {
 listaProductos.addEventListener('click', (e) => {
     if (e.target.closest('.btn-remove-peso')) {
         const card = e.target.closest('.product-card');
-        setTimeout(() => recalcularTarjeta(card), 50);
+        setTimeout(() => {
+            recalcularTarjeta(card);
+            scheduleAutosave();
+        }, 50);
     }
 });
 
