@@ -75,6 +75,28 @@ def _validar_operacion_inicio_cierre(db: Session, id_operacion: int) -> models.O
     return operacion
 
 
+def _resolver_barra_operativa(request: Request) -> int:
+    barra_por_defecto = settings.PALOTEO_DEFAULT_BARRA_ID
+    barras_permitidas = settings.paloteo_allowed_barras
+
+    if not settings.PALOTEO_SELECTOR_ENABLED:
+        return barra_por_defecto
+
+    barra_header = request.headers.get("X-Barra-Id")
+    if not barra_header:
+        return barra_por_defecto
+
+    try:
+        barra = int(barra_header)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="X-Barra-Id inválido.") from exc
+
+    if barra not in barras_permitidas:
+        raise HTTPException(status_code=400, detail="La barra solicitada no está habilitada para esta instancia.")
+
+    return barra
+
+
 def _obtener_onzas_por_botella_llena(db: Session, id_producto: int):
     resultado = db.execute(
         text("SELECT cantidad_detalle FROM alm_producto WHERE id = :id_producto LIMIT 1"),
@@ -250,6 +272,18 @@ def health_check(db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error de conexión a la BD: {str(e)}")
 
+
+@app.get("/api/config/public")
+def obtener_configuracion_publica():
+    return {
+        "app_env": settings.APP_ENV,
+        "paloteo": {
+            "default_barra_id": settings.PALOTEO_DEFAULT_BARRA_ID,
+            "selector_enabled": settings.PALOTEO_SELECTOR_ENABLED,
+            "allowed_barras": settings.paloteo_allowed_barras,
+        },
+    }
+
 @app.post("/api/auth/login", response_model=schemas.Token)
 def login(login_data: schemas.UsuarioLogin, request: Request, db: Session = Depends(get_db)):
     # 1. Buscar al usuario en la base de datos
@@ -382,7 +416,8 @@ def verificar_operacion_activa(
     
 @app.post("/api/inventario/paloteo", response_model=schemas.PaloteoOperacionResponse)
 def procesar_paloteo(
-    payload: schemas.PaloteoRequest, 
+    payload: schemas.PaloteoRequest,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: models.Usuario = Depends(get_usuario_actual) # <-- CANDADO AQUÍ
 ):
@@ -396,6 +431,13 @@ def procesar_paloteo(
 
     # 1. Validar Operación
     _validar_operacion_inicio_cierre(db, payload.id_operacion)
+
+    barra_operativa = _resolver_barra_operativa(request)
+    if payload.id_barra != barra_operativa:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"La barra enviada ({payload.id_barra}) no coincide con la barra operativa configurada ({barra_operativa})."
+        )
 
     # Fix #5: Prevenir inventario duplicado por operación.
     # Si ya existe una cabecera HAB para este id_operacion, rechazamos el registro.
@@ -489,6 +531,7 @@ def obtener_inventario_registrado(
 def corregir_paloteo(
     id_inventario_pos: int,
     payload: schemas.PaloteoRequest,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: models.Usuario = Depends(get_usuario_actual)
 ):
@@ -517,6 +560,13 @@ def corregir_paloteo(
 
     # La corrección solo se permite mientras la operación siga en INICIO CIERRE (24).
     _validar_operacion_inicio_cierre(db, inventario.id_operacion)
+
+    barra_operativa = _resolver_barra_operativa(request)
+    if payload.id_barra != barra_operativa:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"La barra enviada ({payload.id_barra}) no coincide con la barra operativa configurada ({barra_operativa})."
+        )
 
     inventario.observaciones = payload.observaciones if payload.observaciones else inventario.observaciones
     inventario.procesado_por = nombre_formateado
@@ -601,6 +651,7 @@ def crear_perfil_pesaje(
 
 @app.get("/api/inventario/pendientes", response_model=List[schemas.ProductoPendiente])
 def obtener_productos_pendientes(
+    request: Request,
     db: Session = Depends(get_db),
     current_user: models.Usuario = Depends(get_usuario_actual) # <-- CANDADO AQUÍ
     ):
@@ -608,6 +659,8 @@ def obtener_productos_pendientes(
     Devuelve la lista de productos que tuvieron movimiento en la operación activa,
     junto con su stock ideal y parámetros de pesaje.
     """
+    id_barra_operativa = _resolver_barra_operativa(request)
+
     query = text("""
         SELECT 
             a.id AS id_producto, a.codigo, a.nombre, a.ind_permite_comandar,
@@ -616,20 +669,34 @@ def obtener_productos_pendientes(
             p.id AS perfil_id, p.pesable, p.nombre_perfil, p.peso_bruto, p.tara, p.gramos_por_oz, p.tolerancia_oz,
             a.cantidad_detalle AS onzas_por_botella_llena
         FROM (
-            SELECT DISTINCT d.id_producto_receta 
+            SELECT DISTINCT d.id_producto_receta AS id_producto
             FROM comandas_v9_detallada d
             INNER JOIN bar_comanda c ON d.id_comanda = c.id
             WHERE d.id_operacion = (SELECT MAX(id_operacion) FROM bar_comanda)
             AND c.estado_comanda = 26
+            AND d.id_producto_receta IS NOT NULL
+
+            UNION
+
+            SELECT DISTINCT dsi.id_producto AS id_producto
+            FROM alm_salida_inventario asi
+            INNER JOIN alm_detalle_salida_inv dsi ON dsi.id_salida_inventario = asi.id
+            WHERE asi.id_operacion = (SELECT MAX(id_operacion) FROM bar_comanda)
+            AND asi.estado = 'HAB'
+            AND dsi.estado = 'HAB'
+            AND asi.id_barra = :id_barra
+            AND asi.ind_tipo_movimiento = 83
+            AND asi.ind_tipo_salida = 34
+            AND asi.ind_estado_salida = 21
         ) mov
-        INNER JOIN alm_producto a ON mov.id_producto_receta = a.id
+        INNER JOIN alm_producto a ON mov.id_producto = a.id
         INNER JOIN vista_inventario_barra_con_filtro i ON a.id = i.id_almacen 
         LEFT JOIN app_producto_pesaje_config p ON a.id = p.id_producto_almacen
         ORDER BY a.nombre ASC, p.id ASC;
  
           """)
 
-    rows = db.execute(query).mappings().all()
+    rows = db.execute(query, {"id_barra": id_barra_operativa}).mappings().all()
 
     # Agrupamos perfiles de pesaje por producto porque ahora puede haber
     # múltiples modelos de botella para el mismo id_producto.
