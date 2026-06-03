@@ -10,9 +10,13 @@ El flujo operativo actual es:
 
 1. El usuario inicia sesion en la PWA.
 2. La API valida que la operativa este en estado INICIO CIERRE (`24`).
-3. Se registra inventario fisico (paloteo 1 y paloteo 2) por producto.
-4. Se captura paloteo 3 (captura ciega) para contraste.
-5. Se visualiza reporte de diferencias y se puede exportar a PDF.
+3. La app resuelve la barra operativa por entorno (con selector opcional controlado).
+4. Se cargan productos pendientes para paloteo:
+  - productos vendidos durante la operativa
+  - productos traspasados de almacen a barra durante la operativa
+5. Se registra inventario fisico desde PALOTEO 1/2/3 con un unico origen de datos.
+6. Se visualiza reporte de diferencias y se puede exportar a PDF.
+7. Autosave local conserva borradores por operativa, barra y usuario.
 
 Durante el registro, la API convierte gramos a onzas, conserva onzas exactas en auditoria cruda y guarda para POS las onzas redondeadas a media onza.
 
@@ -96,6 +100,11 @@ PROD_DB_USER=usuario_prod
 PROD_DB_PASS=contrasena_prod
 PROD_DB_NAME=nombre_bd_prod
 PROD_DB_PORT=3306
+
+# Paloteo: barra operativa
+PALOTEO_DEFAULT_BARRA_ID=1
+PALOTEO_SELECTOR_ENABLED=false
+PALOTEO_ALLOWED_BARRAS=1
 ```
 
 Generar una `SECRET_KEY` segura:
@@ -130,12 +139,13 @@ Docs: `http://localhost:8000/docs`
 | Metodo | Ruta | Descripcion |
 |---|---|---|
 | `GET` | `/api/operacion/activa` | Valida estado de operativa para paloteo |
+| `GET` | `/api/config/public` | Configuracion publica para frontend (entorno y barra operativa) |
 
 ### Inventario / Paloteo (requiere JWT)
 
 | Metodo | Ruta | Descripcion |
 |---|---|---|
-| `GET` | `/api/inventario/pendientes` | Lista productos con movimiento y configuracion de pesaje |
+| `GET` | `/api/inventario/pendientes` | Lista productos vendidos + traspasados a barra con configuracion de pesaje |
 | `POST` | `/api/inventario/paloteo` | Registra inventario fisico completo |
 | `GET` | `/api/inventario/paloteo/{id_operacion}` | Obtiene inventario registrado y si puede editarse |
 | `PUT` | `/api/inventario/paloteo/{id_inventario_pos}` | Corrige inventario fisico existente |
@@ -146,6 +156,12 @@ Reglas de correccion actuales:
 2. `id_operacion` e `id_barra` del payload deben coincidir con la cabecera existente.
 3. La correccion actualiza de forma selectiva los productos enviados; los no enviados se conservan.
 4. Si la operativa cambia de estado, la API bloquea la correccion.
+
+Reglas de barra operativa:
+
+1. Si `PALOTEO_SELECTOR_ENABLED=false`, la barra se fija por `PALOTEO_DEFAULT_BARRA_ID`.
+2. Si `PALOTEO_SELECTOR_ENABLED=true`, frontend puede enviar `X-Barra-Id` (solo valores de `PALOTEO_ALLOWED_BARRAS`).
+3. En `POST/PUT /api/inventario/paloteo`, `payload.id_barra` debe coincidir con la barra operativa resuelta.
 
 ### Perfiles de Pesaje (requiere JWT)
 
@@ -249,6 +265,12 @@ Flujo actual de navegacion:
 - PALOTEO 2
 - PALOTEO 3 (captura ciega)
 - REPORTE (diferencias y exportacion PDF)
+
+Sincronizacion entre modulos:
+
+1. Cambios en PALOTEO 1, PALOTEO 2 y PALOTEO 3 se reflejan entre vistas.
+2. El payload final se construye desde el inventario canonico.
+3. Autosave guarda y recupera borradores locales por `operativa + barra + usuario`.
 
 Service Worker:
 
