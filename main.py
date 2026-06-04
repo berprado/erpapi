@@ -834,9 +834,9 @@ def exportar_pdf_paloteo3(
     pdf.ln(6)
 
     # — Tabla —
-    col_widths = [14, 22, 94, 22, 18]   # ID | Codigo | Producto | Dif.Unid | Dif.Onzas
-    headers   = ["ID", "CODIGO", "PRODUCTO", "DIF. UNID", "DIF. ONZAS"]
-    aligns    = ["R", "L", "L", "R", "R"]
+    col_widths = [12, 20, 72, 18, 24, 24]   # ID | Codigo | Producto | Dif.Unid | Dif.Oz Exacta | Dif.Oz POS
+    headers   = ["ID", "CODIGO", "PRODUCTO", "DIF. UNID", "DIF. OZ EX", "DIF. OZ POS"]
+    aligns    = ["R", "L", "L", "R", "R", "R"]
     row_h = 7
 
     # cabecera de tabla
@@ -852,23 +852,35 @@ def exportar_pdf_paloteo3(
     pdf.set_font("Helvetica", "", 8)
     for idx, fila in enumerate(payload.filas):
         texto_unid = ""
-        texto_oz = ""
+        texto_oz_exacta = ""
+        texto_oz_pos = ""
         color_unid = None
-        color_oz = None
+        color_oz_exacta = None
+        color_oz_pos = None
 
         if fila.difUnidades is not None:
             texto_unid = f"{'+' if fila.difUnidades > 0 else ''}{round(fila.difUnidades)}"
             color_unid = _color_diferencia(fila.difUnidades)
 
-        if fila.difOnzas is not None:
-            texto_oz = f"{'+' if fila.difOnzas > 0 else ''}{fila.difOnzas:.2f} oz"
-            color_oz = _color_diferencia(fila.difOnzas)
+        dif_oz_exacta = fila.difOnzasExactas if fila.difOnzasExactas is not None else fila.difOnzas
+        dif_oz_pos = fila.difOnzasPos
+        if dif_oz_pos is None and dif_oz_exacta is not None:
+            # Unificamos granularidad con POS: incrementos de 0.5 oz.
+            dif_oz_pos = round(dif_oz_exacta * 2.0) * 0.5
+
+        if dif_oz_exacta is not None:
+            texto_oz_exacta = f"{'+' if dif_oz_exacta > 0 else ''}{dif_oz_exacta:.2f} oz"
+            color_oz_exacta = _color_diferencia(dif_oz_exacta)
+
+        if dif_oz_pos is not None:
+            texto_oz_pos = f"{'+' if dif_oz_pos > 0 else ''}{dif_oz_pos:.2f} oz"
+            color_oz_pos = _color_diferencia(dif_oz_pos)
 
         fondo = (245, 245, 245) if idx % 2 == 1 else (255, 255, 255)
         pdf.set_fill_color(*fondo)
 
-        valores = [fila.idProducto, fila.codigo, fila.nombre, texto_unid, texto_oz]
-        colores = [None, None, None, color_unid, color_oz]
+        valores = [fila.idProducto, fila.codigo, fila.nombre, texto_unid, texto_oz_exacta, texto_oz_pos]
+        colores = [None, None, None, color_unid, color_oz_exacta, color_oz_pos]
 
         for w, val, align, color in zip(col_widths, valores, aligns, colores):
             if color:

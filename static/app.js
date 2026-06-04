@@ -1459,8 +1459,23 @@ function obtenerFilasReportePaloteo3() {
     return filas;
 }
 
+function redondearOnzasOperativas(valor) {
+    if (valor == null || Number.isNaN(Number(valor))) return null;
+    return Math.round(Number(valor) * 2.0) * 0.5;
+}
+
 function aplicarEstadoReporte(filasBase) {
-    const filasFiltradas = filasBase.filter((fila) => {
+    const filasNormalizadas = filasBase.map((fila) => {
+        const clon = { ...fila };
+
+        // Conservamos exacta para auditoria/exportacion y mostramos en UI la operativa (0.5 oz).
+        clon.difOnzasExactas = clon.difOnzas;
+        clon.difOnzas = redondearOnzasOperativas(clon.difOnzas);
+
+        return clon;
+    });
+
+    const filasFiltradas = filasNormalizadas.filter((fila) => {
         if (reporteEstado.filtro === 'ingreso') {
             return fila.difUnidades > 0 || fila.difOnzas > 0;
         }
@@ -1638,6 +1653,9 @@ async function exportarReportePaloteo3Pdf() {
             usuario: localStorage.getItem('nombres') || 'No identificado',
             tipo_reporte: tipoReporte,
             filas: filas.map(f => ({
+                // Exacta para analisis y operativa para comparacion con POS (paso 0.5 oz)
+                difOnzasExactas: f.difOnzasExactas ?? f.difOnzas,
+                difOnzasPos: f.difOnzas,
                 idProducto: f.idProducto,
                 codigo: f.codigo,
                 nombre: f.nombre,
