@@ -7,7 +7,12 @@ let currentToken = localStorage.getItem('token') || null;
 let currentOperacionId = null;
 let currentIdInventarioPOS = null; // Guardamos el ID del inventario ya registrado para correcciones
 let operativaPermitePaloteo = false;
-const ID_BARRA_ACTUAL = 1; // Podemos hacerlo dinámico después
+let idBarraActual = 1;
+let configuracionPaloteo = {
+    selectorEnabled: false,
+    defaultBarraId: 1,
+    allowedBarras: [1],
+};
 let productosInventario = [];
 let modoEnvioOrigen = 'inventario';
 
@@ -71,6 +76,8 @@ const dummyContentTitle = document.getElementById('dummy-content-title');
 const dummyContentBody = document.getElementById('dummy-content-body');
 const btnCloseDummyContent = document.getElementById('btn-close-dummy-content');
 const autosaveStatus = document.getElementById('autosave-status');
+const barraSelectorContainer = document.getElementById('barra-selector-container');
+const barraSelector = document.getElementById('barra-selector');
 
 const dummyContentMap = {
     guia: {
@@ -91,13 +98,79 @@ const dummyContentMap = {
     }
 };
 
+function _normalizarBarrasPermitidas(lista) {
+    if (!Array.isArray(lista)) return [];
+    const barras = lista
+        .map((valor) => parseInt(valor, 10))
+        .filter((valor) => !Number.isNaN(valor) && valor > 0);
+    return [...new Set(barras)];
+}
+
+function aplicarConfiguracionBarraUI() {
+    if (!barraSelectorContainer || !barraSelector) return;
+
+    barraSelector.innerHTML = '';
+    configuracionPaloteo.allowedBarras.forEach((barra) => {
+        const option = document.createElement('option');
+        option.value = String(barra);
+        option.textContent = `#${barra}`;
+        barraSelector.appendChild(option);
+    });
+
+    barraSelector.value = String(idBarraActual);
+
+    const mostrarSelector = configuracionPaloteo.selectorEnabled;
+    barraSelectorContainer.classList.toggle('hidden', !mostrarSelector);
+    barraSelectorContainer.classList.toggle('flex', mostrarSelector);
+}
+
+async function cargarConfiguracionPublica() {
+    try {
+        const response = await fetch(`${API_BASE}/config/public`);
+        if (!response.ok) throw new Error('No se pudo cargar configuración pública.');
+
+        const data = await response.json();
+        const paloteo = data && data.paloteo ? data.paloteo : {};
+        const defaultBarraId = parseInt(paloteo.default_barra_id, 10);
+        const selectorEnabled = Boolean(paloteo.selector_enabled);
+        const allowedBarras = _normalizarBarrasPermitidas(paloteo.allowed_barras);
+
+        configuracionPaloteo = {
+            selectorEnabled,
+            defaultBarraId: (!Number.isNaN(defaultBarraId) && defaultBarraId > 0) ? defaultBarraId : 1,
+            allowedBarras: allowedBarras.length > 0 ? allowedBarras : [(!Number.isNaN(defaultBarraId) && defaultBarraId > 0) ? defaultBarraId : 1],
+        };
+
+        const barraGuardada = parseInt(localStorage.getItem('paloteo_barra_id') || '', 10);
+        const barraInicial = selectorEnabled && configuracionPaloteo.allowedBarras.includes(barraGuardada)
+            ? barraGuardada
+            : configuracionPaloteo.defaultBarraId;
+
+        idBarraActual = configuracionPaloteo.allowedBarras.includes(barraInicial)
+            ? barraInicial
+            : configuracionPaloteo.allowedBarras[0];
+
+        localStorage.setItem('paloteo_barra_id', String(idBarraActual));
+    } catch (error) {
+        configuracionPaloteo = {
+            selectorEnabled: false,
+            defaultBarraId: 1,
+            allowedBarras: [1],
+        };
+        idBarraActual = 1;
+        localStorage.setItem('paloteo_barra_id', '1');
+    }
+
+    aplicarConfiguracionBarraUI();
+}
+
 function _obtenerUsuarioAutosave() {
     return localStorage.getItem('nombres') || 'anonimo';
 }
 
 function _obtenerClaveAutosave() {
     if (!currentOperacionId) return null;
-    return `${AUTOSAVE_KEY_PREFIX}:${ID_BARRA_ACTUAL}:${currentOperacionId}:${_obtenerUsuarioAutosave()}`;
+    return `${AUTOSAVE_KEY_PREFIX}:${idBarraActual}:${currentOperacionId}:${_obtenerUsuarioAutosave()}`;
 }
 
 function _actualizarEstadoAutosave(tipo, mensaje) {
@@ -131,7 +204,7 @@ function _snapshotAutosaveActual() {
     return {
         schema_version: AUTOSAVE_SCHEMA_VERSION,
         id_operacion: currentOperacionId,
-        id_barra: ID_BARRA_ACTUAL,
+        id_barra: idBarraActual,
         id_inventario_pos: currentIdInventarioPOS,
         observaciones: inputObservaciones ? inputObservaciones.value : '',
         saved_at: new Date().toISOString(),
@@ -227,7 +300,7 @@ function hydrateAutosaveDraft() {
 
     try {
         const snapshot = JSON.parse(raw);
-        if (!snapshot || snapshot.id_operacion !== currentOperacionId || snapshot.id_barra !== ID_BARRA_ACTUAL) {
+        if (!snapshot || snapshot.id_operacion !== currentOperacionId || snapshot.id_barra !== idBarraActual) {
             return;
         }
 
@@ -699,6 +772,21 @@ document.addEventListener('DOMContentLoaded', () => {
             cerrarContenidoDummy();
         }
     });
+
+    if (barraSelector) {
+        barraSelector.addEventListener('change', () => {
+            const siguienteBarra = parseInt(barraSelector.value || '', 10);
+            if (Number.isNaN(siguienteBarra) || siguienteBarra <= 0) return;
+            if (!configuracionPaloteo.allowedBarras.includes(siguienteBarra)) return;
+
+            idBarraActual = siguienteBarra;
+            localStorage.setItem('paloteo_barra_id', String(idBarraActual));
+
+            if (currentToken) {
+                iniciarDashboard();
+            }
+        });
+    }
 });
 
 // ==========================================
@@ -747,10 +835,11 @@ function mostrarPantallaLogin() {
     document.getElementById('password').value = '';
 }
 
-function mostrarPantallaApp() {
+async function mostrarPantallaApp() {
     loginScreen.classList.add('hidden');
     appScreen.classList.remove('hidden');
     document.getElementById('user-display').textContent = localStorage.getItem('nombres');
+    await cargarConfiguracionPublica();
     // Asegurar que el panel de inventario sea el visible al entrar a la app
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
     document.getElementById('panel-inventario').classList.remove('hidden');
@@ -847,7 +936,10 @@ async function iniciarDashboard() {
 async function cargarProductos() {
     try {
         const response = await fetch(`${API_BASE}/inventario/pendientes`, {
-            headers: { 'Authorization': `Bearer ${currentToken}` }
+            headers: {
+                'Authorization': `Bearer ${currentToken}`,
+                'X-Barra-Id': String(idBarraActual),
+            }
         });
 
         // Fix #25: Manejar token expirado igual que en iniciarDashboard()
@@ -1367,8 +1459,23 @@ function obtenerFilasReportePaloteo3() {
     return filas;
 }
 
+function redondearOnzasOperativas(valor) {
+    if (valor == null || Number.isNaN(Number(valor))) return null;
+    return Math.round(Number(valor) * 2.0) * 0.5;
+}
+
 function aplicarEstadoReporte(filasBase) {
-    const filasFiltradas = filasBase.filter((fila) => {
+    const filasNormalizadas = filasBase.map((fila) => {
+        const clon = { ...fila };
+
+        // Conservamos exacta para auditoria/exportacion y mostramos en UI la operativa (0.5 oz).
+        clon.difOnzasExactas = clon.difOnzas;
+        clon.difOnzas = redondearOnzasOperativas(clon.difOnzas);
+
+        return clon;
+    });
+
+    const filasFiltradas = filasNormalizadas.filter((fila) => {
         if (reporteEstado.filtro === 'ingreso') {
             return fila.difUnidades > 0 || fila.difOnzas > 0;
         }
@@ -1542,10 +1649,13 @@ async function exportarReportePaloteo3Pdf() {
 
         const payload = {
             id_operacion: currentOperacionId,
-            id_barra: ID_BARRA_ACTUAL,
+            id_barra: idBarraActual,
             usuario: localStorage.getItem('nombres') || 'No identificado',
             tipo_reporte: tipoReporte,
             filas: filas.map(f => ({
+                // Exacta para analisis y operativa para comparacion con POS (paso 0.5 oz)
+                difOnzasExactas: f.difOnzasExactas ?? f.difOnzas,
+                difOnzasPos: f.difOnzas,
                 idProducto: f.idProducto,
                 codigo: f.codigo,
                 nombre: f.nombre,
@@ -1852,7 +1962,7 @@ async function ejecutarValidacionesGlobales(cards) {
 async function construirPayloadInventario(observaciones = null) {
     const payload = {
         id_operacion: currentOperacionId,
-        id_barra: ID_BARRA_ACTUAL,
+        id_barra: idBarraActual,
         observaciones,
         items: []
     };

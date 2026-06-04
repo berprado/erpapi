@@ -75,6 +75,28 @@ def _validar_operacion_inicio_cierre(db: Session, id_operacion: int) -> models.O
     return operacion
 
 
+def _resolver_barra_operativa(request: Request) -> int:
+    barra_por_defecto = settings.PALOTEO_DEFAULT_BARRA_ID
+    barras_permitidas = settings.paloteo_allowed_barras
+
+    if not settings.PALOTEO_SELECTOR_ENABLED:
+        return barra_por_defecto
+
+    barra_header = request.headers.get("X-Barra-Id")
+    if not barra_header:
+        return barra_por_defecto
+
+    try:
+        barra = int(barra_header)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="X-Barra-Id inválido.") from exc
+
+    if barra not in barras_permitidas:
+        raise HTTPException(status_code=400, detail="La barra solicitada no está habilitada para esta instancia.")
+
+    return barra
+
+
 def _obtener_onzas_por_botella_llena(db: Session, id_producto: int):
     resultado = db.execute(
         text("SELECT cantidad_detalle FROM alm_producto WHERE id = :id_producto LIMIT 1"),
@@ -123,7 +145,7 @@ def _procesar_items_paloteo(
 
         # Registrar productos sin configuración en la lista de omitidos.
         if not configs_producto:
-            logger.warning("Producto id=%s omitido: sin configuración de pesaje en app_producto_pesaje_config", item.id_producto)
+            logger.warning("Producto id=%s omitido: sin configuración de pesaje en app_producto_pesaje_config_api", item.id_producto)
             productos_omitidos.append(item.id_producto)
             continue
 
@@ -147,6 +169,18 @@ def _procesar_items_paloteo(
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail=f"Perfil de botella inválido para producto {item.id_producto}."
+                    )
+
+                if any(
+                    valor is None
+                    for valor in (perfil.gramos_por_oz, perfil.tara, perfil.peso_bruto)
+                ):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=(
+                            f"Perfil de botella incompleto para producto {item.id_producto}. "
+                            "Completa la configuración de pesaje antes de registrar el paloteo."
+                        )
                     )
 
                 gr_oz = float(perfil.gramos_por_oz)
@@ -249,6 +283,18 @@ def health_check(db: Session = Depends(get_db)):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error de conexión a la BD: {str(e)}")
+
+
+@app.get("/api/config/public")
+def obtener_configuracion_publica():
+    return {
+        "app_env": settings.APP_ENV,
+        "paloteo": {
+            "default_barra_id": settings.PALOTEO_DEFAULT_BARRA_ID,
+            "selector_enabled": settings.PALOTEO_SELECTOR_ENABLED,
+            "allowed_barras": settings.paloteo_allowed_barras,
+        },
+    }
 
 @app.post("/api/auth/login", response_model=schemas.Token)
 def login(login_data: schemas.UsuarioLogin, request: Request, db: Session = Depends(get_db)):
@@ -382,7 +428,8 @@ def verificar_operacion_activa(
     
 @app.post("/api/inventario/paloteo", response_model=schemas.PaloteoOperacionResponse)
 def procesar_paloteo(
-    payload: schemas.PaloteoRequest, 
+    payload: schemas.PaloteoRequest,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: models.Usuario = Depends(get_usuario_actual) # <-- CANDADO AQUÍ
 ):
@@ -396,6 +443,13 @@ def procesar_paloteo(
 
     # 1. Validar Operación
     _validar_operacion_inicio_cierre(db, payload.id_operacion)
+
+    barra_operativa = _resolver_barra_operativa(request)
+    if payload.id_barra != barra_operativa:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"La barra enviada ({payload.id_barra}) no coincide con la barra operativa configurada ({barra_operativa})."
+        )
 
     # Fix #5: Prevenir inventario duplicado por operación.
     # Si ya existe una cabecera HAB para este id_operacion, rechazamos el registro.
@@ -489,6 +543,7 @@ def obtener_inventario_registrado(
 def corregir_paloteo(
     id_inventario_pos: int,
     payload: schemas.PaloteoRequest,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: models.Usuario = Depends(get_usuario_actual)
 ):
@@ -517,6 +572,13 @@ def corregir_paloteo(
 
     # La corrección solo se permite mientras la operación siga en INICIO CIERRE (24).
     _validar_operacion_inicio_cierre(db, inventario.id_operacion)
+
+    barra_operativa = _resolver_barra_operativa(request)
+    if payload.id_barra != barra_operativa:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"La barra enviada ({payload.id_barra}) no coincide con la barra operativa configurada ({barra_operativa})."
+        )
 
     inventario.observaciones = payload.observaciones if payload.observaciones else inventario.observaciones
     inventario.procesado_por = nombre_formateado
@@ -559,7 +621,7 @@ def crear_perfil_pesaje(
     nombre_perfil = payload.nombre_perfil.strip()
 
     insert_sql = text("""
-        INSERT INTO app_producto_pesaje_config
+        INSERT INTO app_producto_pesaje_config_api
         (id_producto_almacen, nombre_perfil, peso_bruto, tara, gramos_por_oz, tolerancia_oz, pesable, usuario_reg)
         VALUES
         (:id_producto, :nombre_perfil, :peso_bruto, :tara, :gramos_por_oz, :tolerancia_oz, 1, :usuario_reg)
@@ -601,6 +663,7 @@ def crear_perfil_pesaje(
 
 @app.get("/api/inventario/pendientes", response_model=List[schemas.ProductoPendiente])
 def obtener_productos_pendientes(
+    request: Request,
     db: Session = Depends(get_db),
     current_user: models.Usuario = Depends(get_usuario_actual) # <-- CANDADO AQUÍ
     ):
@@ -608,6 +671,8 @@ def obtener_productos_pendientes(
     Devuelve la lista de productos que tuvieron movimiento en la operación activa,
     junto con su stock ideal y parámetros de pesaje.
     """
+    id_barra_operativa = _resolver_barra_operativa(request)
+
     query = text("""
         SELECT 
             a.id AS id_producto, a.codigo, a.nombre, a.ind_permite_comandar,
@@ -616,20 +681,34 @@ def obtener_productos_pendientes(
             p.id AS perfil_id, p.pesable, p.nombre_perfil, p.peso_bruto, p.tara, p.gramos_por_oz, p.tolerancia_oz,
             a.cantidad_detalle AS onzas_por_botella_llena
         FROM (
-            SELECT DISTINCT d.id_producto_receta 
+            SELECT DISTINCT d.id_producto_receta AS id_producto
             FROM comandas_v9_detallada d
             INNER JOIN bar_comanda c ON d.id_comanda = c.id
             WHERE d.id_operacion = (SELECT MAX(id_operacion) FROM bar_comanda)
             AND c.estado_comanda = 26
+            AND d.id_producto_receta IS NOT NULL
+
+            UNION
+
+            SELECT DISTINCT dsi.id_producto AS id_producto
+            FROM alm_salida_inventario asi
+            INNER JOIN alm_detalle_salida_inv dsi ON dsi.id_salida_inventario = asi.id
+            WHERE asi.id_operacion = (SELECT MAX(id_operacion) FROM bar_comanda)
+            AND asi.estado = 'HAB'
+            AND dsi.estado = 'HAB'
+            AND asi.id_barra = :id_barra
+            AND asi.ind_tipo_movimiento = 83
+            AND asi.ind_tipo_salida = 34
+            AND asi.ind_estado_salida = 21
         ) mov
-        INNER JOIN alm_producto a ON mov.id_producto_receta = a.id
+        INNER JOIN alm_producto a ON mov.id_producto = a.id
         INNER JOIN vista_inventario_barra_con_filtro i ON a.id = i.id_almacen 
-        LEFT JOIN app_producto_pesaje_config p ON a.id = p.id_producto_almacen
+        LEFT JOIN app_producto_pesaje_config_api p ON a.id = p.id_producto_almacen
         ORDER BY a.nombre ASC, p.id ASC;
  
           """)
 
-    rows = db.execute(query).mappings().all()
+    rows = db.execute(query, {"id_barra": id_barra_operativa}).mappings().all()
 
     # Agrupamos perfiles de pesaje por producto porque ahora puede haber
     # múltiples modelos de botella para el mismo id_producto.
@@ -651,6 +730,19 @@ def obtener_productos_pendientes(
             }
 
         if row["pesable"] == 1 and row["nombre_perfil"]:
+            # Si el perfil viene incompleto desde BD, se omite para no romper
+            # la serialización del endpoint con valores None en campos float.
+            if any(
+                row[campo] is None
+                for campo in ("peso_bruto", "tara", "gramos_por_oz", "tolerancia_oz")
+            ):
+                logger.warning(
+                    "Perfil de pesaje incompleto omitido. producto=%s perfil_id=%s",
+                    prod_id,
+                    row["perfil_id"],
+                )
+                continue
+
             productos_dict[prod_id]["perfiles"].append({
                 "id": row["perfil_id"],
                 "nombre_perfil": row["nombre_perfil"],
@@ -742,9 +834,9 @@ def exportar_pdf_paloteo3(
     pdf.ln(6)
 
     # — Tabla —
-    col_widths = [14, 22, 94, 22, 18]   # ID | Codigo | Producto | Dif.Unid | Dif.Onzas
-    headers   = ["ID", "CODIGO", "PRODUCTO", "DIF. UNID", "DIF. ONZAS"]
-    aligns    = ["R", "L", "L", "R", "R"]
+    col_widths = [12, 20, 72, 18, 24, 24]   # ID | Codigo | Producto | Dif.Unid | Dif.Oz Exacta | Dif.Oz POS
+    headers   = ["ID", "CODIGO", "PRODUCTO", "DIF. UNID", "DIF. OZ EX", "DIF. OZ POS"]
+    aligns    = ["R", "L", "L", "R", "R", "R"]
     row_h = 7
 
     # cabecera de tabla
@@ -760,23 +852,35 @@ def exportar_pdf_paloteo3(
     pdf.set_font("Helvetica", "", 8)
     for idx, fila in enumerate(payload.filas):
         texto_unid = ""
-        texto_oz = ""
+        texto_oz_exacta = ""
+        texto_oz_pos = ""
         color_unid = None
-        color_oz = None
+        color_oz_exacta = None
+        color_oz_pos = None
 
         if fila.difUnidades is not None:
             texto_unid = f"{'+' if fila.difUnidades > 0 else ''}{round(fila.difUnidades)}"
             color_unid = _color_diferencia(fila.difUnidades)
 
-        if fila.difOnzas is not None:
-            texto_oz = f"{'+' if fila.difOnzas > 0 else ''}{fila.difOnzas:.2f} oz"
-            color_oz = _color_diferencia(fila.difOnzas)
+        dif_oz_exacta = fila.difOnzasExactas if fila.difOnzasExactas is not None else fila.difOnzas
+        dif_oz_pos = fila.difOnzasPos
+        if dif_oz_pos is None and dif_oz_exacta is not None:
+            # Unificamos granularidad con POS: incrementos de 0.5 oz.
+            dif_oz_pos = round(dif_oz_exacta * 2.0) * 0.5
+
+        if dif_oz_exacta is not None:
+            texto_oz_exacta = f"{'+' if dif_oz_exacta > 0 else ''}{dif_oz_exacta:.2f} oz"
+            color_oz_exacta = _color_diferencia(dif_oz_exacta)
+
+        if dif_oz_pos is not None:
+            texto_oz_pos = f"{'+' if dif_oz_pos > 0 else ''}{dif_oz_pos:.2f} oz"
+            color_oz_pos = _color_diferencia(dif_oz_pos)
 
         fondo = (245, 245, 245) if idx % 2 == 1 else (255, 255, 255)
         pdf.set_fill_color(*fondo)
 
-        valores = [fila.idProducto, fila.codigo, fila.nombre, texto_unid, texto_oz]
-        colores = [None, None, None, color_unid, color_oz]
+        valores = [fila.idProducto, fila.codigo, fila.nombre, texto_unid, texto_oz_exacta, texto_oz_pos]
+        colores = [None, None, None, color_unid, color_oz_exacta, color_oz_pos]
 
         for w, val, align, color in zip(col_widths, valores, aligns, colores):
             if color:

@@ -36,10 +36,10 @@ class Operacion(Base):
 
 
 
-# Modelo para la configuración de pesaje de productos (tabla app_producto_pesaje_config)
+# Modelo para la configuración de pesaje de productos (tabla app_producto_pesaje_config_api)
 
 class ProductoPesajeConfig(Base):
-    __tablename__ = "app_producto_pesaje_config"
+    __tablename__ = "app_producto_pesaje_config_api"
     
     id = Column(Integer, primary_key=True, index=True)
     id_producto_almacen = Column(Integer, unique=True, index=True)

@@ -112,6 +112,8 @@ class FilaDiferenciaPdf(BaseModel):
     nombre: str
     difUnidades: Optional[float] = None
     difOnzas: Optional[float] = None
+    difOnzasExactas: Optional[float] = None
+    difOnzasPos: Optional[float] = None
 
 class ExportarPdfRequest(BaseModel):
     id_operacion: int = Field(..., gt=0)

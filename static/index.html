@@ -684,6 +684,10 @@
             </div>
             
             <div class="flex items-center gap-md shrink-0">
+                <div id="barra-selector-container" class="hidden items-center gap-xs">
+                    <label for="barra-selector" class="text-[10px] font-label-mono tracking-widest uppercase text-on-surface-variant">Barra</label>
+                    <select id="barra-selector" class="bg-surface border border-outline-variant rounded-sm px-xs py-[2px] text-[11px] text-on-surface font-data-tabular focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors"></select>
+                </div>
                 <span id="user-display" class="text-label-mono text-on-surface-variant font-semibold tracking-widest hidden sm:inline uppercase"></span>
                 <button id="btn-logout" class="flex items-center text-on-surface-variant hover:text-primary-fixed-dim transition-colors">
                     <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -1026,7 +1030,7 @@
         </div>
     </div>
 
-    <script src="/assets/app.js?v=9.89"></script>
+    <script src="/assets/app.js?v=9.97"></script>
 
     <script>
         (function () {
@@ -1071,7 +1075,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/assets/sw.js?v=9.89')
+                navigator.serviceWorker.register('/assets/sw.js?v=9.97')
                     .then(reg => console.log('[PWA] Service Worker registrado:', reg.scope))
                     .catch(err => console.error('[PWA] Error al registrar SW:', err));
             });
