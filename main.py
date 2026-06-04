@@ -145,7 +145,7 @@ def _procesar_items_paloteo(
 
         # Registrar productos sin configuración en la lista de omitidos.
         if not configs_producto:
-            logger.warning("Producto id=%s omitido: sin configuración de pesaje en app_producto_pesaje_config", item.id_producto)
+            logger.warning("Producto id=%s omitido: sin configuración de pesaje en app_producto_pesaje_config_api", item.id_producto)
             productos_omitidos.append(item.id_producto)
             continue
 
@@ -609,7 +609,7 @@ def crear_perfil_pesaje(
     nombre_perfil = payload.nombre_perfil.strip()
 
     insert_sql = text("""
-        INSERT INTO app_producto_pesaje_config
+        INSERT INTO app_producto_pesaje_config_api
         (id_producto_almacen, nombre_perfil, peso_bruto, tara, gramos_por_oz, tolerancia_oz, pesable, usuario_reg)
         VALUES
         (:id_producto, :nombre_perfil, :peso_bruto, :tara, :gramos_por_oz, :tolerancia_oz, 1, :usuario_reg)
@@ -691,7 +691,7 @@ def obtener_productos_pendientes(
         ) mov
         INNER JOIN alm_producto a ON mov.id_producto = a.id
         INNER JOIN vista_inventario_barra_con_filtro i ON a.id = i.id_almacen 
-        LEFT JOIN app_producto_pesaje_config p ON a.id = p.id_producto_almacen
+        LEFT JOIN app_producto_pesaje_config_api p ON a.id = p.id_producto_almacen
         ORDER BY a.nombre ASC, p.id ASC;
  
           """)

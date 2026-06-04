@@ -1,6 +1,6 @@
 Debemos considerar la posibilidad de que para un mismo producto pueda existir mas de un modelo de botella, eso significa el mismo producto con el mismo volumen pero con un peso bruto diferente y una tara diferente al registrado. 
 En ese caso, nuestra aplicacion debera permitir el registro de botellas adicionales para poder convertir el peso en gramos a onzas.
-Para eso hemos modificado la estructura de la tabla app_producto_pesaje_config y debemos realizar algunas modificaciones en el codigo segun los siguientes lineamientos
+Para eso hemos modificado la estructura de la tabla app_producto_pesaje_config_api y debemos realizar algunas modificaciones en el codigo segun los siguientes lineamientos
 
 ### Paso 1: Modificar el Backend (Python)
 
@@ -56,7 +56,7 @@ def obtener_productos_pendientes(
         ) mov
         INNER JOIN alm_producto a ON mov.id_producto_receta = a.id
         INNER JOIN vista_inventario_barra_con_filtro i ON a.id = i.id_almacen 
-        LEFT JOIN app_producto_pesaje_config p ON a.id = p.id_producto_almacen
+        LEFT JOIN app_producto_pesaje_config_api p ON a.id = p.id_producto_almacen
         ORDER BY a.nombre ASC;
     """)
     

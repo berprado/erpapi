@@ -56,7 +56,7 @@ El propósito es mantener control riguroso del inventario y detectar discrepanci
 ┌─────────────────────────────────────────────────────────────────┐
 │ 3. CARGA DE PRODUCTOS PENDIENTES                                │
 │    └─ Obtiene lista de productos con movimiento en la jornada   │
-│    └─ Carga perfiles de pesaje desde app_producto_pesaje_config │
+│    └─ Carga perfiles de pesaje desde app_producto_pesaje_config_api │
 │    └─ Retorna stock ideal (sistema) para comparación            │
 └─────────────────────────────────────────────────────────────────┘
                             ↓
@@ -179,7 +179,7 @@ El propósito es mantener control riguroso del inventario y detectar discrepanci
                          │ FK: id_producto
                          ↓
         ┌──────────────────────────────────────────┐
-        │ app_producto_pesaje_config               │
+        │ app_producto_pesaje_config_api           │
         │ (Calibración de Balanzas)                │
         │  ├─ PK: id                               │
         │  ├─ FK: id_producto_almacen              │
@@ -417,7 +417,7 @@ Ejemplo:
 
 ---
 
-### 7. **app_producto_pesaje_config** (Calibración de Balanzas)
+### 7. **app_producto_pesaje_config_api** (Calibración de Balanzas)
 
 **Propósito:** Definir parámetros de conversión peso → onzas para cada perfil de botella.
 
@@ -711,7 +711,7 @@ if peso_medido >= (tara - margen_error):
 }
 ```
 
-**Configuración de balanza (app_producto_pesaje_config):**
+**Configuración de balanza (app_producto_pesaje_config_api):**
 - `peso_bruto`: 1200
 - `tara`: 250
 - `gramos_por_oz`: 28.349523

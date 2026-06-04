@@ -1030,7 +1030,7 @@
         </div>
     </div>
 
-    <script src="/assets/app.js?v=9.91"></script>
+    <script src="/assets/app.js?v=9.92"></script>
 
     <script>
         (function () {
@@ -1075,7 +1075,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/assets/sw.js?v=9.91')
+                navigator.serviceWorker.register('/assets/sw.js?v=9.92')
                     .then(reg => console.log('[PWA] Service Worker registrado:', reg.scope))
                     .catch(err => console.error('[PWA] Error al registrar SW:', err));
             });

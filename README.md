@@ -248,7 +248,7 @@ Para cada botella abierta:
 | `seg_usuario` | Usuarios |
 | `seg_acceso` | Auditoria de accesos |
 | `ope_operacion` | Operativas |
-| `app_producto_pesaje_config` | Configuracion/perfiles de pesaje |
+| `app_producto_pesaje_config_api` | Configuracion/perfiles de pesaje |
 | `bar_inventario_fisico` | Cabecera inventario fisico POS |
 | `bar_detalle_fisico` | Detalle inventario fisico POS |
 | `app_paloteo_registro_crudo` | Auditoria cruda de pesajes |
