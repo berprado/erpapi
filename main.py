@@ -171,6 +171,18 @@ def _procesar_items_paloteo(
                         detail=f"Perfil de botella inválido para producto {item.id_producto}."
                     )
 
+                if any(
+                    valor is None
+                    for valor in (perfil.gramos_por_oz, perfil.tara, perfil.peso_bruto)
+                ):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=(
+                            f"Perfil de botella incompleto para producto {item.id_producto}. "
+                            "Completa la configuración de pesaje antes de registrar el paloteo."
+                        )
+                    )
+
                 gr_oz = float(perfil.gramos_por_oz)
                 tara = float(perfil.tara)
                 peso_bruto = float(perfil.peso_bruto)
