@@ -718,6 +718,19 @@ def obtener_productos_pendientes(
             }
 
         if row["pesable"] == 1 and row["nombre_perfil"]:
+            # Si el perfil viene incompleto desde BD, se omite para no romper
+            # la serialización del endpoint con valores None en campos float.
+            if any(
+                row[campo] is None
+                for campo in ("peso_bruto", "tara", "gramos_por_oz", "tolerancia_oz")
+            ):
+                logger.warning(
+                    "Perfil de pesaje incompleto omitido. producto=%s perfil_id=%s",
+                    prod_id,
+                    row["perfil_id"],
+                )
+                continue
+
             productos_dict[prod_id]["perfiles"].append({
                 "id": row["perfil_id"],
                 "nombre_perfil": row["nombre_perfil"],
