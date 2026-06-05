@@ -834,8 +834,8 @@ def exportar_pdf_paloteo3(
     pdf.ln(6)
 
     # — Tabla —
-    col_widths = [12, 20, 72, 18, 24, 24]   # ID | Codigo | Producto | Dif.Unid | Dif.Oz Exacta | Dif.Oz POS
-    headers   = ["ID", "CODIGO", "PRODUCTO", "DIF. UNID", "DIF. OZ EX", "DIF. OZ POS"]
+    col_widths = [12, 20, 72, 18, 24, 24]   # ID | Codigo | Producto | Dif.Paq | Dif.Det | Dif.Det POS
+    headers   = ["ID", "CODIGO", "PRODUCTO", "DIF PAQ", "DIF DET", "DIF DET POS"]
     aligns    = ["R", "L", "L", "R", "R", "R"]
     row_h = 7
 
@@ -881,10 +881,18 @@ def exportar_pdf_paloteo3(
 
         valores = [fila.idProducto, fila.codigo, fila.nombre, texto_unid, texto_oz_exacta, texto_oz_pos]
         colores = [None, None, None, color_unid, color_oz_exacta, color_oz_pos]
+        # Jerarquía visual: ID y CODIGO con menor peso visual que PRODUCTO
+        jerarquias = ["muted", "muted", "primary", "valor", "valor", "valor"]
 
-        for w, val, align, color in zip(col_widths, valores, aligns, colores):
+        for w, val, align, color, jerarquia in zip(col_widths, valores, aligns, colores, jerarquias):
             if color:
                 pdf.set_text_color(*color)
+                pdf.set_font("Helvetica", "B", 8)
+            elif jerarquia == "muted":
+                pdf.set_text_color(150, 150, 150)
+                pdf.set_font("Helvetica", "", 7)
+            elif jerarquia == "primary":
+                pdf.set_text_color(17, 17, 17)
                 pdf.set_font("Helvetica", "B", 8)
             else:
                 pdf.set_text_color(17, 17, 17)
