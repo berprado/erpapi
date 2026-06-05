@@ -828,8 +828,8 @@
                     <button type="button" data-reporte-sort="idProducto" class="reporte-sort-btn text-left font-medium">ID</button>
                     <button type="button" data-reporte-sort="codigo" class="reporte-sort-btn text-left font-medium">COD</button>
                     <button type="button" data-reporte-sort="nombre" class="reporte-sort-btn text-left font-medium">PRODUCTO</button>
-                    <span class="text-left">DELTA UNID</span>
-                    <span class="text-left">DELTA OZ</span>
+                    <span class="text-left inline-flex items-center gap-[2px]"><span class="material-symbols-outlined text-[12px]">difference</span>DIF PAQ</span>
+                    <span class="text-left inline-flex items-center gap-[2px]"><span class="material-symbols-outlined text-[12px]">difference</span>DIF DET</span>
                 </div>
                 <div id="reporte-list" class="divide-y divide-outline-variant"></div>
             </div>
@@ -1030,7 +1030,7 @@
         </div>
     </div>
 
-    <script src="/assets/app.js?v=10.0"></script>
+    <script src="/assets/app.js?v=10.2"></script>
 
     <script>
         (function () {
@@ -1075,7 +1075,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/assets/sw.js?v=10.0')
+                navigator.serviceWorker.register('/assets/sw.js?v=10.2')
                     .then(reg => console.log('[PWA] Service Worker registrado:', reg.scope))
                     .catch(err => console.error('[PWA] Error al registrar SW:', err));
             });
