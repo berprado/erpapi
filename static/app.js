@@ -2313,6 +2313,13 @@ function renderTarjetaCaptura(indice) {
     botonSiguiente.className = `${claseBotonCapturaCompacto} w-[4.75rem] justify-self-end`;
     botonSiguiente.innerHTML = 'Sigt <span class="material-symbols-outlined text-[16px]">arrow_forward</span>';
 
+    const esPrimerProducto = indice <= 0;
+    const esUltimoProducto = indice >= (total - 1);
+    botonAnterior.classList.toggle('invisible', esPrimerProducto);
+    botonAnterior.disabled = esPrimerProducto;
+    botonSiguiente.classList.toggle('invisible', esUltimoProducto);
+    botonSiguiente.disabled = esUltimoProducto;
+
     botonAnterior.addEventListener('click', () => navegarCaptura(-1));
     botonSiguiente.addEventListener('click', () => navegarCaptura(1));
 
