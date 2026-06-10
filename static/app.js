@@ -2569,19 +2569,20 @@ btnEnviarInventario.addEventListener('click', async () => {
 
 // Función auxiliar para pintar las diferencias (Verde/Roja/Amarillo con Electric Industrial)
 function formatearDiferencia(diferencia, isOz = false) {
+    const diferenciaOperativa = isOz ? (redondearOnzasOperativas(diferencia) ?? 0) : diferencia;
     const sufijo = isOz ? "oz" : "bot";
 
     // Tolerancia para decimales (evitar ruido por redondeos)
-    if (Math.abs(diferencia) < 0.01) {
+    if (Math.abs(diferenciaOperativa) < 0.01) {
         return `<span class="text-data-tabular font-semibold" style="color: var(--semantic-action)">${renderCriticalIcon('check_circle', 'ui-icon ui-icon-sm')}</span>`;
     }
 
-    if (diferencia < 0) {
-        const val = isOz ? diferencia.toFixed(2) : Math.round(diferencia);
+    if (diferenciaOperativa < 0) {
+        const val = isOz ? diferenciaOperativa.toFixed(2) : Math.round(diferenciaOperativa);
         return `<span class="text-data-tabular font-semibold" style="color: var(--semantic-danger)">${val} ${sufijo}</span>`;
     }
 
-    const val = isOz ? diferencia.toFixed(2) : Math.round(diferencia);
+    const val = isOz ? diferenciaOperativa.toFixed(2) : Math.round(diferenciaOperativa);
     return `<span class="text-data-tabular font-semibold" style="color: var(--semantic-warning)">+${val} ${sufijo}</span>`;
 }
 
@@ -2636,8 +2637,12 @@ function recalcularTarjeta(card) {
             }
         });
 
-        if (spanDet) spanDet.textContent = detBarra.toFixed(2);
-        if (difDetSpan) difDetSpan.innerHTML = formatearDiferencia(detBarra - detSist, true, tolerancia);
+        const detBarraOperativo = redondearOnzasOperativas(detBarra) ?? 0;
+        const detSistOperativo = redondearOnzasOperativas(detSist) ?? 0;
+        const difDetOperativa = detBarraOperativo - detSistOperativo;
+
+        if (spanDet) spanDet.textContent = detBarraOperativo.toFixed(2);
+        if (difDetSpan) difDetSpan.innerHTML = formatearDiferencia(difDetOperativa, true, tolerancia);
     }
 }
 
