@@ -256,6 +256,38 @@
             font-size: 1rem;
         }
 
+        .floating-menu-user {
+            display: flex;
+            align-items: center;
+            gap: 0.55rem;
+            padding: 0.55rem 0.65rem 0.45rem;
+            color: var(--on-surface);
+            border-bottom: 1px solid var(--outline-variant);
+            margin-bottom: 0.35rem;
+        }
+
+        .floating-menu-user-label {
+            display: block;
+            font-size: 0.6rem;
+            letter-spacing: 0.11em;
+            text-transform: uppercase;
+            color: var(--on-surface-variant);
+        }
+
+        .floating-menu-user-name {
+            display: block;
+            font-size: 0.74rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            font-weight: 600;
+            color: var(--on-surface);
+        }
+
+        .floating-menu-separator {
+            border-top: 1px solid var(--outline-variant);
+            margin: 0.35rem 0;
+        }
+
         .topbar-icon-btn {
             display: inline-flex;
             align-items: center;
@@ -663,6 +695,13 @@
                         <span class="material-symbols-outlined text-base">menu</span>
                     </button>
                     <div id="topbar-menu-dropdown" class="floating-menu-dropdown hidden" role="menu" aria-label="Menu rapido">
+                        <div class="floating-menu-user" role="presentation">
+                            <span class="material-symbols-outlined" aria-hidden="true">account_circle</span>
+                            <div class="min-w-0">
+                                <span class="floating-menu-user-label">Usuario</span>
+                                <span id="user-display" class="floating-menu-user-name truncate"></span>
+                            </div>
+                        </div>
                         <button type="button" class="floating-menu-item" data-dummy-link="guia" role="menuitem">
                             <span class="material-symbols-outlined">article</span>
                             Guia Operativa Dummy
@@ -670,6 +709,11 @@
                         <button type="button" class="floating-menu-item" data-dummy-link="boletin" role="menuitem">
                             <span class="material-symbols-outlined">campaign</span>
                             Boletin Dummy
+                        </button>
+                        <div class="floating-menu-separator" role="presentation"></div>
+                        <button id="btn-logout" type="button" class="floating-menu-item" role="menuitem">
+                            <span class="material-symbols-outlined">logout</span>
+                            Cerrar Sesion
                         </button>
                     </div>
                 </div>
@@ -688,14 +732,6 @@
                     <label for="barra-selector" class="text-[10px] font-label-mono tracking-widest uppercase text-on-surface-variant">Barra</label>
                     <select id="barra-selector" class="bg-surface border border-outline-variant rounded-sm px-xs py-[2px] text-[11px] text-on-surface font-data-tabular focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors"></select>
                 </div>
-                <span id="user-display" class="text-label-mono text-on-surface-variant font-semibold tracking-widest hidden sm:inline uppercase"></span>
-                <button id="btn-logout" class="flex items-center text-on-surface-variant hover:text-primary-fixed-dim transition-colors">
-                    <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M14 7l5 5-5 5"></path>
-                        <path d="M19 12H8"></path>
-                        <path d="M4 4v16"></path>
-                    </svg>
-                </button>
             </div>
         </nav>
 
@@ -1030,7 +1066,7 @@
         </div>
     </div>
 
-    <script src="/assets/app.js?v=10.4"></script>
+    <script src="/assets/app.js?v=10.5"></script>
 
     <script>
         (function () {
@@ -1075,7 +1111,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/assets/sw.js?v=10.4')
+                navigator.serviceWorker.register('/assets/sw.js?v=10.5')
                     .then(reg => console.log('[PWA] Service Worker registrado:', reg.scope))
                     .catch(err => console.error('[PWA] Error al registrar SW:', err));
             });
