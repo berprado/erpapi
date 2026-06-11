@@ -744,6 +744,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         topbarMenuDropdown.addEventListener('click', (event) => {
+            const tabTrigger = event.target.closest('[data-tab]');
+            if (tabTrigger) {
+                cerrarMenuFlotanteTopbar();
+                return;
+            }
+
             const trigger = event.target.closest('[data-dummy-link]');
             if (!trigger) return;
 
@@ -823,6 +829,7 @@ loginForm.addEventListener('submit', async (e) => {
 });
 
 btnLogout.addEventListener('click', () => {
+    cerrarMenuFlotanteTopbar();
     localStorage.removeItem('token');
     localStorage.removeItem('nombres');
     currentToken = null;
