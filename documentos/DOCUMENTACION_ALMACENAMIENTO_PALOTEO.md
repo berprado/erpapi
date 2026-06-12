@@ -1,7 +1,7 @@
 # 📋 Documentación: Proceso de Almacenamiento de Paloteo
 
-**Versión:** 1.0  
-**Fecha:** 9 de mayo de 2026  
+**Versión:** 1.1  
+**Fecha:** 11 de junio de 2026  
 **Proyecto:** BackStage | Live Dashboard - Sistema de Inventario POS  
 **Rama:** experiment/glitch-no-glow
 
@@ -72,8 +72,9 @@ El propósito es mantener control riguroso del inventario y detectar discrepanci
 ┌─────────────────────────────────────────────────────────────────┐
 │ 5. VALIDACIÓN PREVIA AL ENVÍO                                   │
 │    └─ Valida que no haya números negativos                      │
-│    └─ Advertencia si hay >3 botellas abiertas por producto      │
-│    └─ Solicita confirmación al usuario (Fat Finger protection)  │
+│    └─ Valida peso por perfil (peso medido <= peso bruto)        │
+│    └─ Valida capacidad por producto (onzas no excedan máximo)   │
+│    └─ Si hay campos vacíos, solicita confirmación y rellena 0   │
 │    └─ Abre diálogo para observaciones opcionales                │
 └─────────────────────────────────────────────────────────────────┘
                             ↓
@@ -101,7 +102,7 @@ El propósito es mantener control riguroso del inventario y detectar discrepanci
 ┌─────────────────────────────────────────────────────────────────┐
 │ 9. RESPUESTA AL CLIENTE                                         │
 │    └─ Confirma éxito con ID del inventario guardado             │
-│    └─ Recarga dashboard para mostrar "sin pendientes"           │
+│    └─ Mantiene datos en pantalla y habilita flujo de corrección │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -113,7 +114,7 @@ El propósito es mantener control riguroso del inventario y detectar discrepanci
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│         FRONTEND (PWA - Angular/Vanilla JS)             │
+│         FRONTEND (PWA - HTML + Vanilla JS)              │
 │  static/index.html + static/app.js                      │
 └─────────────────────────────────┬───────────────────────┘
                                   │ HTTP/REST
@@ -650,26 +651,29 @@ class PesoAbierta:
 
 ### 2. **Validaciones de Negocio (Backend)**
 
-| Validación | Condición | Error | HTTP |
+| Validación | Condición | Error (resumen) | HTTP |
 |---|---|---|---|
-| Operación activa | `estado != 'HAB'` | "Operación inválida o barra no está en INICIO CIERRE" | 400 |
-| Estado de cierre | `estado_operacion != 24` | "Aún hay ventas activas" | 403 |
-| Inventario duplicado | Ya existe con `id_operacion` y `estado='HAB'` | "Ya existe un inventario registrado" | 409 |
+| Operación inválida para registrar/corregir | No existe operación o `estado_operacion != 24` | "Operación inválida o barra no está en INICIO CIERRE" | 400 |
+| Inventario duplicado (solo creación) | Ya existe con `id_operacion` y `estado='HAB'` | "Ya existe un inventario registrado" | 409 |
+| Barra operativa no válida | `id_barra` no coincide con barra operativa o no habilitada | "La barra enviada... no coincide..." / "La barra solicitada no está habilitada" | 400 |
 | Usuario activo | `usuario.estado != 'HAB' OR habilitado != '1'` | "Usuario no encontrado o inactivo" | 401 |
 | Token expirado | `exp < now()` | "El token ha expirado" | 401 |
-| Perfil inválido | No existe perfil para id_producto | "Perfil de botella inválido" | 400 |
+| Perfil inválido/incompleto | Perfil no encontrado o con datos incompletos | "Perfil de botella inválido/incompleto" | 400 |
+| Peso inválido | `peso_medido > peso_bruto` | "Peso inválido... supera el peso bruto" | 400 |
+| Capacidad excedida | `onzas_abierta > onzas_max_producto` | "Capacidad excedida" | 400 |
 
 ---
 
-### 3. **Validaciones de Datos (Frontend - Fat Finger Protection)**
+### 3. **Validaciones de Datos (Frontend)**
 
 ```javascript
 // Prevención de errores por entrada accidental:
 
 1. Números negativos: Se rechaza si cerradas < 0 o peso < 0
-2. Demasiadas botellas: Aviso si > 3 botellas abiertas por producto
-3. Confirmación doble: El usuario debe confirmar antes de enviar
-4. Diálogo de observaciones: Se solicita confirmación final
+2. Peso inválido: Se bloquea si un peso supera el peso bruto del perfil
+3. Capacidad excedida: Se bloquea si las onzas de una abierta superan la capacidad máxima
+4. Campos vacíos: Se pide confirmación para registrar esos campos como 0
+5. Diálogo de observaciones: Paso opcional antes del envío final
 ```
 
 ---
@@ -1020,44 +1024,35 @@ Esto permite:
 
 ### P5: ¿Se puede editar o eliminar un inventario ya guardado?
 
-**R:** **NO** (Por diseño)
+**R:** **Sí se puede corregir, con restricciones.**
 
-- No hay endpoint PATCH/PUT para editar
-- No hay endpoint DELETE
+- Existe endpoint de corrección: `PUT /api/inventario/paloteo/{id_inventario_pos}`.
+- Solo permite correcciones mientras la operación siga en estado `24` (INICIO CIERRE).
+- No existe endpoint `DELETE` para eliminar inventarios.
 
-**Razones:**
-1. Auditoría: Los datos históricos deben ser inmutables
-2. Compliance: Requisito regulatorio en POS
-3. Integridad: Evita manipulación accidental
-
-Si hay un error, se debe:
-1. Contactar a administrador
-2. Registrar un nuevo cierre (el sistema rechazará el anterior por duplicado)
-3. Documentar la excepción
+**Comportamiento de corrección:**
+1. Se actualiza cabecera y detalles del inventario existente.
+2. Solo se modifican productos con cambios efectivos (actualización selectiva).
+3. Se sigue registrando auditoría cruda por cada envío de corrección.
 
 ---
 
 ### P6: ¿Cuál es el máximo número de botellas abiertas por producto?
 
-**R:** **Técnicamente:** Sin límite  
-**Prácticamente:** El sistema advierte si hay >3
+**R:** No hay un límite duro en frontend/backend para la cantidad de botellas abiertas por producto.
 
-```javascript
-if (pesosAbiertas.length > 3) {
-    // Mostrar confirmación de "Fat Finger protection"
-    confirm("⚠️ Registraste 5 botellas abiertas. ¿Seguro?")
-}
-```
+El sistema actualmente no muestra advertencia específica por superar una cantidad de abiertas. Las protecciones activas son:
 
-Es una protección contra errores de entrada, no una restricción.
+1. no negativos,
+2. peso medido no mayor al peso bruto,
+3. capacidad máxima por producto,
+4. confirmación de campos vacíos.
 
 ---
 
 ### P7: ¿Qué hacer si el token JWT expira mientras estoy ingresando datos?
 
 **R:** El token expira después de **600 minutos (10 horas)**.
-
-Para una jornada típica (14h), es suficiente.
 
 Si expira:
 - Frontend detecta el error 401
@@ -1106,10 +1101,21 @@ Si expira:
 **R:** Sí, **VARCHAR(255)**
 
 - Máximo 255 caracteres
-- El frontend limita a este valor
-- Si intenta mandar más, MySQL rechaza con error
+- El límite duro está en base de datos
+- Si se excede, el backend/BD rechazará el valor
 
 **Recomendación:** Usar frases cortas y puntuales.
+
+---
+
+### P11: ¿Los datos del módulo REPORTE se almacenan de otra forma además del PDF?
+
+**R:** El módulo REPORTE no persiste una tabla propia de "reportes".
+
+1. Las filas del reporte se calculan en frontend desde la captura actual de Paloteo 3.
+2. Los datos base sí se persisten cuando se guarda inventario (cabecera + detalle + auditoría cruda).
+3. El endpoint `/api/paloteo3/exportar-pdf` genera y devuelve el PDF al cliente; no guarda el archivo en servidor.
+4. Existe autosave local (localStorage) para borrador operativo, no como histórico oficial de reportes.
 
 ---
 
@@ -1124,7 +1130,7 @@ CARGAR PRODUCTOS PENDIENTES
   ↓
 USUARIO INGRESA DATOS
   ↓
-VALIDAR DATOS (Fat Finger, negativos)
+VALIDAR DATOS (no negativos, peso/capacidad, vacíos)
   ↓
 SOLICITAR OBSERVACIONES (opcional)
   ↓
@@ -1148,7 +1154,7 @@ COMMIT A BASE DE DATOS
   ↓
 RESPUESTA 200 SUCCESS
   ↓
-FRONTEND RECARGA DASHBOARD
+FRONTEND MANTIENE DATOS Y PERMITE CORRECCIÓN
 ```
 
 ---
@@ -1160,12 +1166,12 @@ Este sistema proporciona:
 ✅ **Precisión:** Dos niveles de almacenamiento (procesado + auditoría exacta)  
 ✅ **Seguridad:** Autenticación JWT, registro de accesos, validaciones de integridad  
 ✅ **Auditoría:** Quién, cuándo, qué (incluyendo pesos exactos)  
-✅ **Prevención de errores:** Fat Finger protection, confirmaciones dobles  
+✅ **Prevención de errores:** validaciones de peso/capacidad, no negativos y confirmación de campos vacíos  
 ✅ **Integridad:** Prevención de inventarios duplicados, transacciones ACID  
 ✅ **Trazabilidad:** Perfiles de botellas seleccionados guardados en auditoría  
 
 ---
 
 **Documentación preparada por:** Backend Architecture Team  
-**Última actualización:** 9 de mayo de 2026  
-**Versión:** 1.0
+**Última actualización:** 11 de junio de 2026  
+**Versión:** 1.1
