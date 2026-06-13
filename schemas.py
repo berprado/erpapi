@@ -87,6 +87,7 @@ class InventarioDetalleRegistrado(BaseModel):
     id_producto: int
     botellas_cerradas: float
     onzas_pos: float
+    pesos_abiertas: List[PesoAbierta] = Field(default_factory=list)
 
 
 class InventarioRegistradoResponse(BaseModel):

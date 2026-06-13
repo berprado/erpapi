@@ -1103,40 +1103,45 @@ async function cargarInventarioExistente() {
 
 /**
  * Pre-llena los inputs de cada tarjeta con los valores ya almacenados en la BD.
- * Para productos pesables, recalcula el peso estimado en gramos usando la inversa
- * de la fórmula: peso_estimado = onzas_pos * gramos_por_oz + tara
+ * Prioriza restaurar los pesos crudos capturados para no reconstruir gramos desde
+ * onzas ya redondeadas. Solo usa el peso estimado como compatibilidad retroactiva.
  */
 function preLlenarInventario(detalles) {
     detalles.forEach(detalle => {
         const card = document.querySelector(`#lista-productos .product-card[data-id="${detalle.id_producto}"]`);
         if (!card) return;
 
-        // Pre-llenar botellas cerradas
-        const inputCerradas = card.querySelector('.input-cerradas');
-        if (inputCerradas) {
-            inputCerradas.value = detalle.botellas_cerradas || 0;
-        }
+        let pesosRestaurados = [];
+        if (parseInt(card.dataset.pesable, 10) === 1) {
+            pesosRestaurados = Array.isArray(detalle.pesos_abiertas)
+                ? detalle.pesos_abiertas
+                    .filter((entrada) => entrada && entrada.peso != null)
+                    .map((entrada) => ({
+                        peso: entrada.peso,
+                        perfilValue: entrada.perfil_id != null ? String(entrada.perfil_id) : String(entrada.perfil_index ?? 0),
+                    }))
+                : [];
 
-        // Pre-llenar peso para productos pesables
-        if (parseInt(card.dataset.pesable) === 1 && detalle.onzas_pos > 0) {
-            const perfiles = JSON.parse(card.dataset.perfiles || '[]');
-            if (perfiles.length > 0) {
-                const perfil = perfiles[0];
-                const tara = parseFloat(perfil.tara) || 0;
-                const gramsPorOz = parseFloat(perfil.gramos_por_oz) || 0;
-                if (gramsPorOz > 0) {
-                    // Inversa: onzas guardadas → gramos estimados para el input de báscula
-                    const pesoEstimado = (detalle.onzas_pos * gramsPorOz) + tara;
-                    const primerInput = card.querySelector('.input-peso');
-                    if (primerInput) {
-                        primerInput.value = pesoEstimado.toFixed(1);
+            if (pesosRestaurados.length === 0 && detalle.onzas_pos > 0) {
+                const perfiles = JSON.parse(card.dataset.perfiles || '[]');
+                if (perfiles.length > 0) {
+                    const perfil = perfiles[0];
+                    const tara = parseFloat(perfil.tara) || 0;
+                    const gramsPorOz = parseFloat(perfil.gramos_por_oz) || 0;
+                    if (gramsPorOz > 0) {
+                        pesosRestaurados = [{
+                            peso: ((detalle.onzas_pos * gramsPorOz) + tara).toFixed(1),
+                            perfilValue: (perfil.id != null) ? String(perfil.id) : '0',
+                        }];
                     }
                 }
             }
         }
 
-        // Recalcular deltas visibles con los valores cargados
-        recalcularTarjeta(card);
+        aplicarValoresCard(card, {
+            cerradas: detalle.botellas_cerradas || 0,
+            pesos: pesosRestaurados,
+        });
     });
 }
 
@@ -1173,9 +1178,11 @@ function crearTarjetaProductoElement(p, scope = 'inv') {
     div.dataset.id = p.id_producto;
     div.dataset.pesable = p.pesable || 0;
     div.dataset.nombre = p.nombre;
+    div.dataset.categoria = p.categoria_nombre || '';
     const perfilesJson = JSON.stringify(p.perfiles || []);
+    const perfilBase = (p.perfiles && p.perfiles.length > 0) ? p.perfiles[0] : null;
     div.dataset.perfiles = perfilesJson;
-    div.dataset.tolerancia = (p.perfiles && p.perfiles.length > 0) ? p.perfiles[0].tolerancia_oz : 0;
+    div.dataset.tolerancia = String(perfilBase ? (parseFloat(perfilBase.tolerancia_oz) || 0) : 0);
     div.dataset.paqsist = parseFloat(p.stock_ideal_unidades) || 0;
     div.dataset.detsist = parseFloat(p.stock_ideal_onzas) || 0;
     div.dataset.onzasMax = parseFloat(p.onzas_por_botella_llena) || 0;
@@ -1323,10 +1330,14 @@ function crearFilaPaloteo3(producto) {
     const idealOnzas = parseFloat(producto.stock_ideal_onzas) || 0;
     const capturado = obtenerValoresCapturadosPaloteo3(producto.id_producto);
     const esPesable = parseInt(producto.pesable, 10) === 1;
+    const toleranciaOz = perfilBase ? (parseFloat(perfilBase.tolerancia_oz) || 0) : 0;
     row.dataset.idealUnidades = String(idealUnidades);
     row.dataset.idealOnzas = String(idealOnzas);
     row.dataset.tara = String(tara);
     row.dataset.gramosOz = String(gramosPorOz);
+    row.dataset.categoria = String(producto.categoria_nombre || '');
+    row.dataset.pesable = esPesable ? '1' : '0';
+    row.dataset.tolerancia = String(toleranciaOz);
 
     row.innerHTML = `
         <div class="contents">
@@ -1458,6 +1469,7 @@ function obtenerFilasReportePaloteo3() {
             idProducto,
             codigo,
             nombre,
+            toleranciaOz: parseFloat(row.dataset.tolerancia) || 0,
             difUnidades: unidadesReales - idealUnidades,
             difOnzas: onzasReales - idealOnzas,
         });
@@ -1468,16 +1480,33 @@ function obtenerFilasReportePaloteo3() {
 
 function redondearOnzasOperativas(valor) {
     if (valor == null || Number.isNaN(Number(valor))) return null;
-    return Math.round(Number(valor) * 2.0) * 0.5;
+    const numero = Number(valor);
+    const escalado = numero * 2.0;
+    const epsilon = 1e-9;
+    const entero = escalado >= 0
+        ? Math.floor(escalado + 0.5 + epsilon)
+        : Math.ceil(escalado - 0.5 - epsilon);
+    return entero * 0.5;
+}
+
+function cuantizarDeltaOnzas(valor, toleranciaOz = 0) {
+    if (valor == null || Number.isNaN(Number(valor))) return null;
+
+    const numero = Number(valor);
+    if (Math.abs(numero) < toleranciaOz) {
+        return 0;
+    }
+
+    return redondearOnzasOperativas(numero);
 }
 
 function aplicarEstadoReporte(filasBase) {
     const filasNormalizadas = filasBase.map((fila) => {
         const clon = { ...fila };
 
-        // Conservamos exacta para auditoria/exportacion y mostramos en UI la operativa (0.5 oz).
+        // Conservamos exacta para auditoria/exportacion y mostramos en UI la operativa con tolerancia.
         clon.difOnzasExactas = clon.difOnzas;
-        clon.difOnzas = redondearOnzasOperativas(clon.difOnzas);
+        clon.difOnzas = cuantizarDeltaOnzas(clon.difOnzas, clon.toleranciaOz || 0);
 
         return clon;
     });
@@ -2575,8 +2604,8 @@ btnEnviarInventario.addEventListener('click', async () => {
 // ==========================================
 
 // Función auxiliar para pintar las diferencias (Verde/Roja/Amarillo con Electric Industrial)
-function formatearDiferencia(diferencia, isOz = false) {
-    const diferenciaOperativa = isOz ? (redondearOnzasOperativas(diferencia) ?? 0) : diferencia;
+function formatearDiferencia(diferencia, isOz = false, toleranciaOz = 0) {
+    const diferenciaOperativa = isOz ? (cuantizarDeltaOnzas(diferencia, toleranciaOz) ?? 0) : diferencia;
     const sufijo = isOz ? "oz" : "bot";
 
     // Tolerancia para decimales (evitar ruido por redondeos)
@@ -2645,11 +2674,10 @@ function recalcularTarjeta(card) {
         });
 
         const detBarraOperativo = redondearOnzasOperativas(detBarra) ?? 0;
-        const detSistOperativo = redondearOnzasOperativas(detSist) ?? 0;
-        const difDetOperativa = detBarraOperativo - detSistOperativo;
+        const difDetExacta = detBarra - detSist;
 
         if (spanDet) spanDet.textContent = detBarraOperativo.toFixed(2);
-        if (difDetSpan) difDetSpan.innerHTML = formatearDiferencia(difDetOperativa, true, tolerancia);
+        if (difDetSpan) difDetSpan.innerHTML = formatearDiferencia(difDetExacta, true, tolerancia);
     }
 }
 

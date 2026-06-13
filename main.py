@@ -13,6 +13,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import jwt
 from datetime import datetime, timedelta, timezone
 import logging
+from decimal import Decimal, ROUND_HALF_UP
 
 logger = logging.getLogger(__name__)
 from config import settings
@@ -38,6 +39,45 @@ app.add_middleware(
 # Configuración de Seguridad
 security = HTTPBearer()
 SECRET_KEY = settings.SECRET_KEY  # Cargado desde .env
+
+
+def _redondear_media_onza_half_up(valor: float) -> float:
+    """Redondea a múltiplos de 0.5 usando HALF_UP para alinear backend y frontend."""
+    redondeado = (Decimal(str(valor)) * Decimal("2")).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    return float(redondeado / Decimal("2"))
+
+
+def _obtener_pesos_crudos_por_producto(db: Session, id_operacion: int) -> dict[int, list]:
+    """Recupera la última captura cruda por producto para restaurar gramos reales en corrección."""
+    registros = db.query(models.PaloteoRegistroCrudo).filter(
+        models.PaloteoRegistroCrudo.id_operacion == id_operacion
+    ).order_by(models.PaloteoRegistroCrudo.id.desc()).all()
+
+    pesos_por_producto = {}
+    for registro in registros:
+        if registro.id_producto in pesos_por_producto:
+            continue
+
+        try:
+            pesos = json.loads(registro.pesos_abiertas) if registro.pesos_abiertas else []
+        except (TypeError, json.JSONDecodeError):
+            pesos = []
+
+        pesos_por_producto[registro.id_producto] = pesos if isinstance(pesos, list) else []
+
+    return pesos_por_producto
+
+
+def _obtener_tolerancia_operativa_oz(pesable: int | None, categoria_nombre: str | None) -> float:
+    """Define la banda muerta operativa por producto pesable según su categoría."""
+    if int(pesable or 0) != 1:
+        return 0.0
+
+    categoria_normalizada = (categoria_nombre or "").strip().upper()
+    if categoria_normalizada in {"MEZCLADORES", "VINOS"}:
+        return 0.5
+
+    return 0.25
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 600 # 10 horas de vigencia para cubrir toda la noche
 
@@ -214,7 +254,7 @@ def _procesar_items_paloteo(
 
                     total_onzas += onzas_abierta
 
-        onzas_redondeadas_pos = round(total_onzas * 2) / 2
+        onzas_redondeadas_pos = _redondear_media_onza_half_up(total_onzas)
 
         if es_correccion and item.id_producto in detalles_existentes_por_producto:
             detalle_existente = detalles_existentes_por_producto[item.id_producto]
@@ -519,12 +559,14 @@ def obtener_inventario_registrado(
         models.DetalleFisicoPOS.id_inventario_fisico == inventario.id,
         models.DetalleFisicoPOS.estado == 'HAB'
     ).all()
+    pesos_crudos_por_producto = _obtener_pesos_crudos_por_producto(db, inventario.id_operacion)
 
     detalles = [
         {
             "id_producto": detalle.id_producto,
             "botellas_cerradas": float(detalle.cantidad_unidad or 0),
             "onzas_pos": float(detalle.cantidad_detalle or 0),
+            "pesos_abiertas": pesos_crudos_por_producto.get(detalle.id_producto, []),
         }
         for detalle in detalles_db
     ]
@@ -749,7 +791,7 @@ def obtener_productos_pendientes(
                 "peso_bruto": float(row["peso_bruto"]),
                 "tara": float(row["tara"]),
                 "gramos_por_oz": float(row["gramos_por_oz"]),
-                "tolerancia_oz": float(row["tolerancia_oz"])
+                "tolerancia_oz": _obtener_tolerancia_operativa_oz(row["pesable"], row["categoria_nombre"])
             })
 
     return list(productos_dict.values())
