@@ -1450,22 +1450,26 @@ function obtenerFilasReportePaloteo3() {
     document.querySelectorAll('#stock-list .stock-row').forEach(row => {
         const inputUnidades = row.querySelector('.stock-input-unidades');
         const inputPeso = row.querySelector('.stock-input-peso');
-        if (!inputUnidades || !inputPeso) return;
+        if (!inputUnidades) return;
 
         const idProducto = row.dataset.idProducto || '';
         const codigo = row.dataset.codigo || '—';
         const nombre = row.dataset.nombre || '';
         const unidadesReales = parseInt(inputUnidades.value, 10) || 0;
-        const pesoReal = parseFloat(inputPeso.value) || 0;
 
         const idealUnidades = parseFloat(row.dataset.idealUnidades) || 0;
         const idealOnzas = parseFloat(row.dataset.idealOnzas) || 0;
-        const tara = parseFloat(row.dataset.tara) || 0;
-        const gramosOz = parseFloat(row.dataset.gramosOz) || 29.5735;
 
-        // Ajuste de margen para consistencia con otras pantallas
-        const pesoLiquidoReal = (pesoReal >= (tara - margenError)) ? Math.max(0, pesoReal - tara) : 0;
-        const onzasReales = gramosOz > 0 ? (pesoLiquidoReal / gramosOz) : 0;
+        let difOnzas = null;
+        if (inputPeso) {
+            const pesoReal = parseFloat(inputPeso.value) || 0;
+            const tara = parseFloat(row.dataset.tara) || 0;
+            const gramosOz = parseFloat(row.dataset.gramosOz) || 29.5735;
+            // Ajuste de margen para consistencia con otras pantallas
+            const pesoLiquidoReal = (pesoReal >= (tara - margenError)) ? Math.max(0, pesoReal - tara) : 0;
+            const onzasReales = gramosOz > 0 ? (pesoLiquidoReal / gramosOz) : 0;
+            difOnzas = onzasReales - idealOnzas;
+        }
 
         filas.push({
             idProducto,
@@ -1473,7 +1477,7 @@ function obtenerFilasReportePaloteo3() {
             nombre,
             toleranciaOz: parseFloat(row.dataset.tolerancia) || 0,
             difUnidades: unidadesReales - idealUnidades,
-            difOnzas: onzasReales - idealOnzas,
+            difOnzas,
         });
     });
 
