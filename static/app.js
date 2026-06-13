@@ -1176,6 +1176,7 @@ function crearTarjetaProductoElement(p, scope = 'inv') {
     div.className = "bg-surface-container border border-outline-variant rounded-md p-md shadow-lg product-card transition-colors focus-within:border-primary-fixed-dim chassis-panel";
     div.dataset.scope = scope;
     div.dataset.id = p.id_producto;
+    div.dataset.idCategoria = p.id_categoria || '';
     div.dataset.pesable = p.pesable || 0;
     div.dataset.nombre = p.nombre;
     div.dataset.categoria = p.categoria_nombre || '';
@@ -1321,6 +1322,7 @@ function crearFilaPaloteo3(producto) {
     row.dataset.search = `${producto.id_producto || ''} ${producto.codigo || ''} ${producto.nombre || ''}`.toLowerCase();
     row.dataset.codigo = String(producto.codigo || '—');
     row.dataset.nombre = String(producto.nombre || '');
+    row.dataset.idCategoria = String(producto.id_categoria || '');
 
     const perfiles = Array.isArray(producto.perfiles) ? producto.perfiles : [];
     const perfilBase = perfiles.length > 0 ? perfiles[0] : null;

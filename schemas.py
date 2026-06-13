@@ -72,6 +72,7 @@ class CrearPerfilPesajeRequest(BaseModel):
     
 class ProductoPendiente(BaseModel):
     id_producto: int
+    id_categoria: Optional[int] = None
     codigo: str
     nombre: str
     categoria_nombre: Optional[str] = None
@@ -122,3 +123,39 @@ class ExportarPdfRequest(BaseModel):
     usuario: str
     tipo_reporte: Literal['general', 'ingreso', 'salida'] = 'general'
     filas: List[FilaDiferenciaPdf] = Field(..., min_length=1)
+
+
+class ConsolidarAjustesRequest(BaseModel):
+    id_operacion: int = Field(..., gt=0, description="ID de la operativa a consolidar")
+    id_barra: int = Field(..., gt=0, description="ID de la barra asociada")
+    observaciones: Optional[str] = Field(None, description="Observaciones opcionales")
+
+
+class AjusteMovimientoPreview(BaseModel):
+    id_producto: int
+    cantidad: float
+    ind_paq_detalle: Literal['0', '1']
+
+
+class AjusteDeltaPreview(BaseModel):
+    id_producto: int
+    id_categoria: Optional[int] = None
+    pesable: int
+    tolerancia_oz: float
+    delta_paq: float
+    delta_det_exacto: float
+    delta_det_operativo: float
+
+
+class ConsolidarAjustesPreviewResponse(BaseModel):
+    status: Literal['ok', 'skipped']
+    id_operacion: int
+    id_barra: int
+    id_inventario_pos: int
+    observaciones: Optional[str] = None
+    resumen: dict
+    sobrantes_paq: List[AjusteMovimientoPreview] = Field(default_factory=list)
+    sobrantes_det: List[AjusteMovimientoPreview] = Field(default_factory=list)
+    faltantes_paq: List[AjusteMovimientoPreview] = Field(default_factory=list)
+    faltantes_det: List[AjusteMovimientoPreview] = Field(default_factory=list)
+    deltas: List[AjusteDeltaPreview] = Field(default_factory=list)
