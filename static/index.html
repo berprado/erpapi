@@ -720,6 +720,10 @@
                             <span class="material-symbols-outlined">inventory_2</span>
                             Paloteo 1
                         </button>
+                        <button id="menu-item-pesaje" type="button" class="floating-menu-item hidden" data-tab="pesaje" role="menuitem">
+                            <span class="material-symbols-outlined">monitor_weight</span>
+                            Pesaje
+                        </button>
                         <div class="floating-menu-separator" role="presentation"></div>
                         <button type="button" class="floating-menu-item" data-dummy-link="guia" role="menuitem">
                             <span class="material-symbols-outlined">article</span>
@@ -899,6 +903,47 @@
             <div id="captura-card-container" class="space-y-4"></div>
 
         </div><!-- /panel-logs -->
+
+
+        <!-- ========== PANEL PESAJE ========== -->
+        <div id="panel-pesaje" class="tab-panel hidden p-md max-w-2xl mx-auto w-full">
+            <div class="flex items-start justify-between mb-sm">
+                <div>
+                    <h2 class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase flex items-center gap-xs leading-none">
+                        <span class="material-symbols-outlined text-primary-fixed" style="font-size:1rem;">monitor_weight</span>
+                        Pesaje
+                    </h2>
+                    <p class="text-[11px] text-on-surface-variant mt-[2px] leading-tight">Modelos de botella y códigos de barra</p>
+                </div>
+            </div>
+
+            <!-- Buscador -->
+            <div class="relative mb-sm">
+                <span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-outline-variant" style="font-size:1rem;">search</span>
+                <input type="text" id="pesaje-search" placeholder="Buscar por nombre de producto..." class="w-full bg-surface-container border border-outline-variant rounded-md pl-10 pr-md py-sm text-sm text-on-surface placeholder-outline/40 focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-body-base">
+            </div>
+
+            <!-- Filtro de categoría -->
+            <div class="mb-sm">
+                <select id="pesaje-categoria" class="w-full bg-surface-container border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-body-base">
+                    <option value="">Todas las categorías</option>
+                </select>
+            </div>
+
+            <!-- Tabs Pesables / No pesables -->
+            <div class="mb-sm flex flex-wrap gap-xs">
+                <button id="pesaje-filtro-pesables" type="button" class="pesaje-filtro-btn bg-primary-container text-black border border-primary-fixed-dim px-sm py-[6px] rounded-sharp text-[10px] font-label-mono uppercase tracking-widest">Pesables</button>
+                <button id="pesaje-filtro-no-pesables" type="button" class="pesaje-filtro-btn bg-surface border border-outline-variant text-on-surface px-sm py-[6px] rounded-sharp text-[10px] font-label-mono uppercase tracking-widest">No pesables</button>
+            </div>
+
+            <!-- Listado -->
+            <div id="pesaje-list" class="space-y-sm"></div>
+
+            <!-- Estado vacío -->
+            <div id="pesaje-empty-state" class="hidden text-center text-on-surface-variant py-md font-body-base text-sm">
+                No se encontraron productos con estos filtros.
+            </div>
+        </div><!-- /panel-pesaje -->
 
 
         </main>

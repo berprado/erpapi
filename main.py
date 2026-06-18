@@ -8,7 +8,7 @@ import json
 from database import get_db
 import models
 import schemas
-from typing import List
+from typing import List, Optional
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import jwt
 from datetime import datetime, timedelta, timezone
@@ -110,6 +110,31 @@ def get_usuario_actual(credentials: HTTPAuthorizationCredentials = Depends(secur
     
     return usuario
 
+
+def _es_usuario_administrador(db: Session, id_usuario: int) -> bool:
+    resultado = db.execute(
+        text("""
+            SELECT 1 FROM seg_permiso sp
+            INNER JOIN seg_rol r ON r.id = sp.id_rol
+            WHERE sp.id_usuario = :id_usuario
+              AND sp.estado = 'HAB'
+              AND r.estado = 'HAB'
+              AND r.codigo = 'ROLE_ADMIN'
+            LIMIT 1
+        """),
+        {"id_usuario": id_usuario}
+    ).scalar()
+    return resultado is not None
+
+
+def get_usuario_administrador(
+    current_user: models.Usuario = Depends(get_usuario_actual),
+    db: Session = Depends(get_db)
+):
+    if not _es_usuario_administrador(db, current_user.id):
+        raise HTTPException(status_code=403, detail="Acceso restringido a administradores.")
+    return current_user
+
 # --- FUNCIÓN DE ENCRIPTACIÓN ---
 def hash_password(password: str) -> str:
     """Aplica SHA-256 puro para coincidir con el POS actual."""
@@ -195,7 +220,8 @@ def _procesar_items_paloteo(
         onzas_max_producto = onzas_max_por_producto[item.id_producto]
 
         configs_producto = db.query(models.ProductoPesajeConfig).filter(
-            models.ProductoPesajeConfig.id_producto_almacen == item.id_producto
+            models.ProductoPesajeConfig.id_producto_almacen == item.id_producto,
+            models.ProductoPesajeConfig.estado == 'HAB'
         ).all()
 
         # Registrar productos sin configuración en la lista de omitidos.
@@ -401,7 +427,8 @@ def login(login_data: schemas.UsuarioLogin, request: Request, db: Session = Depe
         "access_token": token_real,
         "token_type": "Bearer",
         "usuario_id": usuario_db.id,
-        "nombres": f"{usuario_db.paterno} {usuario_db.materno}, {usuario_db.nombres}"
+        "nombres": f"{usuario_db.paterno} {usuario_db.materno}, {usuario_db.nombres}",
+        "is_admin": _es_usuario_administrador(db, usuario_db.id)
     }
     
 @app.get("/api/operacion/activa", response_model=schemas.OperacionResponse)
@@ -669,7 +696,7 @@ def corregir_paloteo(
 def crear_perfil_pesaje(
     payload: schemas.CrearPerfilPesajeRequest,
     db: Session = Depends(get_db),
-    current_user: models.Usuario = Depends(get_usuario_actual)
+    current_user: models.Usuario = Depends(get_usuario_administrador)
 ):
     """Crea un nuevo modelo de botella para un producto pesable."""
     if payload.tara >= payload.peso_bruto:
@@ -690,30 +717,50 @@ def crear_perfil_pesaje(
         barcode = db.execute(
             text("""
                 SELECT barcode FROM app_producto_pesaje_config_api
-                WHERE id_producto_almacen = :id_producto AND barcode IS NOT NULL
+                WHERE id_producto_almacen = :id_producto AND barcode IS NOT NULL AND estado = 'HAB'
                 LIMIT 1
             """),
             {"id_producto": payload.id_producto}
         ).scalar()
 
-    insert_sql = text("""
-        INSERT INTO app_producto_pesaje_config_api
-        (id_producto_almacen, nombre_perfil, peso_bruto, tara, gramos_por_oz, barcode, pesable, usuario_reg)
-        VALUES
-        (:id_producto, :nombre_perfil, :peso_bruto, :tara, :gramos_por_oz, :barcode, 1, :usuario_reg)
-    """)
+    # Un perfil eliminado (DES) con el mismo nombre sigue ocupando la clave única
+    # (id_producto_almacen, nombre_perfil). En vez de fallar con 409, lo reactivamos
+    # con los nuevos datos en lugar de crear una fila nueva.
+    perfil_des = db.query(models.ProductoPesajeConfig).filter(
+        models.ProductoPesajeConfig.id_producto_almacen == payload.id_producto,
+        models.ProductoPesajeConfig.nombre_perfil == nombre_perfil,
+        models.ProductoPesajeConfig.estado == 'DES'
+    ).first()
 
     try:
-        result = db.execute(insert_sql, {
-            "id_producto": payload.id_producto,
-            "nombre_perfil": nombre_perfil,
-            "peso_bruto": payload.peso_bruto,
-            "tara": payload.tara,
-            "gramos_por_oz": gramos_por_oz,
-            "barcode": barcode,
-            "usuario_reg": current_user.usuario,
-        })
-        db.commit()
+        if perfil_des:
+            perfil_des.peso_bruto = payload.peso_bruto
+            perfil_des.tara = payload.tara
+            perfil_des.gramos_por_oz = gramos_por_oz
+            perfil_des.barcode = barcode
+            perfil_des.pesable = 1
+            perfil_des.estado = 'HAB'
+            perfil_des.usuario_reg = current_user.usuario
+            db.commit()
+            perfil_id = perfil_des.id
+        else:
+            insert_sql = text("""
+                INSERT INTO app_producto_pesaje_config_api
+                (id_producto_almacen, nombre_perfil, peso_bruto, tara, gramos_por_oz, barcode, pesable, usuario_reg)
+                VALUES
+                (:id_producto, :nombre_perfil, :peso_bruto, :tara, :gramos_por_oz, :barcode, 1, :usuario_reg)
+            """)
+            result = db.execute(insert_sql, {
+                "id_producto": payload.id_producto,
+                "nombre_perfil": nombre_perfil,
+                "peso_bruto": payload.peso_bruto,
+                "tara": payload.tara,
+                "gramos_por_oz": gramos_por_oz,
+                "barcode": barcode,
+                "usuario_reg": current_user.usuario,
+            })
+            db.commit()
+            perfil_id = result.lastrowid
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(
@@ -725,7 +772,6 @@ def crear_perfil_pesaje(
         logger.exception("Error creando perfil de pesaje para producto %s", payload.id_producto)
         raise HTTPException(status_code=500, detail="No se pudo crear el modelo de botella.") from exc
 
-    perfil_id = getattr(result, "lastrowid", None)
     return schemas.PerfilPesaje(
         id=perfil_id,
         nombre_perfil=nombre_perfil,
@@ -735,6 +781,172 @@ def crear_perfil_pesaje(
         tolerancia_oz=_obtener_tolerancia_operativa_oz(1, None),
         barcode=barcode,
     )
+
+
+@app.get("/api/pesaje/categorias", response_model=List[schemas.CategoriaItem])
+def listar_categorias_pesaje(
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_usuario_administrador)
+):
+    """Lista de categorías habilitadas, para el filtro del módulo PESAJE."""
+    rows = db.execute(
+        text("SELECT id, nombre FROM alm_categoria WHERE estado = 'HAB' ORDER BY nombre")
+    ).mappings().all()
+    return [
+        schemas.CategoriaItem(id_categoria=row["id"], nombre_categoria=row["nombre"])
+        for row in rows
+    ]
+
+
+@app.get("/api/pesaje/config", response_model=List[schemas.PesajeConfigItem])
+def listar_pesaje_config(
+    nombre: Optional[str] = None,
+    id_categoria: Optional[int] = None,
+    pesable: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_usuario_administrador)
+):
+    """Listado de perfiles de pesaje (tabla app_producto_pesaje_config_api vía v9_pesaje_config_api), para el módulo PESAJE."""
+    condiciones = []
+    parametros = {}
+
+    if nombre:
+        condiciones.append("nombre_producto LIKE :nombre")
+        parametros["nombre"] = f"%{nombre}%"
+    if id_categoria is not None:
+        condiciones.append("id_categoria = :id_categoria")
+        parametros["id_categoria"] = id_categoria
+    if pesable is not None:
+        condiciones.append("pesable = :pesable")
+        parametros["pesable"] = pesable
+
+    where_sql = f"WHERE {' AND '.join(condiciones)}" if condiciones else ""
+
+    query = text(f"""
+        SELECT id_pesaje_config, id_producto, nombre_producto, codigo_producto,
+               id_categoria, nombre_categoria, cantidad_detalle, peso_bruto, tara,
+               gramos_por_oz, pesable, barcode, nombre_perfil
+        FROM v9_pesaje_config_api
+        {where_sql}
+        ORDER BY nombre_producto ASC, nombre_perfil ASC
+    """)
+
+    rows = db.execute(query, parametros).mappings().all()
+    return [
+        schemas.PesajeConfigItem(
+            id=row["id_pesaje_config"],
+            id_producto=row["id_producto"],
+            nombre_producto=row["nombre_producto"],
+            codigo_producto=row["codigo_producto"],
+            id_categoria=row["id_categoria"],
+            nombre_categoria=row["nombre_categoria"],
+            volumen_oz=float(row["cantidad_detalle"]) if row["cantidad_detalle"] is not None else None,
+            peso_bruto=float(row["peso_bruto"]) if row["peso_bruto"] is not None else None,
+            tara=float(row["tara"]) if row["tara"] is not None else None,
+            gramos_por_oz=float(row["gramos_por_oz"]) if row["gramos_por_oz"] is not None else None,
+            pesable=row["pesable"],
+            barcode=row["barcode"],
+            nombre_perfil=row["nombre_perfil"],
+        )
+        for row in rows
+    ]
+
+
+@app.put("/api/pesaje/config/{id_pesaje_config}", response_model=schemas.PesajeConfigItem)
+def actualizar_pesaje_config(
+    id_pesaje_config: int,
+    payload: schemas.ActualizarPesajeConfigRequest,
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_usuario_administrador)
+):
+    """Edita peso_bruto/tara/barcode de un perfil de pesaje existente."""
+    perfil = db.query(models.ProductoPesajeConfig).filter(
+        models.ProductoPesajeConfig.id == id_pesaje_config,
+        models.ProductoPesajeConfig.estado == 'HAB'
+    ).first()
+    if not perfil:
+        raise HTTPException(status_code=404, detail="Perfil de pesaje no encontrado.")
+
+    if perfil.pesable == 1:
+        if payload.peso_bruto is None or payload.tara is None:
+            raise HTTPException(status_code=400, detail="peso_bruto y tara son obligatorios para un producto pesable.")
+        if payload.tara >= payload.peso_bruto:
+            raise HTTPException(status_code=400, detail="La tara no puede ser mayor o igual al peso bruto.")
+
+        volumen_oz = _obtener_onzas_por_botella_llena(db, perfil.id_producto_almacen)
+        if not volumen_oz:
+            raise HTTPException(status_code=400, detail="No se pudo determinar el volumen estándar del producto.")
+
+        perfil.peso_bruto = payload.peso_bruto
+        perfil.tara = payload.tara
+        perfil.gramos_por_oz = (payload.peso_bruto - payload.tara) / volumen_oz
+    else:
+        if payload.peso_bruto is not None or payload.tara is not None:
+            raise HTTPException(
+                status_code=400,
+                detail="Solo se puede editar el código de barras en productos no pesables."
+            )
+
+    if payload.barcode is not None:
+        perfil.barcode = payload.barcode.strip() or None
+
+    db.commit()
+
+    row = db.execute(
+        text("""
+            SELECT id_pesaje_config, id_producto, nombre_producto, codigo_producto,
+                   id_categoria, nombre_categoria, cantidad_detalle, peso_bruto, tara,
+                   gramos_por_oz, pesable, barcode, nombre_perfil
+            FROM v9_pesaje_config_api
+            WHERE id_pesaje_config = :id
+        """),
+        {"id": id_pesaje_config}
+    ).mappings().first()
+
+    return schemas.PesajeConfigItem(
+        id=row["id_pesaje_config"],
+        id_producto=row["id_producto"],
+        nombre_producto=row["nombre_producto"],
+        codigo_producto=row["codigo_producto"],
+        id_categoria=row["id_categoria"],
+        nombre_categoria=row["nombre_categoria"],
+        volumen_oz=float(row["cantidad_detalle"]) if row["cantidad_detalle"] is not None else None,
+        peso_bruto=float(row["peso_bruto"]) if row["peso_bruto"] is not None else None,
+        tara=float(row["tara"]) if row["tara"] is not None else None,
+        gramos_por_oz=float(row["gramos_por_oz"]) if row["gramos_por_oz"] is not None else None,
+        pesable=row["pesable"],
+        barcode=row["barcode"],
+        nombre_perfil=row["nombre_perfil"],
+    )
+
+
+@app.delete("/api/pesaje/config/{id_pesaje_config}")
+def eliminar_pesaje_config(
+    id_pesaje_config: int,
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_usuario_administrador)
+):
+    """Elimina (soft-delete) un perfil de pesaje, siempre que el producto conserve al menos uno activo."""
+    perfil = db.query(models.ProductoPesajeConfig).filter(
+        models.ProductoPesajeConfig.id == id_pesaje_config,
+        models.ProductoPesajeConfig.estado == 'HAB'
+    ).first()
+    if not perfil:
+        raise HTTPException(status_code=404, detail="Perfil de pesaje no encontrado.")
+
+    otros_activos = db.query(models.ProductoPesajeConfig).filter(
+        models.ProductoPesajeConfig.id_producto_almacen == perfil.id_producto_almacen,
+        models.ProductoPesajeConfig.estado == 'HAB',
+        models.ProductoPesajeConfig.id != perfil.id
+    ).count()
+
+    if otros_activos == 0:
+        raise HTTPException(status_code=400, detail="No se puede eliminar el último modelo del producto.")
+
+    perfil.estado = 'DES'
+    db.commit()
+    return {"status": "success", "mensaje": "Modelo de pesaje eliminado."}
+
 
 # OBTENEMOS LOS PRODUCTOS PARA EL PALOTEO
 
@@ -780,7 +992,7 @@ def obtener_productos_pendientes(
         ) mov
         INNER JOIN alm_producto a ON mov.id_producto = a.id
         INNER JOIN vista_inventario_barra_con_filtro i ON a.id = i.id_almacen 
-        LEFT JOIN app_producto_pesaje_config_api p ON a.id = p.id_producto_almacen
+        LEFT JOIN app_producto_pesaje_config_api p ON a.id = p.id_producto_almacen AND p.estado = 'HAB'
         ORDER BY a.nombre ASC, p.id ASC;
  
           """)

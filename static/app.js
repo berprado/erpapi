@@ -681,16 +681,254 @@ function abrirModalModelo(nombreProducto, perfilBase, volumenOz) {
     });
 }
 
-async function crearModeloBotella(idProducto) {
-    const card = document.querySelector(`#lista-productos .product-card[data-id="${idProducto}"]`);
-    if (!card) return;
+// ==========================================
+// MÓDULO PESAJE (CRUD app_producto_pesaje_config_api)
+// ==========================================
 
-    const nombreProducto = card.dataset.nombre || `ID ${idProducto}`;
-    const perfiles = JSON.parse(card.dataset.perfiles || '[]');
-    const perfilBase = perfiles[0] || null;
-    const volumenOz = parseFloat(card.dataset.onzasMax) || 0;
+const pesajeEstado = {
+    pesable: 1,
+    nombre: '',
+    idCategoria: '',
+    datos: [],
+};
 
-    const datos = await abrirModalModelo(nombreProducto, perfilBase, volumenOz);
+const pesajeSearchInput         = document.getElementById('pesaje-search');
+const pesajeCategoriaSel        = document.getElementById('pesaje-categoria');
+const pesajeFiltroPesablesBtn   = document.getElementById('pesaje-filtro-pesables');
+const pesajeFiltroNoPesablesBtn = document.getElementById('pesaje-filtro-no-pesables');
+const pesajeList                = document.getElementById('pesaje-list');
+const pesajeEmptyState          = document.getElementById('pesaje-empty-state');
+
+let categoriasPesajeCargadas = false;
+
+async function cargarCategoriasPesaje() {
+    if (categoriasPesajeCargadas || !pesajeCategoriaSel) return;
+    try {
+        const response = await fetch(`${API_BASE}/pesaje/categorias`, {
+            headers: { 'Authorization': `Bearer ${currentToken}` }
+        });
+        if (!response.ok) return;
+        const categorias = await response.json();
+        categorias.forEach((cat) => {
+            const option = document.createElement('option');
+            option.value = cat.id_categoria;
+            option.textContent = cat.nombre_categoria;
+            pesajeCategoriaSel.appendChild(option);
+        });
+        categoriasPesajeCargadas = true;
+    } catch (error) {
+        // Silencioso: el filtro de categoría queda solo con "Todas"
+    }
+}
+
+function actualizarUIFiltrosPesaje() {
+    const estilos = [
+        { btn: pesajeFiltroPesablesBtn, activo: pesajeEstado.pesable === 1 },
+        { btn: pesajeFiltroNoPesablesBtn, activo: pesajeEstado.pesable === 0 },
+    ];
+    estilos.forEach(({ btn, activo }) => {
+        if (!btn) return;
+        btn.classList.toggle('bg-primary-container', activo);
+        btn.classList.toggle('text-black', activo);
+        btn.classList.toggle('border-primary-fixed-dim', activo);
+        btn.classList.toggle('bg-surface', !activo);
+        btn.classList.toggle('text-on-surface', !activo);
+        btn.classList.toggle('border-outline-variant', !activo);
+    });
+}
+
+async function cargarPesaje() {
+    if (!pesajeList) return;
+    await cargarCategoriasPesaje();
+    actualizarUIFiltrosPesaje();
+
+    const params = new URLSearchParams();
+    params.set('pesable', String(pesajeEstado.pesable));
+    if (pesajeEstado.nombre) params.set('nombre', pesajeEstado.nombre);
+    if (pesajeEstado.idCategoria) params.set('id_categoria', pesajeEstado.idCategoria);
+
+    try {
+        const response = await fetch(`${API_BASE}/pesaje/config?${params.toString()}`, {
+            headers: { 'Authorization': `Bearer ${currentToken}` }
+        });
+        if (response.status === 401) return btnLogout.click();
+        if (response.status === 403) {
+            pesajeList.innerHTML = '';
+            pesajeEmptyState.textContent = 'No tienes permisos para acceder a este módulo.';
+            pesajeEmptyState.classList.remove('hidden');
+            return;
+        }
+        pesajeEstado.datos = response.ok ? await response.json() : [];
+    } catch (error) {
+        pesajeEstado.datos = [];
+    }
+
+    renderizarPesaje();
+}
+
+function renderizarPesaje() {
+    pesajeList.innerHTML = '';
+
+    const productos = new Map();
+    pesajeEstado.datos.forEach((item) => {
+        if (!productos.has(item.id_producto)) {
+            productos.set(item.id_producto, {
+                id_producto: item.id_producto,
+                nombre_producto: item.nombre_producto,
+                codigo_producto: item.codigo_producto,
+                nombre_categoria: item.nombre_categoria,
+                pesable: item.pesable,
+                volumen_oz: item.volumen_oz,
+                perfiles: [],
+            });
+        }
+        productos.get(item.id_producto).perfiles.push(item);
+    });
+
+    pesajeEmptyState.textContent = 'No se encontraron productos con estos filtros.';
+    pesajeEmptyState.classList.toggle('hidden', productos.size > 0);
+
+    productos.forEach((producto) => {
+        pesajeList.appendChild(crearTarjetaPesaje(producto));
+    });
+}
+
+function crearTarjetaPesaje(producto) {
+    const div = document.createElement('div');
+    div.className = 'bg-surface-container border border-outline-variant rounded-md p-md shadow-lg space-y-sm';
+
+    const header = document.createElement('div');
+    header.innerHTML = `
+        <p class="text-sm font-semibold text-on-surface">${producto.nombre_producto}</p>
+        <p class="text-[11px] text-on-surface-variant">COD ${producto.codigo_producto}${producto.nombre_categoria ? ' · ' + producto.nombre_categoria : ''}</p>
+    `;
+    div.appendChild(header);
+
+    producto.perfiles.forEach((perfil) => {
+        div.appendChild(crearFilaPerfilPesaje(producto, perfil));
+    });
+
+    if (producto.pesable === 1) {
+        const btnAgregar = document.createElement('button');
+        btnAgregar.type = 'button';
+        btnAgregar.className = 'w-full bg-surface text-on-surface border border-outline-variant py-sm px-md rounded-sharp uppercase tracking-widest text-label-mono hover:border-primary-fixed-dim transition-colors flex items-center justify-center gap-xs';
+        btnAgregar.innerHTML = '<span class="material-symbols-outlined text-sm">add</span> Agregar modelo';
+        btnAgregar.addEventListener('click', () => agregarModeloPesaje(producto));
+        div.appendChild(btnAgregar);
+    }
+
+    return div;
+}
+
+function crearFilaPerfilPesaje(producto, perfil) {
+    const row = document.createElement('div');
+    row.className = 'border border-outline-variant rounded-md p-sm space-y-xs';
+
+    const esPesable = producto.pesable === 1;
+    const puedeEliminar = esPesable && producto.perfiles.length > 1;
+
+    row.innerHTML = `
+        <p class="text-[11px] text-on-surface-variant uppercase tracking-widest">${perfil.nombre_perfil}</p>
+        <div class="grid ${esPesable ? 'grid-cols-3' : 'grid-cols-1'} gap-xs">
+            ${esPesable ? `
+            <div>
+                <label class="text-[10px] text-on-surface-variant block">Peso bruto (g)</label>
+                <input type="number" min="0" step="0.01" class="pesaje-input-peso-bruto w-full bg-surface border border-outline-variant rounded-md px-sm py-xs text-sm text-on-surface font-data-tabular" value="${perfil.peso_bruto ?? ''}">
+            </div>
+            <div>
+                <label class="text-[10px] text-on-surface-variant block">Tara (g)</label>
+                <input type="number" min="0" step="0.01" class="pesaje-input-tara w-full bg-surface border border-outline-variant rounded-md px-sm py-xs text-sm text-on-surface font-data-tabular" value="${perfil.tara ?? ''}">
+            </div>
+            ` : ''}
+            <div>
+                <label class="text-[10px] text-on-surface-variant block">Código de barras</label>
+                <input type="text" class="pesaje-input-barcode w-full bg-surface border border-outline-variant rounded-md px-sm py-xs text-sm text-on-surface font-data-tabular" value="${perfil.barcode || ''}">
+            </div>
+        </div>
+        <p class="pesaje-error hidden text-xs text-error"></p>
+        <div class="flex gap-xs">
+            <button type="button" class="pesaje-btn-guardar flex-1 bg-primary-container text-black py-xs px-sm rounded-sharp text-[10px] font-label-mono uppercase tracking-widest">Guardar</button>
+            ${puedeEliminar ? '<button type="button" class="pesaje-btn-eliminar bg-surface border border-outline-variant text-on-surface py-xs px-sm rounded-sharp text-[10px] font-label-mono uppercase tracking-widest">Eliminar</button>' : ''}
+        </div>
+    `;
+
+    const errorEl        = row.querySelector('.pesaje-error');
+    const btnGuardar      = row.querySelector('.pesaje-btn-guardar');
+    const btnEliminar     = row.querySelector('.pesaje-btn-eliminar');
+    const inputPesoBruto  = row.querySelector('.pesaje-input-peso-bruto');
+    const inputTara       = row.querySelector('.pesaje-input-tara');
+    const inputBarcode    = row.querySelector('.pesaje-input-barcode');
+
+    btnGuardar.addEventListener('click', async () => {
+        errorEl.classList.add('hidden');
+        const body = { barcode: inputBarcode.value.trim() || null };
+        if (esPesable) {
+            body.peso_bruto = parseFloat(inputPesoBruto.value);
+            body.tara = parseFloat(inputTara.value);
+            if (Number.isNaN(body.peso_bruto) || Number.isNaN(body.tara)) {
+                errorEl.textContent = 'Peso bruto y tara deben ser numéricos.';
+                errorEl.classList.remove('hidden');
+                return;
+            }
+        }
+
+        try {
+            const response = await fetch(`${API_BASE}/pesaje/config/${perfil.id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${currentToken}`
+                },
+                body: JSON.stringify(body)
+            });
+            if (response.status === 401) return btnLogout.click();
+            const data = await response.json();
+            if (!response.ok) {
+                errorEl.textContent = data.detail || 'No se pudo guardar.';
+                errorEl.classList.remove('hidden');
+                return;
+            }
+            await cargarPesaje();
+        } catch (error) {
+            errorEl.textContent = 'Error de red al guardar.';
+            errorEl.classList.remove('hidden');
+        }
+    });
+
+    if (btnEliminar) {
+        btnEliminar.addEventListener('click', async () => {
+            const confirmado = await mostrarDialogoConfirmacion({
+                titulo: 'Eliminar modelo',
+                mensaje: `¿Eliminar el modelo "${perfil.nombre_perfil}"?`
+            });
+            if (!confirmado) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/pesaje/config/${perfil.id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${currentToken}` }
+                });
+                if (response.status === 401) return btnLogout.click();
+                const data = await response.json();
+                if (!response.ok) {
+                    errorEl.textContent = data.detail || 'No se pudo eliminar.';
+                    errorEl.classList.remove('hidden');
+                    return;
+                }
+                await cargarPesaje();
+            } catch (error) {
+                errorEl.textContent = 'Error de red al eliminar.';
+                errorEl.classList.remove('hidden');
+            }
+        });
+    }
+
+    return row;
+}
+
+async function agregarModeloPesaje(producto) {
+    const perfilBase = producto.perfiles[0] || null;
+    const datos = await abrirModalModelo(producto.nombre_producto, perfilBase, producto.volumen_oz);
     if (!datos) return; // usuario canceló
 
     try {
@@ -701,7 +939,7 @@ async function crearModeloBotella(idProducto) {
                 'Authorization': `Bearer ${currentToken}`
             },
             body: JSON.stringify({
-                id_producto: idProducto,
+                id_producto: producto.id_producto,
                 nombre_perfil: datos.nombre,
                 peso_bruto: datos.pesoBruto,
                 tara: datos.tara,
@@ -713,24 +951,50 @@ async function crearModeloBotella(idProducto) {
 
         const data = await response.json();
         if (!response.ok) {
-            // Re-abrimos el modal con el error visible en lugar de alert()
             mbError.textContent = `No se pudo crear el modelo: ${data.detail || 'Error desconocido'}`;
             mbError.classList.remove('hidden');
             modeloBotellaDialog.classList.remove('hidden');
             return;
         }
 
-        const perfilesActuales = JSON.parse(card.dataset.perfiles || '[]');
-        perfilesActuales.push(data);
-        card.dataset.perfiles = JSON.stringify(perfilesActuales);
-        refrescarSelectoresPerfil(card);
-        recalcularTarjeta(card);
-        // El modal ya se cerró al confirmar — no usamos alert()
+        await cargarPesaje();
     } catch (error) {
         mbError.textContent = 'Error de red al crear el modelo de botella.';
         mbError.classList.remove('hidden');
         modeloBotellaDialog.classList.remove('hidden');
     }
+}
+
+let pesajeBusquedaTimeout = null;
+if (pesajeSearchInput) {
+    pesajeSearchInput.addEventListener('input', () => {
+        clearTimeout(pesajeBusquedaTimeout);
+        pesajeBusquedaTimeout = setTimeout(() => {
+            pesajeEstado.nombre = pesajeSearchInput.value.trim();
+            cargarPesaje();
+        }, 350);
+    });
+}
+
+if (pesajeCategoriaSel) {
+    pesajeCategoriaSel.addEventListener('change', () => {
+        pesajeEstado.idCategoria = pesajeCategoriaSel.value;
+        cargarPesaje();
+    });
+}
+
+if (pesajeFiltroPesablesBtn) {
+    pesajeFiltroPesablesBtn.addEventListener('click', () => {
+        pesajeEstado.pesable = 1;
+        cargarPesaje();
+    });
+}
+
+if (pesajeFiltroNoPesablesBtn) {
+    pesajeFiltroNoPesablesBtn.addEventListener('click', () => {
+        pesajeEstado.pesable = 0;
+        cargarPesaje();
+    });
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -832,6 +1096,7 @@ loginForm.addEventListener('submit', async (e) => {
             currentToken = data.access_token;
             localStorage.setItem('token', currentToken);
             localStorage.setItem('nombres', data.nombres);
+            localStorage.setItem('is_admin', data.is_admin ? '1' : '0');
             mostrarPantallaApp();
         } else {
             errorBox.textContent = data.detail || "Error al iniciar sesión";
@@ -847,6 +1112,7 @@ btnLogout.addEventListener('click', () => {
     cerrarMenuFlotanteTopbar();
     localStorage.removeItem('token');
     localStorage.removeItem('nombres');
+    localStorage.removeItem('is_admin');
     currentToken = null;
     mostrarPantallaLogin();
 });
@@ -861,6 +1127,9 @@ async function mostrarPantallaApp() {
     loginScreen.classList.add('hidden');
     appScreen.classList.remove('hidden');
     document.getElementById('user-display').textContent = localStorage.getItem('nombres');
+    const esAdmin = localStorage.getItem('is_admin') === '1';
+    const menuItemPesaje = document.getElementById('menu-item-pesaje');
+    if (menuItemPesaje) menuItemPesaje.classList.toggle('hidden', !esAdmin);
     await cargarConfiguracionPublica();
     // Asegurar que el panel de inventario sea el visible al entrar a la app
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
@@ -1185,7 +1454,6 @@ function crearTarjetaProductoElement(p, scope = 'inv') {
     const sufijoScope = esCaptura ? `cap-${p.id_producto}` : `${p.id_producto}`;
     const pesosContainerId = esCaptura ? `pesos-cap-${p.id_producto}` : `pesos-${p.id_producto}`;
     const btnAddPesoClass = esCaptura ? 'btn-add-peso-captura' : 'btn-add-peso';
-    const btnAddModeloClass = esCaptura ? 'btn-add-modelo-captura' : 'btn-add-modelo';
 
     const div = document.createElement('div');
     div.className = "bg-surface-container border border-outline-variant rounded-md p-md shadow-lg product-card transition-colors focus-within:border-primary-fixed-dim chassis-panel";
@@ -1279,9 +1547,6 @@ function crearTarjetaProductoElement(p, scope = 'inv') {
                 <div class="mt-sm flex flex-wrap gap-sm">
                     <button type="button" data-id-producto="${p.id_producto}" class="${btnAddPesoClass} btn-action w-full sm:w-auto text-label-mono font-semibold flex items-center justify-center sm:justify-start gap-xs transition-colors uppercase tracking-widest rounded-sharp border px-sm py-xs">
                         <span class="material-symbols-outlined text-sm">add_circle</span> + Botella
-                    </button>
-                    <button type="button" data-id-producto="${p.id_producto}" class="${btnAddModeloClass} btn-info w-full sm:w-auto text-label-mono font-semibold flex items-center justify-center sm:justify-start gap-xs transition-colors uppercase tracking-widest rounded-sharp border px-sm py-xs">
-                        <span class="material-symbols-outlined text-sm">labs</span> + Modelo
                     </button>
                 </div>
             </div>` : ''}
@@ -2172,6 +2437,7 @@ const TAB_PANEL_MAP = {
     inventario: 'panel-inventario',
     scan:       'panel-scan',
     logs:       'panel-logs',
+    pesaje:     'panel-pesaje',
 };
 
 /**
@@ -2196,6 +2462,10 @@ function navegarATab(tabName) {
 
     if (tabName === 'scan') {
         renderizarReportePaloteo3();
+    }
+
+    if (tabName === 'pesaje') {
+        cargarPesaje();
     }
 
     // Actualizar estado visual de tabs (excepto btn-guardar que tiene su propio estado)
@@ -2591,16 +2861,6 @@ if (capturaCardContainer) {
             return;
         }
 
-        const btnModelo = e.target.closest('.btn-add-modelo-captura');
-        if (btnModelo) {
-            const idProducto = parseInt(btnModelo.dataset.idProducto, 10);
-            if (!isNaN(idProducto)) {
-                await crearModeloBotella(idProducto);
-                renderTarjetaCaptura(capturaEstado.indice);
-            }
-            return;
-        }
-
         if (e.target.closest('.btn-remove-peso')) {
             const card = capturaCardContainer.querySelector('.product-card[data-scope="captura"]');
             setTimeout(() => {
@@ -2770,15 +3030,6 @@ listaProductos.addEventListener('click', (e) => {
             agregarInputPeso(idProducto);
             refrescarPaloteo3DesdeInventario();
             scheduleAutosave();
-        }
-        return;
-    }
-
-    const btnModelo = e.target.closest('.btn-add-modelo');
-    if (btnModelo) {
-        const idProducto = parseInt(btnModelo.dataset.idProducto, 10);
-        if (!isNaN(idProducto)) {
-            crearModeloBotella(idProducto);
         }
         return;
     }

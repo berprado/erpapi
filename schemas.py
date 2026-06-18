@@ -12,6 +12,7 @@ class Token(BaseModel):
     token_type: str
     usuario_id: int
     nombres: str
+    is_admin: bool = False
 
 # Esquema para la respuesta de la operación
 class OperacionResponse(BaseModel):
@@ -70,6 +71,30 @@ class CrearPerfilPesajeRequest(BaseModel):
     tara: float = Field(..., ge=0)
     barcode: Optional[str] = Field(None, max_length=50)
     
+class PesajeConfigItem(BaseModel):
+    id: int
+    id_producto: int
+    nombre_producto: str
+    codigo_producto: str
+    id_categoria: Optional[int] = None
+    nombre_categoria: Optional[str] = None
+    volumen_oz: Optional[float] = None
+    peso_bruto: Optional[float] = None
+    tara: Optional[float] = None
+    gramos_por_oz: Optional[float] = None
+    pesable: int
+    barcode: Optional[str] = None
+    nombre_perfil: str
+
+class ActualizarPesajeConfigRequest(BaseModel):
+    peso_bruto: Optional[float] = Field(None, gt=0)
+    tara: Optional[float] = Field(None, ge=0)
+    barcode: Optional[str] = Field(None, max_length=50)
+
+class CategoriaItem(BaseModel):
+    id_categoria: int
+    nombre_categoria: str
+
 class ProductoPendiente(BaseModel):
     id_producto: int
     id_categoria: Optional[int] = None

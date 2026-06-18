@@ -184,11 +184,14 @@ El propósito es mantener control riguroso del inventario y detectar discrepanci
         │ (Calibración de Balanzas)                │
         │  ├─ PK: id                               │
         │  ├─ FK: id_producto_almacen              │
-        │  ├─ peso_bruto, tara                     │
+        │  ├─ peso_bruto, tara, barcode            │
         │  ├─ gramos_por_oz, tolerancia_oz         │
-        │  └─ pesable (0=no pesable, 1=pesable)    │
+        │  ├─ pesable (0=no pesable, 1=pesable)    │
+        │  └─ estado (HAB=activo, DES=eliminado)   │
         └──────────────────────────────────────────┘
 ```
+
+**Gestión (CRUD):** este módulo se administra desde el panel **PESAJE** de la PWA, accesible solo para usuarios con rol `ROLE_ADMINISTRADOR` (ver tabla `seg_rol`/`seg_permiso`). Ya no se crean modelos de botella desde los paneles de paloteo.
 
 ---
 
@@ -433,14 +436,29 @@ Ejemplo:
 | `barcode` | VARCHAR(50) | SÍ | Código de barras del modelo de botella. Opcional; si no se especifica al crear, se copia el de otro perfil existente del mismo producto (si hay) |
 | `tolerancia_oz` | DECIMAL(10,2) | SÍ | Columna heredada, default `1.50`. **No es configurable por el usuario** en el alta de un modelo: el valor operativo real siempre se calcula por categoría de producto vía `_obtener_tolerancia_operativa_oz` (0.5 oz para categorías 6/22, 0.25 oz para el resto), tanto al listar pendientes como al consolidar diferencias |
 | `pesable` | INT (TINYINT) | SÍ | **0** = No pesable, **1** = Pesable |
+| `estado` | VARCHAR(3) | NO | **'HAB'** (default) = activo, **'DES'** = eliminado lógicamente (soft-delete) desde el módulo PESAJE |
 
-**Clave única:** `(id_producto_almacen, nombre_perfil)` — evita duplicar el nombre de perfil dentro de un mismo producto, pero permite múltiples perfiles distintos por producto.
+**Clave única:** `(id_producto_almacen, nombre_perfil)` — evita duplicar el nombre de perfil dentro de un mismo producto, pero permite múltiples perfiles distintos por producto. Esta clave **no distingue `estado`**: un perfil con `estado='DES'` sigue ocupando esa combinación nombre+producto (ver "Reactivación" más abajo).
 
 **Validaciones al crear un modelo (`POST /api/pesaje/perfiles`):**
 - Nombre del modelo obligatorio (2-100 caracteres)
 - `peso_bruto > tara` (obligatorio)
 - El producto debe tener un volumen estándar válido en `alm_producto.cantidad_detalle` (de lo contrario no se puede calcular `gramos_por_oz`)
 - El volumen del nuevo modelo es siempre el mismo que el del producto (no se permite definir un volumen distinto por perfil)
+
+**Reactivación de perfiles eliminados:** si se intenta crear un modelo con un nombre que ya existe para ese producto pero con `estado='DES'` (fue eliminado antes), el backend **reactiva esa misma fila** (mismo `id`) con los nuevos valores de `peso_bruto`/`tara`/`gramos_por_oz`/`barcode` y `estado='HAB'`, en vez de intentar un `INSERT` que chocaría con la clave única. Si el nombre ya existe con `estado='HAB'` (duplicado real), se sigue rechazando con `409`.
+
+**Vista de consulta (módulo PESAJE):** `v9_pesaje_config_api` expone esta tabla unida con `alm_producto` y `alm_categoria`, filtrando `p.estado = 'HAB' AND pc.estado = 'HAB'` (los perfiles eliminados no aparecen en el listado del módulo).
+
+**Control de acceso:** todas las operaciones de escritura sobre esta tabla (crear, editar, eliminar) requieren que el usuario autenticado tenga el rol `ROLE_ADMINISTRADOR` (verificado contra `seg_permiso`/`seg_rol`). Un usuario sin ese rol recibe `403 Forbidden`.
+
+**Reglas de edición (`PUT /api/pesaje/config/{id}`):**
+- Si `pesable = 1`: se exigen `peso_bruto` y `tara`, se valida `tara < peso_bruto`, y `gramos_por_oz` se recalcula con la misma fórmula del alta.
+- Si `pesable = 0`: solo se permite editar `barcode`; si el payload incluye `peso_bruto` o `tara`, se rechaza con `400`.
+
+**Reglas de eliminación (`DELETE /api/pesaje/config/{id}`):**
+- Soft-delete (`estado='DES'`), nunca `DELETE` físico.
+- Se rechaza con `400` si es el último perfil con `estado='HAB'` del producto (todo producto debe conservar al menos un modelo activo).
 
 **Ejemplo de dato:**
 ```json
@@ -453,7 +471,8 @@ Ejemplo:
   "gramos_por_oz": 28.349523,
   "barcode": "7501234567890",
   "tolerancia_oz": 1.5,
-  "pesable": 1
+  "pesable": 1,
+  "estado": "HAB"
 }
 ```
 
@@ -902,10 +921,16 @@ Respuesta: "Usuario no encontrado o inactivo"
 ### Error 403: Forbidden (No Autorizado)
 
 ```
-Causa: Estado de operación es 22 (vendiendo), no 24 (cierre)
+Causa 1: Estado de operación es 22 (vendiendo), no 24 (cierre)
 Respuesta:
 {
   "detail": "Aún hay ventas activas. Cambie el estado de la operativa a INICIO CIERRE..."
+}
+
+Causa 2: Usuario sin rol ROLE_ADMINISTRADOR intenta acceder a los endpoints de /api/pesaje/*
+Respuesta:
+{
+  "detail": "Acceso restringido a administradores."
 }
 ```
 

@@ -50,6 +50,7 @@ class ProductoPesajeConfig(Base):
     pesable = Column(Integer) # Usamos Integer para el TINYINT(1)
     barcode = Column(String(50))
     tolerancia_oz = Column(Numeric(10, 2))
+    estado = Column(String(3))
 
 class PaloteoRegistroCrudo(Base):
     __tablename__ = "app_paloteo_registro_crudo"
