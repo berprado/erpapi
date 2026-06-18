@@ -829,7 +829,7 @@ function crearFilaPerfilPesaje(producto, perfil) {
 
     row.innerHTML = `
         <p class="text-[11px] text-on-surface-variant uppercase tracking-widest">${perfil.nombre_perfil}</p>
-        <div class="grid ${esPesable ? 'grid-cols-3' : 'grid-cols-1'} gap-xs">
+        <div class="grid ${esPesable ? 'grid-cols-4' : 'grid-cols-1'} gap-xs">
             ${esPesable ? `
             <div>
                 <label class="text-[10px] text-on-surface-variant block">Peso bruto (g)</label>
@@ -838,6 +838,10 @@ function crearFilaPerfilPesaje(producto, perfil) {
             <div>
                 <label class="text-[10px] text-on-surface-variant block">Tara (g)</label>
                 <input type="number" min="0" step="0.01" class="pesaje-input-tara w-full bg-surface border border-outline-variant rounded-md px-sm py-xs text-sm text-on-surface font-data-tabular" value="${perfil.tara ?? ''}">
+            </div>
+            <div>
+                <label class="text-[10px] text-on-surface-variant block">g / oz</label>
+                <input type="text" readonly class="pesaje-input-gramos-oz w-full bg-surface-container border border-outline-variant rounded-md px-sm py-xs text-sm text-on-surface-variant font-data-tabular cursor-not-allowed" value="${perfil.gramos_por_oz ?? ''}">
             </div>
             ` : ''}
             <div>
@@ -857,7 +861,22 @@ function crearFilaPerfilPesaje(producto, perfil) {
     const btnEliminar     = row.querySelector('.pesaje-btn-eliminar');
     const inputPesoBruto  = row.querySelector('.pesaje-input-peso-bruto');
     const inputTara       = row.querySelector('.pesaje-input-tara');
+    const inputGramosOz   = row.querySelector('.pesaje-input-gramos-oz');
     const inputBarcode    = row.querySelector('.pesaje-input-barcode');
+
+    if (esPesable && inputGramosOz) {
+        const actualizarGramosOz = () => {
+            const pesoBruto = parseFloat(inputPesoBruto.value);
+            const tara = parseFloat(inputTara.value);
+            if (!producto.volumen_oz || Number.isNaN(pesoBruto) || Number.isNaN(tara)) {
+                inputGramosOz.value = '';
+                return;
+            }
+            inputGramosOz.value = ((pesoBruto - tara) / producto.volumen_oz).toFixed(6);
+        };
+        inputPesoBruto.addEventListener('input', actualizarGramosOz);
+        inputTara.addEventListener('input', actualizarGramosOz);
+    }
 
     btnGuardar.addEventListener('click', async () => {
         errorEl.classList.add('hidden');
