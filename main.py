@@ -675,13 +675,32 @@ def crear_perfil_pesaje(
     if payload.tara >= payload.peso_bruto:
         raise HTTPException(status_code=400, detail="La tara no puede ser mayor o igual al peso bruto.")
 
+    volumen_oz = _obtener_onzas_por_botella_llena(db, payload.id_producto)
+    if not volumen_oz:
+        raise HTTPException(
+            status_code=400,
+            detail="No se pudo determinar el volumen estándar del producto."
+        )
+
+    gramos_por_oz = (payload.peso_bruto - payload.tara) / volumen_oz
+
     nombre_perfil = payload.nombre_perfil.strip()
+    barcode = payload.barcode.strip() if payload.barcode else None
+    if not barcode:
+        barcode = db.execute(
+            text("""
+                SELECT barcode FROM app_producto_pesaje_config_api
+                WHERE id_producto_almacen = :id_producto AND barcode IS NOT NULL
+                LIMIT 1
+            """),
+            {"id_producto": payload.id_producto}
+        ).scalar()
 
     insert_sql = text("""
         INSERT INTO app_producto_pesaje_config_api
-        (id_producto_almacen, nombre_perfil, peso_bruto, tara, gramos_por_oz, tolerancia_oz, pesable, usuario_reg)
+        (id_producto_almacen, nombre_perfil, peso_bruto, tara, gramos_por_oz, barcode, pesable, usuario_reg)
         VALUES
-        (:id_producto, :nombre_perfil, :peso_bruto, :tara, :gramos_por_oz, :tolerancia_oz, 1, :usuario_reg)
+        (:id_producto, :nombre_perfil, :peso_bruto, :tara, :gramos_por_oz, :barcode, 1, :usuario_reg)
     """)
 
     try:
@@ -690,8 +709,8 @@ def crear_perfil_pesaje(
             "nombre_perfil": nombre_perfil,
             "peso_bruto": payload.peso_bruto,
             "tara": payload.tara,
-            "gramos_por_oz": payload.gramos_por_oz,
-            "tolerancia_oz": payload.tolerancia_oz,
+            "gramos_por_oz": gramos_por_oz,
+            "barcode": barcode,
             "usuario_reg": current_user.usuario,
         })
         db.commit()
@@ -712,8 +731,9 @@ def crear_perfil_pesaje(
         nombre_perfil=nombre_perfil,
         peso_bruto=float(payload.peso_bruto),
         tara=float(payload.tara),
-        gramos_por_oz=float(payload.gramos_por_oz),
-        tolerancia_oz=float(payload.tolerancia_oz),
+        gramos_por_oz=gramos_por_oz,
+        tolerancia_oz=_obtener_tolerancia_operativa_oz(1, None),
+        barcode=barcode,
     )
 
 # OBTENEMOS LOS PRODUCTOS PARA EL PALOTEO
@@ -735,7 +755,7 @@ def obtener_productos_pendientes(
             a.id AS id_producto, a.codigo, a.nombre, a.ind_permite_comandar,
             i.cantidad_paq AS stock_ideal_unidades, i.cantidad_detalle AS stock_ideal_onzas,
             i.id_categoria, i.categoria_nombre,
-            p.id AS perfil_id, p.pesable, p.nombre_perfil, p.peso_bruto, p.tara, p.gramos_por_oz, p.tolerancia_oz,
+            p.id AS perfil_id, p.pesable, p.nombre_perfil, p.peso_bruto, p.tara, p.gramos_por_oz, p.tolerancia_oz, p.barcode,
             a.cantidad_detalle AS onzas_por_botella_llena
         FROM (
             SELECT DISTINCT d.id_producto_receta AS id_producto
@@ -807,7 +827,8 @@ def obtener_productos_pendientes(
                 "peso_bruto": float(row["peso_bruto"]),
                 "tara": float(row["tara"]),
                 "gramos_por_oz": float(row["gramos_por_oz"]),
-                "tolerancia_oz": _obtener_tolerancia_operativa_oz(row["pesable"], row["id_categoria"])
+                "tolerancia_oz": _obtener_tolerancia_operativa_oz(row["pesable"], row["id_categoria"]),
+                "barcode": row["barcode"]
             })
 
     return list(productos_dict.values())

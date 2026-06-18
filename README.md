@@ -14,7 +14,7 @@ El flujo operativo actual es:
 4. Se cargan productos pendientes para paloteo:
   - productos vendidos durante la operativa
   - productos traspasados de almacen a barra durante la operativa
-5. Se registra inventario fisico desde PALOTEO 1/2/3 con un unico origen de datos.
+5. Se registra inventario fisico desde PALOTEO 1/2/3 con un unico origen de datos. (estamos evaluando cual de las tres opciones de PALOTEO genera la menor friccion con el usuario al momento de ingresar los datos.
 6. Se visualiza reporte de diferencias y se puede exportar a PDF.
 7. Autosave local conserva borradores por operativa, barra y usuario.
 

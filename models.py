@@ -42,11 +42,13 @@ class ProductoPesajeConfig(Base):
     __tablename__ = "app_producto_pesaje_config_api"
     
     id = Column(Integer, primary_key=True, index=True)
-    id_producto_almacen = Column(Integer, unique=True, index=True)
+    id_producto_almacen = Column(Integer, index=True)
+    nombre_perfil = Column(String(100))
     peso_bruto = Column(Numeric(10, 2))
     tara = Column(Numeric(10, 2))
     gramos_por_oz = Column(Numeric(10, 6))
     pesable = Column(Integer) # Usamos Integer para el TINYINT(1)
+    barcode = Column(String(50))
     tolerancia_oz = Column(Numeric(10, 2))
 
 class PaloteoRegistroCrudo(Base):

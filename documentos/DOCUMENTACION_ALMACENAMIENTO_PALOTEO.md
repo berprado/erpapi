@@ -426,17 +426,21 @@ Ejemplo:
 |-------|------|----------|-------------|
 | `id` | INT | NO | ID del perfil de botella |
 | `id_producto_almacen` | INT | NO | **ID del producto** (puede haber múltiples perfiles por producto) |
-| `nombre_perfil` | VARCHAR(255) | SÍ | Nombre descriptivo (ej: "Copa Estándar", "Botella Premium") |
+| `nombre_perfil` | VARCHAR(100) | SÍ | Nombre descriptivo (ej: "Copa Estándar", "Botella Premium"). Default `'Estándar'` |
 | `peso_bruto` | DECIMAL(10,2) | SÍ | Peso total cuando la botella está **llena** |
 | `tara` | DECIMAL(10,2) | SÍ | Peso de la botella **vacía** |
-| `gramos_por_oz` | DECIMAL(10,6) | SÍ | Factor de conversión (ej: 28.349523 gramos/oz) |
-| `tolerancia_oz` | DECIMAL(10,2) | SÍ | Margen de tolerancia permitido (ej: 0.5 oz) |
+| `gramos_por_oz` | DECIMAL(10,6) | SÍ | Factor de conversión gramos/oz. **Calculado por el backend**, no editable por el usuario: `(peso_bruto - tara) / volumen_estandar_oz`, donde `volumen_estandar_oz` es `alm_producto.cantidad_detalle` del mismo producto |
+| `barcode` | VARCHAR(50) | SÍ | Código de barras del modelo de botella. Opcional; si no se especifica al crear, se copia el de otro perfil existente del mismo producto (si hay) |
+| `tolerancia_oz` | DECIMAL(10,2) | SÍ | Columna heredada, default `1.50`. **No es configurable por el usuario** en el alta de un modelo: el valor operativo real siempre se calcula por categoría de producto vía `_obtener_tolerancia_operativa_oz` (0.5 oz para categorías 6/22, 0.25 oz para el resto), tanto al listar pendientes como al consolidar diferencias |
 | `pesable` | INT (TINYINT) | SÍ | **0** = No pesable, **1** = Pesable |
 
-**Validaciones:**
+**Clave única:** `(id_producto_almacen, nombre_perfil)` — evita duplicar el nombre de perfil dentro de un mismo producto, pero permite múltiples perfiles distintos por producto.
+
+**Validaciones al crear un modelo (`POST /api/pesaje/perfiles`):**
+- Nombre del modelo obligatorio (2-100 caracteres)
 - `peso_bruto > tara` (obligatorio)
-- `gramos_por_oz > 0` (obligatorio)
-- Máximo 1 perfil con `pesable=0` por producto
+- El producto debe tener un volumen estándar válido en `alm_producto.cantidad_detalle` (de lo contrario no se puede calcular `gramos_por_oz`)
+- El volumen del nuevo modelo es siempre el mismo que el del producto (no se permite definir un volumen distinto por perfil)
 
 **Ejemplo de dato:**
 ```json
@@ -447,7 +451,8 @@ Ejemplo:
   "peso_bruto": 1200,
   "tara": 250,
   "gramos_por_oz": 28.349523,
-  "tolerancia_oz": 0.5,
+  "barcode": "7501234567890",
+  "tolerancia_oz": 1.5,
   "pesable": 1
 }
 ```

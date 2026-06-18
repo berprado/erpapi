@@ -61,14 +61,14 @@ class PerfilPesaje(BaseModel):
     tara: float
     gramos_por_oz: float
     tolerancia_oz: float
+    barcode: Optional[str] = None
 
 class CrearPerfilPesajeRequest(BaseModel):
     id_producto: int = Field(..., gt=0)
     nombre_perfil: str = Field(..., min_length=2, max_length=100)
     peso_bruto: float = Field(..., gt=0)
     tara: float = Field(..., ge=0)
-    gramos_por_oz: float = Field(..., gt=0)
-    tolerancia_oz: float = Field(0, ge=0)
+    barcode: Optional[str] = Field(None, max_length=50)
     
 class ProductoPendiente(BaseModel):
     id_producto: int

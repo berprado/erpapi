@@ -518,7 +518,8 @@ const mbNombre     = document.getElementById('mb-nombre');
 const mbPesoBruto  = document.getElementById('mb-peso-bruto');
 const mbTara       = document.getElementById('mb-tara');
 const mbGramosOz   = document.getElementById('mb-gramos-oz');
-const mbTolerancia = document.getElementById('mb-tolerancia');
+const mbBarcode    = document.getElementById('mb-barcode');
+const mbVolumenOz  = document.getElementById('mb-volumen-oz');
 const mbError      = document.getElementById('mb-error');
 const btnCancelarModelo  = document.getElementById('btn-cancelar-modelo');
 const btnConfirmarModelo = document.getElementById('btn-confirmar-modelo');
@@ -613,19 +614,30 @@ function mostrarDialogoConfirmacion({ titulo, mensaje }) {
 }
 
 /** Muestra el modal de nuevo modelo y resuelve con los datos cuando el usuario confirma, o null si cancela. */
-function abrirModalModelo(nombreProducto, perfilBase) {
+function abrirModalModelo(nombreProducto, perfilBase, volumenOz) {
     return new Promise((resolve) => {
         // Subtítulo con nombre del producto
         modeloBotellaSubtit.textContent = nombreProducto;
+        mbVolumenOz.textContent = volumenOz ? volumenOz.toFixed(2) : '-';
 
         // Pre-llenar con valores del perfil base si existe
-        mbNombre.value     = '';
-        mbPesoBruto.value  = perfilBase ? perfilBase.peso_bruto  : '';
-        mbTara.value       = perfilBase ? perfilBase.tara        : '';
-        mbGramosOz.value   = perfilBase ? perfilBase.gramos_por_oz : '29.5735';
-        mbTolerancia.value = perfilBase ? perfilBase.tolerancia_oz : '0';
+        mbNombre.value    = '';
+        mbPesoBruto.value = perfilBase ? perfilBase.peso_bruto : '';
+        mbTara.value      = perfilBase ? perfilBase.tara : '';
+        mbBarcode.value   = perfilBase ? (perfilBase.barcode || '') : '';
         mbError.classList.add('hidden');
         mbError.textContent = '';
+
+        function actualizarGramosOz() {
+            const pesoBruto = parseFloat(mbPesoBruto.value);
+            const tara = parseFloat(mbTara.value);
+            if (!volumenOz || Number.isNaN(pesoBruto) || Number.isNaN(tara)) {
+                mbGramosOz.value = '';
+                return;
+            }
+            mbGramosOz.value = ((pesoBruto - tara) / volumenOz).toFixed(6);
+        }
+        actualizarGramosOz();
 
         modeloBotellaDialog.classList.remove('hidden');
         mbNombre.focus();
@@ -640,6 +652,8 @@ function abrirModalModelo(nombreProducto, perfilBase) {
             btnConfirmarModelo.removeEventListener('click', onConfirmar);
             btnCancelarModelo.removeEventListener('click', onCancelar);
             modeloBotellaOverlay.removeEventListener('click', onCancelar);
+            mbPesoBruto.removeEventListener('input', actualizarGramosOz);
+            mbTara.removeEventListener('input', actualizarGramosOz);
             resolve(resultado);
         }
 
@@ -647,15 +661,14 @@ function abrirModalModelo(nombreProducto, perfilBase) {
             const nombre    = mbNombre.value.trim().toUpperCase();
             const pesoBruto = parseFloat(mbPesoBruto.value);
             const tara      = parseFloat(mbTara.value);
-            const gramosOz  = parseFloat(mbGramosOz.value);
-            const tolerancia = parseFloat(mbTolerancia.value);
+            const barcode   = mbBarcode.value.trim();
 
             if (!nombre) return mostrarError('El nombre del modelo es obligatorio.');
-            if ([pesoBruto, tara, gramosOz, tolerancia].some(Number.isNaN)) {
+            if ([pesoBruto, tara].some(Number.isNaN)) {
                 return mostrarError('Todos los valores numéricos deben ser válidos.');
             }
 
-            cerrar({ nombre, pesoBruto, tara, gramosOz, tolerancia });
+            cerrar({ nombre, pesoBruto, tara, barcode: barcode || null });
         }
 
         function onCancelar() { cerrar(null); }
@@ -663,6 +676,8 @@ function abrirModalModelo(nombreProducto, perfilBase) {
         btnConfirmarModelo.addEventListener('click', onConfirmar);
         btnCancelarModelo.addEventListener('click', onCancelar);
         modeloBotellaOverlay.addEventListener('click', onCancelar);
+        mbPesoBruto.addEventListener('input', actualizarGramosOz);
+        mbTara.addEventListener('input', actualizarGramosOz);
     });
 }
 
@@ -673,8 +688,9 @@ async function crearModeloBotella(idProducto) {
     const nombreProducto = card.dataset.nombre || `ID ${idProducto}`;
     const perfiles = JSON.parse(card.dataset.perfiles || '[]');
     const perfilBase = perfiles[0] || null;
+    const volumenOz = parseFloat(card.dataset.onzasMax) || 0;
 
-    const datos = await abrirModalModelo(nombreProducto, perfilBase);
+    const datos = await abrirModalModelo(nombreProducto, perfilBase, volumenOz);
     if (!datos) return; // usuario canceló
 
     try {
@@ -689,8 +705,7 @@ async function crearModeloBotella(idProducto) {
                 nombre_perfil: datos.nombre,
                 peso_bruto: datos.pesoBruto,
                 tara: datos.tara,
-                gramos_por_oz: datos.gramosOz,
-                tolerancia_oz: datos.tolerancia
+                barcode: datos.barcode
             })
         });
 
@@ -2324,6 +2339,15 @@ function actualizarResumenCaptura() {
     if (capturaBtnAnterior) capturaBtnAnterior.classList.toggle('opacity-40', capturaEstado.indice <= 0);
 }
 
+// select() en type="number" no es confiable en mobile: cambio temporal a text para seleccionar
+function focarYSeleccionar(input) {
+    const tipo = input.type;
+    input.type = 'text';
+    input.focus();
+    input.setSelectionRange(0, input.value.length);
+    input.type = tipo;
+}
+
 function renderTarjetaCaptura(indice) {
     if (!capturaEstado.inicializado || capturaEstado.idsOrdenados.length === 0) {
         capturaCardContainer.innerHTML = `<div class="text-center text-on-surface-variant py-lg font-body-base">No hay productos disponibles para captura.</div>`;
@@ -2384,6 +2408,41 @@ function renderTarjetaCaptura(indice) {
     }
 
     actualizarResumenCaptura();
+
+    // Auto-focus en el primer campo al cargar la tarjeta
+    const primerInput = card.querySelector('.input-cerradas');
+    if (primerInput) {
+        requestAnimationFrame(() => focarYSeleccionar(primerInput));
+    }
+
+    // Navegación por Enter: cerradas → primer peso → ... → último peso → siguiente producto
+    card.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+
+        const inputCerradas = card.querySelector('.input-cerradas');
+        const inputsPeso = [...card.querySelectorAll('.input-peso')];
+        const foco = document.activeElement;
+
+        if (foco === inputCerradas) {
+            e.preventDefault();
+            if (inputsPeso.length > 0) {
+                focarYSeleccionar(inputsPeso[0]);
+            } else {
+                navegarCaptura(1);
+            }
+            return;
+        }
+
+        const idxPeso = inputsPeso.indexOf(foco);
+        if (idxPeso !== -1) {
+            e.preventDefault();
+            if (idxPeso < inputsPeso.length - 1) {
+                focarYSeleccionar(inputsPeso[idxPeso + 1]);
+            } else {
+                navegarCaptura(1);
+            }
+        }
+    });
 }
 
 async function navegarCaptura(delta = 1) {
