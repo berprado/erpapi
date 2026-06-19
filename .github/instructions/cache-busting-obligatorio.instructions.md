@@ -30,3 +30,7 @@ Usar version semantica simplificada: `MAJOR.MINOR` (ej: `1.0`, `1.1`, `1.2` ... 
 - Cambio funcional completado.
 - `CACHE_NAME` incrementado en `static/sw.js`.
 - Query string `?v=X` actualizada en `static/index.html`.
+
+## Mantener el README actualizado
+
+- Los cambios realizados deben reflejarse en `README.md`.
