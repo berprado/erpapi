@@ -4,6 +4,12 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.23
+- Feature: asistencia de foco/progreso en PALOTEO 1 y PALOTEO 3 — barra
+  "Capturados: X / Y (Z%)" que cuenta productos con unidades/peso ya
+  ingresados, sin revelar el inventario ideal. Se actualiza en vivo al
+  capturar y se mantiene sincronizada entre ambos modulos.
+
 ## 10.22
 - Cambio funcional: en PALOTEO 3, los botones +/- de ajuste rapido (unidades
   y peso) ahora solo son visibles para usuarios administradores; el boton

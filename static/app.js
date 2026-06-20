@@ -1351,12 +1351,14 @@ async function cargarProductos() {
             // Renderizar PALOTEO 3 después de cargar datos existentes para mantener un solo origen de datos
             renderizarPaloteo3(productos);
             startAutosaveInterval();
+            actualizarResumenProgresoInventario();
             enfocarPrimerCampoInventario();
         } else {
             productosInventario = [];
             listaProductos.innerHTML = `<div class="text-center text-on-surface-variant py-lg font-body-base">No hay productos consumidos para auditar hoy.</div>`;
             mostrarEstadoVacioPaloteo3();
             ocultarResumenProductos();
+            actualizarResumenProgresoInventario();
         }
     } catch (error) {
         console.error("Error cargando productos", error);
@@ -1670,6 +1672,7 @@ function mostrarEstadoVacioPaloteo3() {
     const emptyState = document.getElementById('stock-empty-state');
     if (stockList) stockList.innerHTML = '';
     if (emptyState) emptyState.classList.remove('hidden');
+    actualizarResumenProgresoPaloteo3();
 }
 
 function crearFilaPaloteo3(producto) {
@@ -1768,6 +1771,7 @@ function renderizarPaloteo3(productos) {
     });
 
     renderizarReportePaloteo3();
+    actualizarResumenProgresoPaloteo3();
 }
 
 function refrescarPaloteo3DesdeInventario() {
@@ -2089,6 +2093,7 @@ function syncFilaPaloteo3ConInventario(row) {
     // elegido en cada una), reutilizando el mismo mecanismo que PALOTEO 2
     // (modo captura 1x1) usa para sincronizar contra la tarjeta canónica.
     aplicarValoresCard(card, leerValoresCard(row));
+    actualizarResumenProgresoInventario();
     scheduleAutosave();
 }
 
@@ -2646,6 +2651,33 @@ function tarjetaCompleta(card) {
     return tienePesoValido;
 }
 
+// Actualiza un contador "X / Y (Z%)" de items completos dentro de un contenedor.
+// Reutiliza tarjetaCompleta(), que solo depende de .input-cerradas/.input-peso
+// y data-pesable, asi que sirve tanto para .product-card (Paloteo 1) como
+// para .stock-row (Paloteo 3).
+function actualizarResumenProgreso(contenedor, selectorItem, idCompletados, idTotal, idPct) {
+    if (!contenedor) return;
+    const items = [...contenedor.querySelectorAll(selectorItem)];
+    const total = items.length;
+    const completos = items.filter(tarjetaCompleta).length;
+    const pct = total > 0 ? Math.round((completos / total) * 100) : 0;
+
+    const elCompletados = document.getElementById(idCompletados);
+    const elTotal = document.getElementById(idTotal);
+    const elPct = document.getElementById(idPct);
+    if (elCompletados) elCompletados.textContent = String(completos);
+    if (elTotal) elTotal.textContent = String(total);
+    if (elPct) elPct.textContent = `${pct}%`;
+}
+
+function actualizarResumenProgresoInventario() {
+    actualizarResumenProgreso(listaProductos, '.product-card', 'inventario-completados', 'inventario-total-items', 'inventario-pct-completados');
+}
+
+function actualizarResumenProgresoPaloteo3() {
+    actualizarResumenProgreso(document.getElementById('stock-list'), '.stock-row', 'stock-completados', 'stock-total-items', 'stock-pct-completados');
+}
+
 function syncCapturaConInventario() {
     if (!capturaEstado.inicializado || capturaEstado.idsOrdenados.length === 0) return;
     const idProducto = capturaEstado.idsOrdenados[capturaEstado.indice];
@@ -2850,6 +2882,7 @@ if (stockList) {
             const row = e.target.closest('.stock-row');
             syncFilaPaloteo3ConInventario(row);
             renderizarReportePaloteo3();
+            actualizarResumenProgresoPaloteo3();
         }
     });
 
@@ -2902,6 +2935,7 @@ if (stockList) {
             if (wrapper) wrapper.remove();
             syncFilaPaloteo3ConInventario(row);
             renderizarReportePaloteo3();
+            actualizarResumenProgresoPaloteo3();
             return;
         }
     });
@@ -3183,6 +3217,7 @@ listaProductos.addEventListener('input', (e) => {
     if (e.target.classList.contains('input-cerradas') || e.target.classList.contains('input-peso')) {
         recalcularTarjeta(e.target.closest('.product-card'));
         refrescarPaloteo3DesdeInventario();
+        actualizarResumenProgresoInventario();
         scheduleAutosave();
     }
 });
@@ -3213,6 +3248,7 @@ listaProductos.addEventListener('click', (e) => {
         const card = e.target.closest('.product-card');
         setTimeout(() => {
             recalcularTarjeta(card);
+            actualizarResumenProgresoInventario();
             scheduleAutosave();
         }, 50);
     }

@@ -799,6 +799,12 @@
                 </div>
             </div>
             
+            <!-- Progreso de captura: cuantos productos ya tienen unidades/peso ingresados -->
+            <div id="inventario-resumen-progreso" class="mb-md flex items-center justify-between gap-sm bg-surface-container border border-outline-variant rounded-md px-md py-sm text-label-mono text-[10px] tracking-widest uppercase text-on-surface-variant">
+                <span class="inline-flex items-center gap-xs"><span class="material-symbols-outlined" style="font-size:1rem;">checklist</span>Capturados</span>
+                <span class="text-on-surface font-semibold"><span id="inventario-completados">0</span> / <span id="inventario-total-items">0</span> (<span id="inventario-pct-completados">0%</span>)</span>
+            </div>
+
             <!-- Lista Dinámica de Insumos -->
             <div id="lista-productos" class="space-y-4">
                 <!-- JS inyectará las "tarjetas" aquí -->
@@ -847,6 +853,12 @@
             <div class="relative mb-sm">
                 <span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-outline-variant" style="font-size:1rem;">search</span>
                 <input type="text" id="stock-search" placeholder="Buscar por ID, código o nombre..." class="w-full bg-surface-container border border-outline-variant rounded-md pl-10 pr-md py-sm text-sm text-on-surface placeholder-outline/40 focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-body-base">
+            </div>
+
+            <!-- Progreso de captura: cuantos productos ya tienen unidades/peso ingresados -->
+            <div id="stock-resumen-progreso" class="mb-sm flex items-center justify-between gap-sm bg-surface-container border border-outline-variant rounded-md px-md py-sm text-label-mono text-[10px] tracking-widest uppercase text-on-surface-variant">
+                <span class="inline-flex items-center gap-xs"><span class="material-symbols-outlined" style="font-size:1rem;">checklist</span>Capturados</span>
+                <span class="text-on-surface font-semibold"><span id="stock-completados">0</span> / <span id="stock-total-items">0</span> (<span id="stock-pct-completados">0%</span>)</span>
             </div>
 
             <!-- Tabla PALOTEO 3 -->
@@ -1146,7 +1158,7 @@
         </div>
     </div>
 
-    <script src="/assets/app.js?v=10.22"></script>
+    <script src="/assets/app.js?v=10.23"></script>
 
     <script>
         (function () {
