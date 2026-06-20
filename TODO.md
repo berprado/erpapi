@@ -60,3 +60,8 @@
 
 - [ ] **Verificar las validaciones implementadas en Paloteo 1, 2 y 3**
   - Repasar end-to-end (frontend y backend) las validaciones ya marcadas como resueltas en esta sección (pesos máximos, sobrecapacidad de onzas, unicidad de `id_producto`) y confirmar que se comportan igual en los tres módulos tras los cambios recientes de consistencia funcional y foco.
+
+- [ ] **Restringir a administradores los botones de ajuste (+/-) en PALOTEO 1 y PALOTEO 2**
+  - Ya implementado en PALOTEO 3 (`esUsuarioAdministrador()` oculta `stock-btn-dec-unid`/`inc-unid` y `stock-btn-dec-peso`/`inc-peso`).
+  - Aplicar el mismo criterio a los botones equivalentes de PALOTEO 1 y 2 (decisión explícita de dejarlos para después, ver `CHANGELOG.md` v10.22).
+  - Evaluar si conviene además una validación server-side, dado que hoy es una restricción solo de frontend.

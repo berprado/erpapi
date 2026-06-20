@@ -281,6 +281,26 @@ Sincronizacion entre modulos:
 2. El payload final se construye desde el inventario canonico.
 3. Autosave guarda y recupera borradores locales por `operativa + barra + usuario`.
 
+### PALOTEO 3: captura ciega y botones de ajuste
+
+El paloteo compara el inventario ideal (segun el POS) contra el inventario
+real (conteo fisico de cerradas + peso de abiertas convertido a onzas); la
+diferencia es lo que el futuro modulo de Ajustes materializa como
+ingreso/salida. Por eso PALOTEO 3 es "captura ciega": a diferencia de
+PALOTEO 1/2, no muestra el ideal del sistema ni el delta en tiempo real,
+para que quien cuenta fisicamente no pueda ajustar su conteo para disimular
+faltantes.
+
+En la misma linea, los botones +/- de ajuste rapido (unidades y peso) en
+PALOTEO 3 solo son visibles para usuarios con `is_admin` (helper
+`esUsuarioAdministrador()` en `app.js`), ya que facilitan "redondear" un
+valor sin haber contado/pesado con precision. El boton "+ Botella" (agregar
+una entrada de peso) y el de eliminar una entrada agregada por error siguen
+disponibles para todos los usuarios, porque solo gestionan la estructura de
+inputs, no el valor capturado. Es una restriccion de frontend (oculta el
+boton, no protege un endpoint) — pendiente aplicar el mismo criterio en
+PALOTEO 1 y 2.
+
 ### Modulo PESAJE: detalles de UI
 
 - Cada perfil pesable muestra `peso_bruto`, `tara`, `g/oz` (solo lectura, recalculado en vivo al editar peso/tara) y `barcode`.
