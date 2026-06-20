@@ -301,6 +301,12 @@ inputs, no el valor capturado. Es una restriccion de frontend (oculta el
 boton, no protege un endpoint) — pendiente aplicar el mismo criterio en
 PALOTEO 1 y 2.
 
+PALOTEO 1 y PALOTEO 3 muestran una barra "Capturados: X / Y (Z%)" que
+cuenta cuantos productos ya tienen unidades/peso ingresados
+(`tarjetaCompleta()` + `actualizarResumenProgreso*()` en `app.js`). No
+revela el inventario ideal, solo el avance de la captura, y se mantiene
+sincronizada entre ambos modulos porque comparten el mismo origen de datos.
+
 ### Modulo PESAJE: detalles de UI
 
 - Cada perfil pesable muestra `peso_bruto`, `tara`, `g/oz` (solo lectura, recalculado en vivo al editar peso/tara) y `barcode`.
