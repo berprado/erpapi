@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, bindparam
 from sqlalchemy.exc import IntegrityError
 from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
@@ -783,6 +783,9 @@ def crear_perfil_pesaje(
     )
 
 
+CATEGORIAS_EXCLUIDAS_PESAJE = (15, 18, 19, 20)
+
+
 @app.get("/api/pesaje/categorias", response_model=List[schemas.CategoriaItem])
 def listar_categorias_pesaje(
     db: Session = Depends(get_db),
@@ -790,7 +793,12 @@ def listar_categorias_pesaje(
 ):
     """Lista de categorías habilitadas, para el filtro del módulo PESAJE."""
     rows = db.execute(
-        text("SELECT id, nombre FROM alm_categoria WHERE estado = 'HAB' ORDER BY nombre")
+        text("""
+            SELECT id, nombre FROM alm_categoria
+            WHERE estado = 'HAB' AND id NOT IN :excluidas
+            ORDER BY nombre
+        """).bindparams(bindparam("excluidas", expanding=True)),
+        {"excluidas": CATEGORIAS_EXCLUIDAS_PESAJE}
     ).mappings().all()
     return [
         schemas.CategoriaItem(id_categoria=row["id"], nombre_categoria=row["nombre"])
@@ -807,8 +815,8 @@ def listar_pesaje_config(
     current_user: models.Usuario = Depends(get_usuario_administrador)
 ):
     """Listado de perfiles de pesaje (tabla app_producto_pesaje_config_api vía v9_pesaje_config_api), para el módulo PESAJE."""
-    condiciones = []
-    parametros = {}
+    condiciones = ["(id_categoria IS NULL OR id_categoria NOT IN :excluidas)"]
+    parametros = {"excluidas": CATEGORIAS_EXCLUIDAS_PESAJE}
 
     if nombre:
         condiciones.append("nombre_producto LIKE :nombre")
@@ -820,7 +828,7 @@ def listar_pesaje_config(
         condiciones.append("pesable = :pesable")
         parametros["pesable"] = pesable
 
-    where_sql = f"WHERE {' AND '.join(condiciones)}" if condiciones else ""
+    where_sql = f"WHERE {' AND '.join(condiciones)}"
 
     query = text(f"""
         SELECT id_pesaje_config, id_producto, nombre_producto, codigo_producto,
@@ -829,7 +837,7 @@ def listar_pesaje_config(
         FROM v9_pesaje_config_api
         {where_sql}
         ORDER BY nombre_producto ASC, nombre_perfil ASC
-    """)
+    """).bindparams(bindparam("excluidas", expanding=True))
 
     rows = db.execute(query, parametros).mappings().all()
     return [

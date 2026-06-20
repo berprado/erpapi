@@ -822,13 +822,28 @@ function crearTarjetaPesaje(producto) {
 
 function crearFilaPerfilPesaje(producto, perfil) {
     const row = document.createElement('div');
-    row.className = 'border border-outline-variant rounded-md p-sm space-y-xs';
 
     const esPesable = producto.pesable === 1;
     const puedeEliminar = esPesable && producto.perfiles.length > 1;
+    const esIncompleto = esPesable && (perfil.peso_bruto === null || perfil.tara === null);
+
+    row.className = esIncompleto
+        ? 'border rounded-md p-sm space-y-xs'
+        : 'border border-outline-variant rounded-md p-sm space-y-xs';
+    if (esIncompleto) {
+        row.style.borderColor = 'var(--semantic-warning)';
+    }
 
     row.innerHTML = `
-        <p class="text-[11px] text-on-surface-variant uppercase tracking-widest">${perfil.nombre_perfil}</p>
+        <p class="text-[11px] text-on-surface-variant uppercase tracking-widest flex items-center gap-xs">
+            ${perfil.nombre_perfil}
+            ${esIncompleto ? `
+            <span class="inline-flex items-center gap-[2px] normal-case tracking-normal" style="color: var(--semantic-warning);">
+                <span class="material-symbols-outlined" style="font-size: 13px;">warning</span>
+                Datos incompletos
+            </span>
+            ` : ''}
+        </p>
         <div class="grid ${esPesable ? 'grid-cols-4' : 'grid-cols-1'} gap-xs">
             ${esPesable ? `
             <div>
@@ -1022,6 +1037,11 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
         mostrarPantallaLogin();
     }
+
+    inicializarFabScrollTop('pesaje-fab-scroll-top', 'panel-pesaje');
+    inicializarFabScrollTop('inventario-fab-scroll-top', 'panel-inventario');
+    inicializarFabScrollTop('stock-fab-scroll-top', 'panel-stock');
+    inicializarFabScrollTop('scan-fab-scroll-top', 'panel-scan');
 
     // Configurar Password Toggle (El ojito)
     const togglePassword = document.getElementById('toggle-password');
@@ -1625,17 +1645,11 @@ function crearFilaPaloteo3(producto) {
 
     const perfiles = Array.isArray(producto.perfiles) ? producto.perfiles : [];
     const perfilBase = perfiles.length > 0 ? perfiles[0] : null;
-    const tara = perfilBase ? (parseFloat(perfilBase.tara) || 0) : 0;
-    const gramosPorOz = perfilBase ? (parseFloat(perfilBase.gramos_por_oz) || 29.5735) : 29.5735;
     const idealUnidades = parseFloat(producto.stock_ideal_unidades) || 0;
-    const idealOnzas = parseFloat(producto.stock_ideal_onzas) || 0;
     const capturado = obtenerValoresCapturadosPaloteo3(producto.id_producto);
     const esPesable = parseInt(producto.pesable, 10) === 1;
     const toleranciaOz = perfilBase ? (parseFloat(perfilBase.tolerancia_oz) || 0) : 0;
     row.dataset.idealUnidades = String(idealUnidades);
-    row.dataset.idealOnzas = String(idealOnzas);
-    row.dataset.tara = String(tara);
-    row.dataset.gramosOz = String(gramosPorOz);
     row.dataset.categoria = String(producto.categoria_nombre || '');
     row.dataset.pesable = esPesable ? '1' : '0';
     row.dataset.tolerancia = String(toleranciaOz);
@@ -1744,11 +1758,9 @@ function refrescarPaloteo3DesdeInventario() {
 
 function obtenerFilasReportePaloteo3() {
     const filas = [];
-    const margenError = 10.0;
 
     document.querySelectorAll('#stock-list .stock-row').forEach(row => {
         const inputUnidades = row.querySelector('.stock-input-unidades');
-        const inputPeso = row.querySelector('.stock-input-peso');
         if (!inputUnidades) return;
 
         const idProducto = row.dataset.idProducto || '';
@@ -1757,17 +1769,17 @@ function obtenerFilasReportePaloteo3() {
         const unidadesReales = parseInt(inputUnidades.value, 10) || 0;
 
         const idealUnidades = parseFloat(row.dataset.idealUnidades) || 0;
-        const idealOnzas = parseFloat(row.dataset.idealOnzas) || 0;
 
+        // El delta de onzas se toma de la tarjeta de Paloteo 1/2 (recalcularTarjeta),
+        // que es la única fuente que conoce el modelo de botella seleccionado por
+        // cada peso y suma correctamente todas las botellas pesadas. Recalcularlo
+        // aquí de forma independiente (perfiles[0] + un solo input) producía un
+        // delta distinto al mostrado en la franja DELTA de Paloteo 1/2.
         let difOnzas = null;
-        if (inputPeso) {
-            const pesoReal = parseFloat(inputPeso.value) || 0;
-            const tara = parseFloat(row.dataset.tara) || 0;
-            const gramosOz = parseFloat(row.dataset.gramosOz) || 29.5735;
-            // Ajuste de margen para consistencia con otras pantallas
-            const pesoLiquidoReal = (pesoReal >= (tara - margenError)) ? Math.max(0, pesoReal - tara) : 0;
-            const onzasReales = gramosOz > 0 ? (pesoLiquidoReal / gramosOz) : 0;
-            difOnzas = onzasReales - idealOnzas;
+        const cardInventario = document.querySelector(`#lista-productos .product-card[data-id="${idProducto}"]`);
+        if (cardInventario && cardInventario.dataset.pesable === '1' && cardInventario.dataset.difDetExacta !== undefined) {
+            const valor = parseFloat(cardInventario.dataset.difDetExacta);
+            difOnzas = Number.isNaN(valor) ? null : valor;
         }
 
         filas.push({
@@ -2496,6 +2508,39 @@ function navegarATab(tabName) {
         btn.classList.toggle('text-on-surface-variant', !esActivo);
         btn.classList.toggle('border-outline-variant', !esActivo);
     });
+
+    fabsScrollTop.forEach((actualizar) => actualizar());
+}
+
+/**
+ * FAB de "volver al inicio", reutilizable en cualquier panel.
+ * Muestra el boton (id fabId) solo cuando el panel (id panelId) esta visible
+ * y la pagina esta desplazada mas alla de UMBRAL_SCROLL_FAB; al hacer click
+ * hace scroll suave al inicio. Para replicarlo en otro modulo: agregar un
+ * boton con clase "fab-scroll-top" dentro del panel y llamar a esta funcion
+ * con sus ids.
+ */
+const UMBRAL_SCROLL_FAB = 240;
+const fabsScrollTop = [];
+
+function inicializarFabScrollTop(fabId, panelId) {
+    const fab = document.getElementById(fabId);
+    const panel = document.getElementById(panelId);
+    if (!fab || !panel) return;
+
+    function actualizarVisibilidad() {
+        const panelVisible = !panel.classList.contains('hidden');
+        const debeMostrarse = panelVisible && window.scrollY > UMBRAL_SCROLL_FAB;
+        fab.classList.toggle('hidden', !debeMostrarse);
+    }
+
+    window.addEventListener('scroll', actualizarVisibilidad, { passive: true });
+    fab.addEventListener('click', () => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    fabsScrollTop.push(actualizarVisibilidad);
+    actualizarVisibilidad();
 }
 
 function resetModoCaptura() {
@@ -2854,6 +2899,10 @@ if (capturaCardContainer) {
             } else {
                 capturaEstado.completos.delete(idActual);
             }
+            // Sin esto, lo tecleado en Paloteo 2 solo vive en la tarjeta de captura:
+            // REPORTE (que lee la tarjeta de #lista-productos) queda desactualizado y
+            // al volver a Paloteo 2 se reconstruye desde esa misma tarjeta sin sincronizar.
+            syncCapturaConInventario();
             actualizarResumenCaptura();
             scheduleAutosave();
         }
@@ -3019,6 +3068,10 @@ function recalcularTarjeta(card) {
 
         const detBarraOperativo = redondearOnzasOperativas(detBarra) ?? 0;
         const difDetExacta = detBarra - detSist;
+
+        // Fuente canónica para REPORTE: ya respeta el perfil de botella
+        // seleccionado por input y suma todas las botellas pesadas.
+        card.dataset.difDetExacta = String(difDetExacta);
 
         if (spanDet) spanDet.textContent = detBarraOperativo.toFixed(2);
         if (difDetSpan) difDetSpan.innerHTML = formatearDiferencia(difDetExacta, true, tolerancia);

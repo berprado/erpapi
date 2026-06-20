@@ -450,6 +450,10 @@ Ejemplo:
 
 **Vista de consulta (módulo PESAJE):** `v9_pesaje_config_api` expone esta tabla unida con `alm_producto` y `alm_categoria`, filtrando `p.estado = 'HAB' AND pc.estado = 'HAB'` (los perfiles eliminados no aparecen en el listado del módulo).
 
+**Categorías excluidas del módulo PESAJE:** los endpoints `GET /api/pesaje/config` y `GET /api/pesaje/categorias` excluyen siempre las categorías con `id` 15, 18, 19 y 20 (y por lo tanto todos sus productos), tanto del listado como del filtro de categorías. Los productos sin categoría asignada (`id_categoria IS NULL`) no se ven afectados por esta exclusión.
+
+**Indicador de datos incompletos (frontend):** en la UI del módulo PESAJE, un perfil pesable (`pesable=1`) con `peso_bruto` o `tara` en `NULL` se marca visualmente (borde de advertencia, ícono y texto "Datos incompletos") para que el administrador identifique rápidamente qué modelos requieren completarse.
+
 **Control de acceso:** todas las operaciones de escritura sobre esta tabla (crear, editar, eliminar) requieren que el usuario autenticado tenga el rol `ROLE_ADMINISTRADOR` (verificado contra `seg_permiso`/`seg_rol`). Un usuario sin ese rol recibe `403 Forbidden`.
 
 **Reglas de edición (`PUT /api/pesaje/config/{id}`):**

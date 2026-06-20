@@ -313,6 +313,22 @@
             overflow: auto;
         }
 
+        /* FAB de scroll-al-inicio. Reutilizable en cualquier panel: agregar un
+           boton con esta clase (icono arrow_upward) y llamar a
+           inicializarFabScrollTop('id-del-fab', 'id-del-panel') en app.js. */
+        .fab-scroll-top {
+            position: fixed;
+            right: 1rem;
+            bottom: 5.5rem;
+            z-index: 25;
+            width: 2.75rem;
+            height: 2.75rem;
+            border-radius: 9999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
         /* Ajustes móviles para CTA y dialogo */
         @media (max-width: 640px) {
             #observaciones-dialog .max-w-lg {
@@ -805,6 +821,11 @@
                 Enviar Paloteo 1
             </button>
 
+            <!-- FAB: volver al inicio de la página -->
+            <button id="inventario-fab-scroll-top" type="button" aria-label="Volver al inicio" class="fab-scroll-top hidden bg-primary-container text-on-primary-fixed shadow-cyan-glow hover:brightness-110 active:scale-95 transition-all">
+                <span class="material-symbols-outlined">arrow_upward</span>
+            </button>
+
         </div><!-- /panel-inventario -->
 
 
@@ -845,6 +866,11 @@
                     Guardar Paloteo 3
                 </button>
             </div>
+
+            <!-- FAB: volver al inicio de la página -->
+            <button id="stock-fab-scroll-top" type="button" aria-label="Volver al inicio" class="fab-scroll-top hidden bg-primary-container text-on-primary-fixed shadow-cyan-glow hover:brightness-110 active:scale-95 transition-all">
+                <span class="material-symbols-outlined">arrow_upward</span>
+            </button>
 
         </div><!-- /panel-stock -->
 
@@ -888,6 +914,11 @@
                     Exportar PDF
                 </button>
             </div>
+
+            <!-- FAB: volver al inicio de la página -->
+            <button id="scan-fab-scroll-top" type="button" aria-label="Volver al inicio" class="fab-scroll-top hidden bg-primary-container text-on-primary-fixed shadow-cyan-glow hover:brightness-110 active:scale-95 transition-all">
+                <span class="material-symbols-outlined">arrow_upward</span>
+            </button>
         </div><!-- /panel-scan -->
 
 
@@ -943,6 +974,11 @@
             <div id="pesaje-empty-state" class="hidden text-center text-on-surface-variant py-md font-body-base text-sm">
                 No se encontraron productos con estos filtros.
             </div>
+
+            <!-- FAB: volver al inicio de la página -->
+            <button id="pesaje-fab-scroll-top" type="button" aria-label="Volver al inicio" class="fab-scroll-top hidden bg-primary-container text-on-primary-fixed shadow-cyan-glow hover:brightness-110 active:scale-95 transition-all">
+                <span class="material-symbols-outlined">arrow_upward</span>
+            </button>
         </div><!-- /panel-pesaje -->
 
 
@@ -1110,7 +1146,7 @@
         </div>
     </div>
 
-    <script src="/assets/app.js?v=10.15"></script>
+    <script src="/assets/app.js?v=10.17"></script>
 
     <script>
         (function () {

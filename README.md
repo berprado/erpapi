@@ -14,7 +14,7 @@ El flujo operativo actual es:
 4. Se cargan productos pendientes para paloteo:
   - productos vendidos durante la operativa
   - productos traspasados de almacen a barra durante la operativa
-5. Se registra inventario fisico desde PALOTEO 1/2/3 con un unico origen de datos. (estamos evaluando cual de las tres opciones de PALOTEO genera la menor friccion con el usuario al momento de ingresar los datos.
+5. Se registra inventario fisico desde PALOTEO 1/2/3 con un unico origen de datos. (estamos evaluando cual de las tres opciones de PALOTEO genera la menor friccion con el usuario al momento de ingresar los datos.)
 6. Se visualiza reporte de diferencias y se puede exportar a PDF.
 7. Autosave local conserva borradores por operativa, barra y usuario.
 
@@ -169,7 +169,7 @@ Reglas de barra operativa:
 |---|---|---|
 | `POST` | `/api/pesaje/perfiles` | Crea (o reactiva si existe uno eliminado con el mismo nombre) un modelo de botella para producto pesable. Calcula `gramos_por_oz` en el backend a partir del volumen estandar del producto |
 | `GET` | `/api/pesaje/categorias` | Lista de categorias habilitadas, para el filtro del modulo PESAJE |
-| `GET` | `/api/pesaje/config` | Lista perfiles de pesaje (tabla `app_producto_pesaje_config_api`), con filtros opcionales `nombre`, `id_categoria`, `pesable` |
+| `GET` | `/api/pesaje/config` | Lista perfiles de pesaje (tabla `app_producto_pesaje_config_api`), con filtros opcionales `nombre`, `id_categoria`, `pesable`. Excluye siempre las categorias 15, 18, 19 y 20 |
 | `PUT` | `/api/pesaje/config/{id}` | Edita `peso_bruto`/`tara`/`barcode` de un perfil existente. En productos no pesables solo se permite editar `barcode` |
 | `DELETE` | `/api/pesaje/config/{id}` | Elimina (soft-delete, `estado='DES'`) un perfil. Rechaza la eliminacion si es el ultimo perfil activo del producto |
 
@@ -280,6 +280,16 @@ Sincronizacion entre modulos:
 1. Cambios en PALOTEO 1, PALOTEO 2 y PALOTEO 3 se reflejan entre vistas.
 2. El payload final se construye desde el inventario canonico.
 3. Autosave guarda y recupera borradores locales por `operativa + barra + usuario`.
+
+### Modulo PESAJE: detalles de UI
+
+- Cada perfil pesable muestra `peso_bruto`, `tara`, `g/oz` (solo lectura, recalculado en vivo al editar peso/tara) y `barcode`.
+- Los perfiles pesables con `peso_bruto` o `tara` nulos se marcan visualmente (borde de advertencia + icono + texto "Datos incompletos").
+- Excluye productos de las categorias 15, 18, 19 y 20 (tanto en el listado como en el filtro de categorias).
+
+### FAB "volver al inicio"
+
+Boton flotante reutilizable (clase `fab-scroll-top` + funcion `inicializarFabScrollTop(fabId, panelId)` en `app.js`) presente en PALOTEO 1, PALOTEO 3, REPORTE y PESAJE. Aparece al hacer scroll mas alla de un umbral y solo si su panel esta activo; al hacer click hace scroll suave al inicio de la pagina. Para agregarlo a un nuevo modulo: insertar un boton con esa clase dentro del panel y llamar a la funcion con sus ids.
 
 Service Worker:
 
