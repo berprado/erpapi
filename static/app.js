@@ -2990,18 +2990,6 @@ if (capturaCardContainer) {
             }, 20);
         }
     });
-
-    capturaCardContainer.addEventListener('keydown', (e) => {
-        if (e.key !== 'Enter') return;
-        if (!esDesktopParaCaptura()) return;
-        if (!(e.target.classList.contains('input-cerradas') || e.target.classList.contains('input-peso'))) return;
-
-        const card = capturaCardContainer.querySelector('.product-card[data-scope="captura"]');
-        if (!card) return;
-        e.preventDefault();
-
-        navegarCaptura(1);
-    });
 }
 
 document.addEventListener('keydown', (event) => {
