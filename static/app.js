@@ -2490,6 +2490,10 @@ function navegarATab(tabName) {
         inicializarModoCaptura();
     }
 
+    if (tabName === 'stock') {
+        enfocarPrimerCampoPaloteo3();
+    }
+
     if (tabName === 'scan') {
         renderizarReportePaloteo3();
     }
@@ -2893,6 +2897,55 @@ if (stockList) {
             return;
         }
     });
+
+    // Navegación por Enter entre filas: cerradas → primer peso → ... → último peso → cerradas de la siguiente fila.
+    stockList.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        if (!(e.target.classList.contains('input-cerradas') || e.target.classList.contains('input-peso'))) return;
+
+        const row = e.target.closest('.stock-row');
+        if (!row) return;
+        e.preventDefault();
+
+        const inputsPeso = [...row.querySelectorAll('.input-peso')];
+
+        if (e.target.classList.contains('input-cerradas')) {
+            if (inputsPeso.length > 0) {
+                focarYSeleccionar(inputsPeso[0]);
+            } else {
+                avanzarALaSiguienteFilaPaloteo3(row);
+            }
+            return;
+        }
+
+        const idxPeso = inputsPeso.indexOf(e.target);
+        if (idxPeso !== -1) {
+            if (idxPeso < inputsPeso.length - 1) {
+                focarYSeleccionar(inputsPeso[idxPeso + 1]);
+            } else {
+                avanzarALaSiguienteFilaPaloteo3(row);
+            }
+        }
+    });
+}
+
+function avanzarALaSiguienteFilaPaloteo3(filaActual) {
+    const siguienteFila = filaActual.nextElementSibling;
+    if (!siguienteFila || !siguienteFila.classList.contains('stock-row')) return;
+
+    const siguienteInput = siguienteFila.querySelector('.input-cerradas');
+    if (siguienteInput) {
+        siguienteFila.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        focarYSeleccionar(siguienteInput);
+    }
+}
+
+// Auto-focus en el primer campo de la lista al entrar al tab de PALOTEO 3 (igual que PALOTEO 1/2).
+function enfocarPrimerCampoPaloteo3() {
+    const primerInput = document.querySelector('#stock-list .stock-row .input-cerradas');
+    if (primerInput) {
+        requestAnimationFrame(() => focarYSeleccionar(primerInput));
+    }
 }
 
 // Persistir borrador al segundo plano o cierre abrupto de pestaña.

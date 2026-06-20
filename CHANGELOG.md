@@ -4,6 +4,12 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.21
+- Feature: asistencia de foco en PALOTEO 3 (igual que PALOTEO 1 y 2) —
+  auto-focus y seleccion del primer campo al entrar al tab, y navegacion
+  por Enter entre campos de una fila que avanza a la fila siguiente al
+  terminar.
+
 ## 10.20
 - Feature: asistencia de foco en PALOTEO 1 (igual que PALOTEO 2) — auto-focus
   y seleccion del valor en el primer campo al cargar la lista, y navegacion
