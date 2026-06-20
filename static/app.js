@@ -1345,6 +1345,7 @@ async function cargarProductos() {
             // Renderizar PALOTEO 3 después de cargar datos existentes para mantener un solo origen de datos
             renderizarPaloteo3(productos);
             startAutosaveInterval();
+            enfocarPrimerCampoInventario();
         } else {
             productosInventario = [];
             listaProductos.innerHTML = `<div class="text-center text-on-surface-variant py-lg font-body-base">No hay productos consumidos para auditar hoy.</div>`;
@@ -3153,6 +3154,58 @@ listaProductos.addEventListener('click', (e) => {
             recalcularTarjeta(card);
             scheduleAutosave();
         }, 50);
+    }
+});
+
+// Auto-focus en el primer campo de la lista al cargar (igual que PALOTEO 2).
+function enfocarPrimerCampoInventario() {
+    const panelInventario = document.getElementById('panel-inventario');
+    if (panelInventario && panelInventario.classList.contains('hidden')) return;
+
+    const primerInput = listaProductos.querySelector('.product-card .input-cerradas');
+    if (primerInput) {
+        requestAnimationFrame(() => focarYSeleccionar(primerInput));
+    }
+}
+
+// Navegación por Enter entre tarjetas: cerradas → primer peso → ... → último peso → cerradas de la siguiente tarjeta.
+function avanzarAlSiguienteProductoInventario(cardActual) {
+    const siguienteCard = cardActual.nextElementSibling;
+    if (!siguienteCard || !siguienteCard.classList.contains('product-card')) return;
+
+    const siguienteInput = siguienteCard.querySelector('.input-cerradas');
+    if (siguienteInput) {
+        siguienteCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        focarYSeleccionar(siguienteInput);
+    }
+}
+
+listaProductos.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    if (!(e.target.classList.contains('input-cerradas') || e.target.classList.contains('input-peso'))) return;
+
+    const card = e.target.closest('.product-card');
+    if (!card) return;
+    e.preventDefault();
+
+    const inputsPeso = [...card.querySelectorAll('.input-peso')];
+
+    if (e.target.classList.contains('input-cerradas')) {
+        if (inputsPeso.length > 0) {
+            focarYSeleccionar(inputsPeso[0]);
+        } else {
+            avanzarAlSiguienteProductoInventario(card);
+        }
+        return;
+    }
+
+    const idxPeso = inputsPeso.indexOf(e.target);
+    if (idxPeso !== -1) {
+        if (idxPeso < inputsPeso.length - 1) {
+            focarYSeleccionar(inputsPeso[idxPeso + 1]);
+        } else {
+            avanzarAlSiguienteProductoInventario(card);
+        }
     }
 });
 

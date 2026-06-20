@@ -57,3 +57,6 @@
 
 - [ ] **Mejorar precarga de corrección para múltiples botellas abiertas**
   - Actualmente se repone solo el primer peso/perfil; evaluar restauración completa de todas las entradas capturadas.
+
+- [ ] **Verificar las validaciones implementadas en Paloteo 1, 2 y 3**
+  - Repasar end-to-end (frontend y backend) las validaciones ya marcadas como resueltas en esta sección (pesos máximos, sobrecapacidad de onzas, unicidad de `id_producto`) y confirmar que se comportan igual en los tres módulos tras los cambios recientes de consistencia funcional y foco.
