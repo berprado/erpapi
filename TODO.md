@@ -3,23 +3,22 @@
 ## 🔴 Alta Prioridad
 
 - [ ] **Reemplazar SECRET_KEY en `.env` por una clave real y aleatoria antes de pasar a producción**
+  - `.env` sigue usando el placeholder `cambia_esto_por_una_clave_larga_y_aleatoria_en_produccion` (pasa la validación de longitud ≥32, pero no es aleatorio).
   - Generar con: `python -c "import secrets; print(secrets.token_hex(32))"`
 
-- [ ] **Reemplazar el token simulado de autenticación por JWT real en el endpoint `/api/auth/login`**
-  - Ya está implementado el sistema JWT, verificar que funcione end-to-end con el cliente móvil.
+- [x] **Reemplazar el token simulado de autenticación por JWT real en el endpoint `/api/auth/login`**
+  - Confirmado: `login()` genera JWT real (`jwt.encode` con `SECRET_KEY`/`ALGORITHM`), valida usuario/contraseña/estado y registra acceso en `seg_acceso`.
 
-- [ ] **Extraer el usuario logueado desde el token en todos los endpoints protegidos**
-  - `procesar_paloteo` ya fue corregido.
-  - Revisar cualquier endpoint futuro que registre `usuario_reg`.
+- [x] **Extraer el usuario logueado desde el token en todos los endpoints protegidos**
+  - Todos los endpoints que registran `usuario_reg` usan `current_user` desde `Depends(get_usuario_actual)` (paloteo, ajustes, perfiles de pesaje, etc.).
 
 ## 🟡 Media Prioridad
 
-- [ ] **Manejar productos sin configuración de pesaje en `procesar_paloteo`**
-  - Actualmente se omiten en silencio (`if not config: continue`).
-  - Decidir si se debe retornar un `400` o incluir una lista de `omitidos` en la respuesta.
+- [x] **Manejar productos sin configuración de pesaje en `procesar_paloteo`**
+  - Implementado: `_procesar_items_paloteo` devuelve `productos_omitidos` y se incluye en la respuesta de los endpoints de paloteo (no se omiten en silencio).
 
-- [ ] **Proteger el endpoint `/api/operacion/activa` con autenticación JWT**
-  - Actualmente es público. Agregar `Depends(get_usuario_actual)` si se requiere.
+- [x] **Proteger el endpoint `/api/operacion/activa` con autenticación JWT**
+  - Ya usa `Depends(get_usuario_actual)` (`main.py:437`).
 
 - [ ] **Implementar refresh token**
   - El token actual expira en 10 horas (`ACCESS_TOKEN_EXPIRE_MINUTES = 600`).
@@ -30,8 +29,8 @@
 - [ ] **Separar los endpoints en routers por módulo (FastAPI `APIRouter`)**
   - `auth.py`, `inventario.py`, `operacion.py` — para mantener `main.py` limpio a medida que crece.
 
-- [ ] **Agregar logging estructurado**
-  - Reemplazar los `print()` de `config.py` por un logger real (`logging` o `loguru`).
+- [x] **Agregar logging estructurado**
+  - `config.py` ya usa `logging.getLogger(__name__)` en lugar de `print()` (Fix #20). Pendiente evaluar si se extiende a `main.py`.
 
 - [ ] **Agregar manejo de errores global**
   - Implementar un `exception_handler` en FastAPI para respuestas de error consistentes.
