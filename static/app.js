@@ -476,12 +476,15 @@ function crearInputPesoCompacto(perfilesJson, removable = true) {
         ? `<button type="button" class="btn-remove-peso flex-none px-1 text-on-surface-variant hover:text-error transition-colors" aria-label="Eliminar peso">×</button>`
         : '';
 
+    // Botones +/- de ajuste rápido: solo administradores (ver crearFilaPaloteo3).
+    const claseBotonAjustePeso = esUsuarioAdministrador() ? '' : ' hidden';
+
     return `
         <div class="item-peso-wrapper flex items-center gap-1">
             ${selectHTML}
             <input type="number" min="0" step="1" class="input-peso w-14 text-center bg-surface border border-outline-variant rounded px-1 py-1 text-on-surface focus:border-primary-fixed-dim focus:outline-none transition-colors" placeholder="0">
-            <button type="button" class="stock-btn-dec-peso flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded text-on-surface hover:bg-surface-container-highest transition-colors font-semibold leading-none" title="Restar">−</button>
-            <button type="button" class="stock-btn-inc-peso flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded text-on-surface hover:bg-surface-container-highest transition-colors font-semibold leading-none" title="Sumar">+</button>
+            <button type="button" class="stock-btn-dec-peso${claseBotonAjustePeso} flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded text-on-surface hover:bg-surface-container-highest transition-colors font-semibold leading-none" title="Restar">−</button>
+            <button type="button" class="stock-btn-inc-peso${claseBotonAjustePeso} flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded text-on-surface hover:bg-surface-container-highest transition-colors font-semibold leading-none" title="Sumar">+</button>
             ${removeButtonHtml}
         </div>
     `;
@@ -1207,6 +1210,10 @@ btnLogout.addEventListener('click', () => {
     mostrarPantallaLogin();
 });
 
+function esUsuarioAdministrador() {
+    return localStorage.getItem('is_admin') === '1';
+}
+
 function mostrarPantallaLogin() {
     loginScreen.classList.remove('hidden');
     appScreen.classList.add('hidden');
@@ -1217,9 +1224,8 @@ async function mostrarPantallaApp() {
     loginScreen.classList.add('hidden');
     appScreen.classList.remove('hidden');
     document.getElementById('user-display').textContent = localStorage.getItem('nombres');
-    const esAdmin = localStorage.getItem('is_admin') === '1';
     const menuItemPesaje = document.getElementById('menu-item-pesaje');
-    if (menuItemPesaje) menuItemPesaje.classList.toggle('hidden', !esAdmin);
+    if (menuItemPesaje) menuItemPesaje.classList.toggle('hidden', !esUsuarioAdministrador());
     await cargarConfiguracionPublica();
     // Asegurar que el panel de inventario sea el visible al entrar a la app
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
@@ -1700,6 +1706,8 @@ function crearFilaPaloteo3(producto) {
     row.dataset.paqsist = String(idealUnidades);
     row.dataset.detsist = String(parseFloat(producto.stock_ideal_onzas) || 0);
 
+    const claseBotonAjusteUnidades = esUsuarioAdministrador() ? '' : ' hidden';
+
     row.innerHTML = `
         <div class="contents">
             <!-- Primera línea: código + nombre (ancho completo) -->
@@ -1710,12 +1718,12 @@ function crearFilaPaloteo3(producto) {
 
             <!-- Segunda línea: input de unidades y, si aplica, pesos con botones integrados -->
             <div class="col-span-full flex flex-wrap gap-sm text-xs">
-                <!-- Unidades con botones +/- -->
+                <!-- Unidades con botones +/- (solo administradores) -->
                 <div class="flex items-center gap-1">
                     <span class="material-symbols-outlined text-on-surface-variant" style="font-size:1.4rem;" title="Unidades">123</span>
                     <input type="number" min="0" step="1" class="input-cerradas stock-input-unidades w-14 text-center bg-surface border border-outline-variant rounded px-1 py-1 text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors" placeholder="0">
-                    <button type="button" class="stock-btn-dec-unid flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded flex items-center justify-center text-on-surface hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors font-semibold leading-none" title="Restar">−</button>
-                    <button type="button" class="stock-btn-inc-unid flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded flex items-center justify-center text-on-surface hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors font-semibold leading-none" title="Sumar">+</button>
+                    <button type="button" class="stock-btn-dec-unid${claseBotonAjusteUnidades} flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded flex items-center justify-center text-on-surface hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors font-semibold leading-none" title="Restar">−</button>
+                    <button type="button" class="stock-btn-inc-unid${claseBotonAjusteUnidades} flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded flex items-center justify-center text-on-surface hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors font-semibold leading-none" title="Sumar">+</button>
                 </div>
 
                 ${esPesable ? `

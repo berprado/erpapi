@@ -4,6 +4,12 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.22
+- Cambio funcional: en PALOTEO 3, los botones +/- de ajuste rapido (unidades
+  y peso) ahora solo son visibles para usuarios administradores; el boton
+  "+ Botella" sigue disponible para todos. Evita que se "redondee" un
+  conteo sin escribir el valor real contado/pesado.
+
 ## 10.21
 - Feature: asistencia de foco en PALOTEO 3 (igual que PALOTEO 1 y 2) —
   auto-focus y seleccion del primer campo al entrar al tab, y navegacion
