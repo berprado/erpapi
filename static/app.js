@@ -455,6 +455,57 @@ function crearInputPeso(perfilesJson, removable = true) {
     `;
 }
 
+// Variante compacta de crearInputPeso para PALOTEO 3: misma estructura/clases
+// (item-peso-wrapper, input-peso, select-perfil) para ser compatible con
+// leerValoresCard/aplicarValoresCard/recalcularTarjeta, pero con botones ±
+// para ajuste rápido en la tabla.
+function crearInputPesoCompacto(perfilesJson, removable = true) {
+    const perfiles = JSON.parse(perfilesJson || '[]');
+    let selectHTML = '';
+
+    if (perfiles.length > 1) {
+        selectHTML = `<select class="select-perfil bg-surface-container-low text-on-surface border border-outline-variant rounded px-1 py-1 text-[10px] focus:outline-none cursor-pointer">`;
+        perfiles.forEach((pf, idx) => {
+            const optionValue = (pf.id != null) ? pf.id : idx;
+            selectHTML += `<option value="${optionValue}">${escapeHtml(pf.nombre_perfil)}</option>`;
+        });
+        selectHTML += `</select>`;
+    }
+
+    const removeButtonHtml = removable
+        ? `<button type="button" class="btn-remove-peso flex-none px-1 text-on-surface-variant hover:text-error transition-colors" aria-label="Eliminar peso">×</button>`
+        : '';
+
+    return `
+        <div class="item-peso-wrapper flex items-center gap-1">
+            ${selectHTML}
+            <input type="number" min="0" step="1" class="input-peso w-14 text-center bg-surface border border-outline-variant rounded px-1 py-1 text-on-surface focus:border-primary-fixed-dim focus:outline-none transition-colors" placeholder="0">
+            <button type="button" class="stock-btn-dec-peso flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded text-on-surface hover:bg-surface-container-highest transition-colors font-semibold leading-none" title="Restar">−</button>
+            <button type="button" class="stock-btn-inc-peso flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded text-on-surface hover:bg-surface-container-highest transition-colors font-semibold leading-none" title="Sumar">+</button>
+            ${removeButtonHtml}
+        </div>
+    `;
+}
+
+// Paso de ± en gramos equivalente a media onza del perfil seleccionado
+// (consistente con el redondeo operativo de recalcularTarjeta). Si no hay
+// perfil resoluble, usa un paso fijo conservador de 5 g.
+function calcularStepPesoGramos(perfiles, select) {
+    const { perfil } = resolverPerfilSeleccionado(perfiles, select);
+    const groz = perfil ? parseFloat(perfil.gramos_por_oz) : NaN;
+    if (isNaN(groz) || groz <= 0) return 5;
+    return Math.max(1, Math.round(groz / 2));
+}
+
+function ajustarValorNumerico(input, incrementar, paso, decimales = 0) {
+    if (!input) return;
+    let valor = parseFloat(input.value) || 0;
+    valor = incrementar ? (valor + paso) : Math.max(0, valor - paso);
+    valor = decimales > 0 ? parseFloat(valor.toFixed(decimales)) : Math.round(valor);
+    input.value = valor;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
 function resolverPerfilSeleccionado(perfiles, select) {
     if (!perfiles || perfiles.length === 0) return { perfil: null, index: -1 };
     if (!select) return { perfil: perfiles[0], index: 0 };
@@ -1614,30 +1665,20 @@ function mostrarEstadoVacioPaloteo3() {
     if (emptyState) emptyState.classList.remove('hidden');
 }
 
-function obtenerValoresCapturadosPaloteo3(idProducto) {
-    const card = document.querySelector(`#lista-productos .product-card[data-id="${idProducto}"]`);
-    if (!card) return { unidades: '', peso: '' };
-
-    const inputUnidades = card.querySelector('.input-cerradas');
-    const inputPeso = card.querySelector('.input-peso');
-
-    return {
-        unidades: inputUnidades ? inputUnidades.value : '',
-        peso: inputPeso ? inputPeso.value : '',
-    };
-}
-
 function crearFilaPaloteo3(producto) {
     const row = document.createElement('div');
     row.className = 'stock-row grid gap-xs px-sm py-sm items-start sm:items-center hover:bg-surface-container-highest transition-colors';
     // Responsive: apilado en móvil (1 col), grid 4 cols en desktop (sm+)
     row.style.gridTemplateColumns = '1fr';
     row.classList.add('sm:gap-xs');
-    
+
     // Aplicar grid desktop con media query inline para mejor compatibilidad
     row.setAttribute('data-mobile-stack', 'true');
-    
+
     row.dataset.idProducto = String(producto.id_producto || '');
+    // dataset.id se mantiene en sincronía con idProducto para reutilizar
+    // leerValoresCard/aplicarValoresCard/recalcularTarjeta sin duplicar lógica.
+    row.dataset.id = String(producto.id_producto || '');
     row.dataset.search = `${producto.id_producto || ''} ${producto.codigo || ''} ${producto.nombre || ''}`.toLowerCase();
     row.dataset.codigo = String(producto.codigo || '—');
     row.dataset.nombre = String(producto.nombre || '');
@@ -1646,13 +1687,17 @@ function crearFilaPaloteo3(producto) {
     const perfiles = Array.isArray(producto.perfiles) ? producto.perfiles : [];
     const perfilBase = perfiles.length > 0 ? perfiles[0] : null;
     const idealUnidades = parseFloat(producto.stock_ideal_unidades) || 0;
-    const capturado = obtenerValoresCapturadosPaloteo3(producto.id_producto);
     const esPesable = parseInt(producto.pesable, 10) === 1;
     const toleranciaOz = perfilBase ? (parseFloat(perfilBase.tolerancia_oz) || 0) : 0;
+    const perfilesJson = JSON.stringify(perfiles);
+
     row.dataset.idealUnidades = String(idealUnidades);
     row.dataset.categoria = String(producto.categoria_nombre || '');
     row.dataset.pesable = esPesable ? '1' : '0';
     row.dataset.tolerancia = String(toleranciaOz);
+    row.dataset.perfiles = perfilesJson;
+    row.dataset.paqsist = String(idealUnidades);
+    row.dataset.detsist = String(parseFloat(producto.stock_ideal_onzas) || 0);
 
     row.innerHTML = `
         <div class="contents">
@@ -1662,73 +1707,38 @@ function crearFilaPaloteo3(producto) {
                 <span class="text-xs text-on-surface truncate" title="${escapeHtml(producto.nombre || '')}">${escapeHtml(producto.nombre || '')}</span>
             </div>
 
-            <!-- Segunda línea: input de unidades y, si aplica, peso con botones integrados -->
-            <div class="col-span-full flex gap-sm text-xs">
+            <!-- Segunda línea: input de unidades y, si aplica, pesos con botones integrados -->
+            <div class="col-span-full flex flex-wrap gap-sm text-xs">
                 <!-- Unidades con botones +/- -->
-                <div class="flex items-center gap-1 flex-1">
+                <div class="flex items-center gap-1">
                     <span class="material-symbols-outlined text-on-surface-variant" style="font-size:1.4rem;" title="Unidades">123</span>
-                    <input type="number" min="0" step="1" value="${escapeHtml(capturado.unidades)}" class="stock-input-unidades w-14 text-center bg-surface border border-outline-variant rounded px-1 py-1 text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors" placeholder="0">
-                    <button type="button" class="stock-btn-dec-unid flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded flex items-center justify-center text-on-surface hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors font-semibold leading-none" data-id-producto="${producto.id_producto}" title="Restar">−</button>
-                    <button type="button" class="stock-btn-inc-unid flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded flex items-center justify-center text-on-surface hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors font-semibold leading-none" data-id-producto="${producto.id_producto}" title="Sumar">+</button>
+                    <input type="number" min="0" step="1" class="input-cerradas stock-input-unidades w-14 text-center bg-surface border border-outline-variant rounded px-1 py-1 text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors" placeholder="0">
+                    <button type="button" class="stock-btn-dec-unid flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded flex items-center justify-center text-on-surface hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors font-semibold leading-none" title="Restar">−</button>
+                    <button type="button" class="stock-btn-inc-unid flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded flex items-center justify-center text-on-surface hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors font-semibold leading-none" title="Sumar">+</button>
                 </div>
 
                 ${esPesable ? `
-                <!-- Peso con botones +/- -->
-                <div class="flex items-center gap-1 flex-1">
+                <!-- Pesos (una o más botellas abiertas) con botones +/- y selector de perfil si aplica -->
+                <div class="flex items-center gap-1">
                     <span class="material-symbols-outlined text-on-surface-variant" style="font-size:1.1rem;" title="Peso">balance</span>
-                    <input type="number" min="0" step="0.1" value="${escapeHtml(capturado.peso)}" class="stock-input-peso w-14 text-center bg-surface border border-outline-variant rounded px-1 py-1 text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors" placeholder="0">
-                    <button type="button" class="stock-btn-dec-peso flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded flex items-center justify-center text-on-surface hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors font-semibold leading-none" data-id-producto="${producto.id_producto}" title="Restar">−</button>
-                    <button type="button" class="stock-btn-inc-peso flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded flex items-center justify-center text-on-surface hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors font-semibold leading-none" data-id-producto="${producto.id_producto}" title="Sumar">+</button>
+                    <div class="pesos-container flex flex-col gap-1" id="stock-pesos-${producto.id_producto}">
+                        ${crearInputPesoCompacto(perfilesJson, false)}
+                    </div>
+                    <button type="button" class="stock-btn-add-peso flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded text-on-surface hover:bg-surface-container-highest transition-colors" title="Agregar botella abierta">
+                        <span class="material-symbols-outlined" style="font-size:1rem;">add</span>
+                    </button>
                 </div>` : ''}
             </div>
         </div>
     `;
 
-    // Agregar listeners directamente a los botones
-    const btnDecUnid = row.querySelector('.stock-btn-dec-unid');
-    const btnIncUnid = row.querySelector('.stock-btn-inc-unid');
-    const btnDecPeso = row.querySelector('.stock-btn-dec-peso');
-    const btnIncPeso = row.querySelector('.stock-btn-inc-peso');
-    const inputUnidades = row.querySelector('.stock-input-unidades');
-    const inputPeso = row.querySelector('.stock-input-peso');
+    // Precarga: si ya hay datos capturados en la tarjeta de inventario (PALOTEO 1/2),
+    // refleja unidades, todos los pesos abiertos y el perfil elegido en cada uno.
+    const cardInventario = getCardInventarioById(producto.id_producto);
+    if (cardInventario) {
+        aplicarValoresCard(row, leerValoresCard(cardInventario), crearInputPesoCompacto);
+    }
 
-    const ajustarValor = (input, incrementar, isPeso = false) => {
-        let valor = parseFloat(input.value) || 0;
-        const paso = isPeso ? 0.1 : 1;
-        valor = incrementar ? (valor + paso) : Math.max(0, valor - paso);
-        
-        if (isPeso) {
-            valor = parseFloat(valor.toFixed(1));
-        }
-        
-        input.value = valor;
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-    };
-
-    if (btnDecUnid) btnDecUnid.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        ajustarValor(inputUnidades, false, false);
-    });
-
-    if (btnIncUnid) btnIncUnid.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        ajustarValor(inputUnidades, true, false);
-    });
-
-    if (btnDecPeso && inputPeso) btnDecPeso.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        ajustarValor(inputPeso, false, true);
-    });
-
-    if (btnIncPeso && inputPeso) btnIncPeso.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        ajustarValor(inputPeso, true, true);
-    });
-    
     return row;
 }
 
@@ -2063,25 +2073,13 @@ function syncFilaPaloteo3ConInventario(row) {
     const idProducto = parseInt(row.dataset.idProducto, 10);
     if (isNaN(idProducto)) return;
 
-    const card = document.querySelector(`#lista-productos .product-card[data-id="${idProducto}"]`);
+    const card = getCardInventarioById(idProducto);
     if (!card) return;
 
-    const inputUnidades = row.querySelector('.stock-input-unidades');
-    const inputPeso = row.querySelector('.stock-input-peso');
-    const inputCerradas = card.querySelector('.input-cerradas');
-
-    if (inputCerradas && inputUnidades) {
-        inputCerradas.value = inputUnidades.value;
-    }
-
-    if (inputPeso) {
-        const inputPesoInventario = card.querySelector('.input-peso');
-        if (inputPesoInventario) {
-            inputPesoInventario.value = inputPeso.value;
-        }
-    }
-
-    recalcularTarjeta(card);
+    // Round-trip completo (unidades + todas las botellas abiertas + perfil
+    // elegido en cada una), reutilizando el mismo mecanismo que PALOTEO 2
+    // (modo captura 1x1) usa para sincronizar contra la tarjeta canónica.
+    aplicarValoresCard(card, leerValoresCard(row));
     scheduleAutosave();
 }
 
@@ -2580,7 +2578,7 @@ function leerValoresCard(card) {
     return { cerradas, pesos };
 }
 
-function aplicarValoresCard(card, valores) {
+function aplicarValoresCard(card, valores, builderInputPeso = crearInputPeso) {
     if (!card || !valores) return;
 
     const cerradasInput = card.querySelector('.input-cerradas');
@@ -2596,7 +2594,7 @@ function aplicarValoresCard(card, valores) {
     const objetivo = Math.max(1, (valores.pesos || []).length || 1);
     while (pesosContainer.querySelectorAll('.item-peso-wrapper').length < objetivo) {
         const wrapper = document.createElement('div');
-        wrapper.innerHTML = crearInputPeso(perfilesJson, true);
+        wrapper.innerHTML = builderInputPeso(perfilesJson, true);
         pesosContainer.appendChild(wrapper.firstElementChild);
     }
     while (pesosContainer.querySelectorAll('.item-peso-wrapper').length > objetivo) {
@@ -2835,10 +2833,63 @@ if (stockSearchInput) {
 const stockList = document.getElementById('stock-list');
 if (stockList) {
     stockList.addEventListener('input', (e) => {
-        if (e.target.classList.contains('stock-input-unidades') || e.target.classList.contains('stock-input-peso')) {
+        if (e.target.classList.contains('input-cerradas') || e.target.classList.contains('input-peso')) {
             const row = e.target.closest('.stock-row');
             syncFilaPaloteo3ConInventario(row);
             renderizarReportePaloteo3();
+        }
+    });
+
+    stockList.addEventListener('change', (e) => {
+        if (e.target.classList.contains('select-perfil')) {
+            const row = e.target.closest('.stock-row');
+            syncFilaPaloteo3ConInventario(row);
+            renderizarReportePaloteo3();
+        }
+    });
+
+    stockList.addEventListener('click', (e) => {
+        const row = e.target.closest('.stock-row');
+        if (!row) return;
+
+        if (e.target.closest('.stock-btn-dec-unid') || e.target.closest('.stock-btn-inc-unid')) {
+            e.preventDefault();
+            const incrementar = !!e.target.closest('.stock-btn-inc-unid');
+            ajustarValorNumerico(row.querySelector('.input-cerradas'), incrementar, 1);
+            return;
+        }
+
+        const btnDecPeso = e.target.closest('.stock-btn-dec-peso');
+        const btnIncPeso = e.target.closest('.stock-btn-inc-peso');
+        if (btnDecPeso || btnIncPeso) {
+            e.preventDefault();
+            const wrapper = (btnDecPeso || btnIncPeso).closest('.item-peso-wrapper');
+            const input = wrapper ? wrapper.querySelector('.input-peso') : null;
+            const select = wrapper ? wrapper.querySelector('.select-perfil') : null;
+            const perfiles = JSON.parse(row.dataset.perfiles || '[]');
+            const paso = calcularStepPesoGramos(perfiles, select);
+            ajustarValorNumerico(input, !!btnIncPeso, paso);
+            return;
+        }
+
+        if (e.target.closest('.stock-btn-add-peso')) {
+            e.preventDefault();
+            const container = row.querySelector('.pesos-container');
+            if (container) {
+                const wrapper = document.createElement('div');
+                wrapper.innerHTML = crearInputPesoCompacto(row.dataset.perfiles || '[]', true);
+                container.appendChild(wrapper.firstElementChild);
+            }
+            return;
+        }
+
+        if (e.target.closest('.btn-remove-peso')) {
+            e.preventDefault();
+            const wrapper = e.target.closest('.item-peso-wrapper');
+            if (wrapper) wrapper.remove();
+            syncFilaPaloteo3ConInventario(row);
+            renderizarReportePaloteo3();
+            return;
         }
     });
 }
@@ -2938,18 +2989,6 @@ if (capturaCardContainer) {
                 scheduleAutosave();
             }, 20);
         }
-    });
-
-    capturaCardContainer.addEventListener('keydown', (e) => {
-        if (e.key !== 'Enter') return;
-        if (!esDesktopParaCaptura()) return;
-        if (!(e.target.classList.contains('input-cerradas') || e.target.classList.contains('input-peso'))) return;
-
-        const card = capturaCardContainer.querySelector('.product-card[data-scope="captura"]');
-        if (!card) return;
-        e.preventDefault();
-
-        navegarCaptura(1);
     });
 }
 

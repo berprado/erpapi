@@ -30,7 +30,19 @@ Usar version semantica simplificada: `MAJOR.MINOR` (ej: `1.0`, `1.1`, `1.2` ... 
 - Cambio funcional completado.
 - `CACHE_NAME` incrementado en `static/sw.js`.
 - Query string `?v=X` actualizada en `static/index.html`.
+- Entrada agregada en `CHANGELOG.md` (ver seccion siguiente).
 
-## Mantener el README actualizado
+## Actualizar el CHANGELOG
 
-- Los cambios realizados deben reflejarse en `README.md`.
+- En cada cambio, agregar una entrada en `CHANGELOG.md` bajo el numero de
+  version recien asignado (el mismo de `CACHE_NAME` / `?v=`).
+- La entrada debe ser un resumen breve (1-2 lineas) del cambio, no el detalle
+  tecnico completo.
+
+## Mantener la documentacion actualizada
+
+- Actualizar `README.md` cuando el cambio sea pertinente para la
+  documentacion (nuevo endpoint, regla de negocio, variable de entorno,
+  cambio de arquitectura, etc.). No es obligatorio para cambios que no
+  afecten el comportamiento documentado (fixes internos, ajustes de UI
+  menores, refactors sin impacto externo).
