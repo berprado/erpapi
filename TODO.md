@@ -52,9 +52,8 @@
 - [x] **Validar unicidad de `id_producto` en `items` del payload de paloteo**
   - Implementado en schema de request para evitar duplicados en creacion/correccion.
 
-- [ ] **Revisar consistencia funcional de PALOTEO 3 vs PALOTEO 1/2**
-  - PALOTEO 3 captura un solo peso por producto, mientras PALOTEO 1/2 soportan múltiples abiertas y perfiles.
-  - Definir si es decisión funcional o si debe unificarse el modelo de captura.
+- [x] **Revisar consistencia funcional de PALOTEO 3 vs PALOTEO 1/2**
+  - Resuelto: PALOTEO 3 reutiliza `leerValoresCard`/`aplicarValoresCard` (igual que el modo captura 1x1), soporta multi-botella y multi-perfil, y corrige el step de los botones +/- de peso para que sea proporcional a `gramos_por_oz`.
 
 - [ ] **Mejorar precarga de corrección para múltiples botellas abiertas**
   - Actualmente se repone solo el primer peso/perfil; evaluar restauración completa de todas las entradas capturadas.
