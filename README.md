@@ -9,7 +9,7 @@ Backend REST construido con FastAPI y frontend PWA integrado para control de inv
 El flujo operativo actual es:
 
 1. El usuario inicia sesion en la PWA.
-2. La API valida que la operativa este en estado INICIO CIERRE (`24`).
+2. La API valida que la operativa este en estado INICIO CIERRE (`24`) para permitir registrar o corregir paloteo. Si la operativa esta en otro estado, los modulos PALOTEO 1/2/3 permanecen accesibles pero en modo solo lectura: se puede consultar el ultimo paloteo registrado, sin poder editarlo (inputs y botones de ajuste deshabilitados en el frontend; la API rechaza cualquier intento de registro/correccion mientras el estado no sea `24`).
 3. La app resuelve la barra operativa por entorno (con selector opcional controlado).
 4. Se cargan productos pendientes para paloteo:
   - productos vendidos durante la operativa

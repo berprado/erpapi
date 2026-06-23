@@ -289,6 +289,8 @@ function clearAutosaveDraft() {
 }
 
 function hydrateAutosaveDraft() {
+    if (!operativaPermitePaloteo) return;
+
     const key = _obtenerClaveAutosave();
     if (!key) return;
 
@@ -428,9 +430,11 @@ function abrirContenidoDummy(clave) {
 function crearInputPeso(perfilesJson, removable = true) {
     const perfiles = JSON.parse(perfilesJson || '[]');
     let selectHTML = '';
+    const soloLectura = !operativaPermitePaloteo;
+    const disabledAttr = soloLectura ? ' disabled' : '';
 
     if (perfiles.length > 1) {
-        selectHTML = `<select class="bg-surface-container-low text-data-tabular text-primary-fixed border border-outline-variant rounded-md px-sm py-xs focus:outline-none select-perfil mr-sm cursor-pointer font-semibold">`;
+        selectHTML = `<select class="bg-surface-container-low text-data-tabular text-primary-fixed border border-outline-variant rounded-md px-sm py-xs focus:outline-none select-perfil mr-sm cursor-pointer font-semibold"${disabledAttr}>`;
         perfiles.forEach((pf, idx) => {
                 const optionValue = (pf.id != null) ? pf.id : idx;
                 selectHTML += `<option value="${optionValue}">${escapeHtml(pf.nombre_perfil)}</option>`;
@@ -439,7 +443,7 @@ function crearInputPeso(perfilesJson, removable = true) {
     }
 
     const removeButtonHtml = removable
-        ? `<button type="button" onclick="this.parentElement.parentElement.remove()" class="btn-remove-peso absolute right-sm top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-error transition-colors" aria-label="Eliminar campo de peso">
+        ? `<button type="button" onclick="this.parentElement.parentElement.remove()" class="btn-remove-peso absolute right-sm top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-error transition-colors"${disabledAttr} aria-label="Eliminar campo de peso">
                     ${renderCriticalIcon('close', 'ui-icon ui-icon-sm')}
                 </button>`
         : '';
@@ -448,7 +452,7 @@ function crearInputPeso(perfilesJson, removable = true) {
         <div class="relative flex items-center item-peso-wrapper gap-sm">
             ${selectHTML}
             <div class="relative flex-1">
-                <input type="number" min="0" step="1" class="w-full bg-surface border border-outline-variant rounded-md pl-md pr-lg py-sm text-on-surface input-peso focus:border-error focus:outline-none focus:shadow-cyan-glow-focus font-data-tabular" placeholder="Ej: 950" required>
+                <input type="number" min="0" step="1" class="w-full bg-surface border border-outline-variant rounded-md pl-md pr-lg py-sm text-on-surface input-peso focus:border-error focus:outline-none focus:shadow-cyan-glow-focus font-data-tabular" placeholder="Ej: 950" required${disabledAttr}>
                 ${removeButtonHtml}
             </div>
         </div>
@@ -462,9 +466,11 @@ function crearInputPeso(perfilesJson, removable = true) {
 function crearInputPesoCompacto(perfilesJson, removable = true) {
     const perfiles = JSON.parse(perfilesJson || '[]');
     let selectHTML = '';
+    const soloLectura = !operativaPermitePaloteo;
+    const disabledAttr = soloLectura ? ' disabled' : '';
 
     if (perfiles.length > 1) {
-        selectHTML = `<select class="select-perfil bg-surface-container-low text-on-surface border border-outline-variant rounded px-1 py-1 text-[10px] focus:outline-none cursor-pointer">`;
+        selectHTML = `<select class="select-perfil bg-surface-container-low text-on-surface border border-outline-variant rounded px-1 py-1 text-[10px] focus:outline-none cursor-pointer"${disabledAttr}>`;
         perfiles.forEach((pf, idx) => {
             const optionValue = (pf.id != null) ? pf.id : idx;
             selectHTML += `<option value="${optionValue}">${escapeHtml(pf.nombre_perfil)}</option>`;
@@ -473,18 +479,18 @@ function crearInputPesoCompacto(perfilesJson, removable = true) {
     }
 
     const removeButtonHtml = removable
-        ? `<button type="button" class="btn-remove-peso flex-none px-1 text-on-surface-variant hover:text-error transition-colors" aria-label="Eliminar peso">×</button>`
+        ? `<button type="button" class="btn-remove-peso flex-none px-1 text-on-surface-variant hover:text-error transition-colors"${disabledAttr} aria-label="Eliminar peso">×</button>`
         : '';
 
     // Botones +/- de ajuste rápido: solo administradores (ver crearFilaPaloteo3).
-    const claseBotonAjustePeso = esUsuarioAdministrador() ? '' : ' hidden';
+    const claseBotonAjustePeso = (esUsuarioAdministrador() && !soloLectura) ? '' : ' hidden';
 
     return `
         <div class="item-peso-wrapper flex items-center gap-1">
             ${selectHTML}
-            <input type="number" min="0" step="1" class="input-peso w-14 text-center bg-surface border border-outline-variant rounded px-1 py-1 text-on-surface focus:border-primary-fixed-dim focus:outline-none transition-colors" placeholder="0">
-            <button type="button" class="stock-btn-dec-peso${claseBotonAjustePeso} flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded text-on-surface hover:bg-surface-container-highest transition-colors font-semibold leading-none" title="Restar">−</button>
-            <button type="button" class="stock-btn-inc-peso${claseBotonAjustePeso} flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded text-on-surface hover:bg-surface-container-highest transition-colors font-semibold leading-none" title="Sumar">+</button>
+            <input type="number" min="0" step="1" class="input-peso w-14 text-center bg-surface border border-outline-variant rounded px-1 py-1 text-on-surface focus:border-primary-fixed-dim focus:outline-none transition-colors" placeholder="0"${disabledAttr}>
+            <button type="button" class="stock-btn-dec-peso${claseBotonAjustePeso} flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded text-on-surface hover:bg-surface-container-highest transition-colors font-semibold leading-none" title="Restar"${disabledAttr}>−</button>
+            <button type="button" class="stock-btn-inc-peso${claseBotonAjustePeso} flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded text-on-surface hover:bg-surface-container-highest transition-colors font-semibold leading-none" title="Sumar"${disabledAttr}>+</button>
             ${removeButtonHtml}
         </div>
     `;
@@ -1245,7 +1251,7 @@ async function iniciarDashboard() {
     resetModoCaptura();
     modoEnvioOrigen = 'inventario';
     _deshabilitarBtnEnvio();
-    actualizarBloqueoTabsPaloteo(true);
+    ocultarBannerSoloLectura();
     observacionesDialog.classList.add('hidden');
     inputObservaciones.value = '';
 
@@ -1289,17 +1295,31 @@ async function iniciarDashboard() {
                 estadoTituloErr.textContent = detail.titulo || "Operativa bloqueada";
             }
 
-            estadoTexto.textContent = detail.mensaje || "Debes iniciar el cierre de la operativa para realizar el paloteo";
+            estadoTexto.textContent = `${detail.mensaje || "Debes iniciar el cierre de la operativa para realizar el paloteo"} Puedes consultar el último paloteo registrado, pero no editarlo.`;
             _actualizarEstadoAutosave('idle', 'Autosave bloqueado: operativa fuera de INICIO CIERRE.');
-            return; // Bloqueamos la ejecución aquí
+
+            // Modo solo lectura: dejamos los módulos accesibles para consultar
+            // el último paloteo registrado, sin permitir registrar ni corregir nada.
+            currentOperacionId = detail.id_operacion || null;
+            operativaPermitePaloteo = false;
+            currentIdInventarioPOS = null;
+            ocultarBannerCorreccion();
+            mostrarBannerSoloLectura();
+
+            if (currentOperacionId) {
+                cargarProductos();
+            } else {
+                listaProductos.innerHTML = `<div class="text-center text-on-surface-variant py-lg font-body-base">No hay datos de paloteo para consultar.</div>`;
+            }
+            return;
         }
 
         // Luz Verde: Guardamos el ID de operación (estado 24)
         currentOperacionId = dataOp.id_operacion;
         operativaPermitePaloteo = true;
-        actualizarBloqueoTabsPaloteo(false);
         currentIdInventarioPOS = null; // Resetear el ID de inventario previo para nueva operativa
         ocultarBannerCorreccion(); // Ocultar banner de corrección hasta confirmar si hay inventario
+        ocultarBannerSoloLectura();
         const iconoExito = dataOp.icon || 'check_circle';
         estadoIcon.innerHTML = renderCriticalIcon(iconoExito);
         estadoIcon.classList.remove('animate-pulse', 'text-on-surface-variant', 'text-error', 'status-warning-icon', 'status-checking-icon', 'status-info-icon');
@@ -1396,6 +1416,8 @@ function _habilitarBtnEnvio() {
     btnGuardar.classList.remove('opacity-40', 'cursor-not-allowed', 'text-on-surface-variant');
     btnGuardar.classList.add('text-primary-fixed', 'hover:text-primary-fixed-dim', 'border-primary-fixed-dim', 'glow-cyan-intense');
     if (btnEnviarInventario) btnEnviarInventario.disabled = false;
+    if (stockBtnGuardar) stockBtnGuardar.disabled = false;
+    if (capturaBtnFinalizar) capturaBtnFinalizar.disabled = false;
 }
 
 function _deshabilitarBtnEnvio() {
@@ -1403,47 +1425,8 @@ function _deshabilitarBtnEnvio() {
     btnGuardar.classList.remove('text-primary-fixed', 'hover:text-primary-fixed-dim', 'border-primary-fixed-dim', 'glow-cyan-intense');
     btnGuardar.classList.add('opacity-40', 'cursor-not-allowed', 'text-on-surface-variant');
     if (btnEnviarInventario) btnEnviarInventario.disabled = true;
-}
-
-function actualizarBloqueoTabsPaloteo(estaBloqueado) {
-    const tabsBloqueables = ['logs', 'stock', 'scan'];
-    const mensajeBloqueo = 'Operativa bloqueada: inicia el cierre de la operativa para habilitar este módulo.';
-
-    tabsBloqueables.forEach((tabName) => {
-        const btn = document.querySelector(`[data-tab="${tabName}"]`);
-        if (!btn) return;
-
-        btn.disabled = estaBloqueado;
-        btn.setAttribute('aria-disabled', estaBloqueado ? 'true' : 'false');
-        if (estaBloqueado) {
-            btn.setAttribute('title', mensajeBloqueo);
-            btn.setAttribute('aria-label', mensajeBloqueo);
-        } else {
-            btn.removeAttribute('title');
-            btn.removeAttribute('aria-label');
-        }
-        btn.classList.toggle('opacity-40', estaBloqueado);
-        btn.classList.toggle('cursor-not-allowed', estaBloqueado);
-    });
-
-    if (estaBloqueado) {
-        const tabActivo = document.querySelector('[data-tab].active-tab');
-        if (tabActivo && tabsBloqueables.includes(tabActivo.dataset.tab)) {
-            navegarATab('inventario');
-        }
-    }
-
-    if (btnEnviarInventario) {
-        btnEnviarInventario.disabled = estaBloqueado;
-        btnEnviarInventario.setAttribute('aria-disabled', estaBloqueado ? 'true' : 'false');
-        if (estaBloqueado) {
-            btnEnviarInventario.setAttribute('title', mensajeBloqueo);
-            btnEnviarInventario.setAttribute('aria-label', mensajeBloqueo);
-        } else {
-            btnEnviarInventario.removeAttribute('title');
-            btnEnviarInventario.removeAttribute('aria-label');
-        }
-    }
+    if (stockBtnGuardar) stockBtnGuardar.disabled = true;
+    if (capturaBtnFinalizar) capturaBtnFinalizar.disabled = true;
 }
 
 // ==========================================
@@ -1545,6 +1528,16 @@ function ocultarBannerCorreccion() {
     if (banner) banner.classList.add('hidden');
 }
 
+function mostrarBannerSoloLectura() {
+    const banner = document.getElementById('banner-solo-lectura');
+    if (banner) banner.classList.remove('hidden');
+}
+
+function ocultarBannerSoloLectura() {
+    const banner = document.getElementById('banner-solo-lectura');
+    if (banner) banner.classList.add('hidden');
+}
+
 // ==========================================
 // RENDERIZADO Y DINAMISMO UI
 // ==========================================
@@ -1634,7 +1627,7 @@ function crearTarjetaProductoElement(p, scope = 'inv') {
         <div class="grid ${p.pesable === 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'} gap-md items-start">
             <div>
                 <label class="block text-label-mono font-label-mono text-on-surface-variant mb-xs tracking-widest uppercase">Unidades</label>
-                <input type="number" min="0" class="w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-on-surface input-cerradas focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus font-data-tabular" placeholder="0">
+                <input type="number" min="0" class="w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-on-surface input-cerradas focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus font-data-tabular" placeholder="0"${!operativaPermitePaloteo ? ' disabled' : ''}>
             </div>
 
             ${p.pesable === 1 ? `
@@ -1644,7 +1637,7 @@ function crearTarjetaProductoElement(p, scope = 'inv') {
                     ${crearInputPeso(perfilesJson, false)}
                 </div>
                 <div class="mt-sm flex flex-wrap gap-sm">
-                    <button type="button" data-id-producto="${p.id_producto}" class="${btnAddPesoClass} btn-action w-full sm:w-auto text-label-mono font-semibold flex items-center justify-center sm:justify-start gap-xs transition-colors uppercase tracking-widest rounded-sharp border px-sm py-xs">
+                    <button type="button" data-id-producto="${p.id_producto}" class="${btnAddPesoClass} btn-action w-full sm:w-auto text-label-mono font-semibold flex items-center justify-center sm:justify-start gap-xs transition-colors uppercase tracking-widest rounded-sharp border px-sm py-xs"${!operativaPermitePaloteo ? ' disabled' : ''}>
                         <span class="material-symbols-outlined text-sm">add_circle</span> + Botella
                     </button>
                 </div>
@@ -1709,7 +1702,9 @@ function crearFilaPaloteo3(producto) {
     row.dataset.paqsist = String(idealUnidades);
     row.dataset.detsist = String(parseFloat(producto.stock_ideal_onzas) || 0);
 
-    const claseBotonAjusteUnidades = esUsuarioAdministrador() ? '' : ' hidden';
+    const soloLecturaFila = !operativaPermitePaloteo;
+    const claseBotonAjusteUnidades = (esUsuarioAdministrador() && !soloLecturaFila) ? '' : ' hidden';
+    const disabledAttrFila = soloLecturaFila ? ' disabled' : '';
 
     row.innerHTML = `
         <div class="contents">
@@ -1724,9 +1719,9 @@ function crearFilaPaloteo3(producto) {
                 <!-- Unidades con botones +/- (solo administradores) -->
                 <div class="flex items-center gap-1">
                     <span class="material-symbols-outlined text-on-surface-variant" style="font-size:1.4rem;" title="Unidades">123</span>
-                    <input type="number" min="0" step="1" class="input-cerradas stock-input-unidades w-14 text-center bg-surface border border-outline-variant rounded px-1 py-1 text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors" placeholder="0">
-                    <button type="button" class="stock-btn-dec-unid${claseBotonAjusteUnidades} flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded flex items-center justify-center text-on-surface hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors font-semibold leading-none" title="Restar">−</button>
-                    <button type="button" class="stock-btn-inc-unid${claseBotonAjusteUnidades} flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded flex items-center justify-center text-on-surface hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors font-semibold leading-none" title="Sumar">+</button>
+                    <input type="number" min="0" step="1" class="input-cerradas stock-input-unidades w-14 text-center bg-surface border border-outline-variant rounded px-1 py-1 text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors" placeholder="0"${disabledAttrFila}>
+                    <button type="button" class="stock-btn-dec-unid${claseBotonAjusteUnidades} flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded flex items-center justify-center text-on-surface hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors font-semibold leading-none" title="Restar"${disabledAttrFila}>−</button>
+                    <button type="button" class="stock-btn-inc-unid${claseBotonAjusteUnidades} flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded flex items-center justify-center text-on-surface hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors font-semibold leading-none" title="Sumar"${disabledAttrFila}>+</button>
                 </div>
 
                 ${esPesable ? `
@@ -1736,7 +1731,7 @@ function crearFilaPaloteo3(producto) {
                     <div class="pesos-container flex flex-col gap-1" id="stock-pesos-${producto.id_producto}">
                         ${crearInputPesoCompacto(perfilesJson, false)}
                     </div>
-                    <button type="button" class="stock-btn-add-peso flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded text-on-surface hover:bg-surface-container-highest transition-colors" title="Agregar botella abierta">
+                    <button type="button" class="stock-btn-add-peso flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded text-on-surface hover:bg-surface-container-highest transition-colors" title="Agregar botella abierta"${disabledAttrFila}>
                         <span class="material-symbols-outlined" style="font-size:1rem;">add</span>
                     </button>
                 </div>` : ''}

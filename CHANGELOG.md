@@ -4,6 +4,13 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.24
+- Cambio funcional: cuando la operativa no esta en INICIO CIERRE (estado 24),
+  los modulos PALOTEO 1/2/3 ya no se bloquean. Permanecen accesibles en modo
+  solo lectura para consultar el ultimo paloteo registrado (inputs y botones
+  de ajuste deshabilitados), con un banner indicandolo. El guardado/edicion
+  sigue exigiendo estado 24, validado tanto en frontend como en backend.
+
 ## 10.23
 - Feature: asistencia de foco/progreso en PALOTEO 1 y PALOTEO 3 — barra
   "Capturados: X / Y (Z%)" que cuenta productos con unidades/peso ya

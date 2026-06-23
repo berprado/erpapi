@@ -759,6 +759,12 @@
             </div>
         </nav>
 
+        <!-- Banner global: modo solo lectura cuando la operativa no está en INICIO CIERRE -->
+        <div id="banner-solo-lectura" class="hidden p-sm flex items-center justify-center gap-sm text-label-mono uppercase tracking-widest text-[11px] sticky top-14 sm:top-16 z-10" style="background: color-mix(in srgb, var(--semantic-warning) 12%, transparent); border-bottom: 1px solid var(--semantic-warning); color: var(--semantic-warning);">
+            <span class="material-symbols-outlined" style="font-size: 1.1rem;">visibility</span>
+            <span>Modo solo lectura: viendo el último paloteo registrado. No se pueden hacer cambios.</span>
+        </div>
+
         <!-- Área de Contenido -->
         <main class="flex-1 pb-28 overflow-y-auto" id="main-content">
 
@@ -1158,7 +1164,7 @@
         </div>
     </div>
 
-    <script src="/assets/app.js?v=10.23"></script>
+    <script src="/assets/app.js?v=10.24"></script>
 
     <script>
         (function () {
