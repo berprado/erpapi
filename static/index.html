@@ -736,6 +736,10 @@
                             <span class="material-symbols-outlined">inventory_2</span>
                             Paloteo 1
                         </button>
+                        <button type="button" class="floating-menu-item" data-tab="conversor" role="menuitem">
+                            <span class="material-symbols-outlined">scale</span>
+                            Conversor
+                        </button>
                         <button id="menu-item-pesaje" type="button" class="floating-menu-item hidden" data-tab="pesaje" role="menuitem">
                             <span class="material-symbols-outlined">monitor_weight</span>
                             Pesaje
@@ -999,6 +1003,36 @@
             </button>
         </div><!-- /panel-pesaje -->
 
+        <!-- ========== PANEL CONVERSOR ========== -->
+        <div id="panel-conversor" class="tab-panel hidden p-md max-w-2xl mx-auto w-full">
+            <div class="flex items-start justify-between mb-sm">
+                <div>
+                    <h2 class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase flex items-center gap-xs leading-none">
+                        <span class="material-symbols-outlined text-primary-fixed" style="font-size:1rem;">scale</span>
+                        Conversor
+                    </h2>
+                    <p class="text-[11px] text-on-surface-variant mt-[2px] leading-tight">Equivalencia de peso a onzas, sin registrar nada</p>
+                </div>
+            </div>
+
+            <!-- Buscador de producto -->
+            <div class="relative mb-sm">
+                <span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-outline-variant" style="font-size:1rem;">search</span>
+                <input type="text" id="conversor-search" placeholder="Buscar producto por código o nombre..." class="w-full bg-surface-container border border-outline-variant rounded-md pl-10 pr-md py-sm text-sm text-on-surface placeholder-outline/40 focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-body-base">
+            </div>
+
+            <!-- Resultados de búsqueda -->
+            <div id="conversor-resultados" class="space-y-xs mb-md"></div>
+            <div id="conversor-empty-state" class="hidden text-center text-on-surface-variant py-md font-body-base text-sm">
+                No se encontraron productos pesables con ese criterio.
+            </div>
+
+            <!-- FAB: volver al inicio de la página -->
+            <button id="conversor-fab-scroll-top" type="button" aria-label="Volver al inicio" class="fab-scroll-top hidden bg-primary-container text-on-primary-fixed shadow-cyan-glow hover:brightness-110 active:scale-95 transition-all">
+                <span class="material-symbols-outlined">arrow_upward</span>
+            </button>
+        </div><!-- /panel-conversor -->
+
 
         </main>
 
@@ -1162,9 +1196,46 @@
                 </div>
             </div>
         </div>
+
+        <!-- Modal: captura de botellas del Conversor -->
+        <div id="conversor-modal" class="hidden fixed inset-0 z-50" aria-hidden="true">
+            <div id="conversor-modal-overlay" class="absolute inset-0 bg-black/70 backdrop-blur-[2px]"></div>
+            <div class="relative z-10 h-full flex items-center justify-center p-md">
+                <div class="w-full max-w-lg bg-surface-container border border-outline-variant rounded-md shadow-2xl max-h-[85vh] flex flex-col">
+                    <div class="px-md py-sm border-b border-outline-variant flex items-center justify-between shrink-0">
+                        <div class="min-w-0">
+                            <h3 id="conversor-producto-nombre" class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase truncate"></h3>
+                            <p id="conversor-producto-codigo" class="text-[11px] text-on-surface-variant font-data-tabular"></p>
+                        </div>
+                        <button id="btn-close-conversor-modal" type="button" class="topbar-icon-btn shrink-0" aria-label="Cerrar conversor">
+                            <span class="material-symbols-outlined text-base">close</span>
+                        </button>
+                    </div>
+                    <div class="px-md py-md overflow-y-auto flex-1">
+                        <div id="conversor-botellas-container" class="space-y-sm"></div>
+
+                        <button type="button" id="conversor-btn-agregar" class="mt-sm w-full border border-dashed border-outline-variant rounded-md py-sm text-[11px] font-label-mono uppercase tracking-widest text-on-surface-variant hover:border-primary-fixed-dim hover:text-primary-fixed transition-colors flex items-center justify-center gap-xs">
+                            <span class="material-symbols-outlined" style="font-size:1rem;">add</span>
+                            Agregar botella
+                        </button>
+
+                        <div class="mt-md pt-md border-t border-outline-variant grid grid-cols-2 gap-md text-center">
+                            <div>
+                                <p class="text-label-mono text-on-surface-variant tracking-widest uppercase text-[10px] mb-xs">Onzas exactas</p>
+                                <p class="text-headline-md font-semibold text-secondary-fixed" id="conversor-total-exacto">0</p>
+                            </div>
+                            <div>
+                                <p class="text-label-mono text-on-surface-variant tracking-widest uppercase text-[10px] mb-xs">Onzas POS (redondeo)</p>
+                                <p class="text-headline-md font-semibold text-primary-fixed" id="conversor-total-redondeado">0</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <script src="/assets/app.js?v=10.24"></script>
+    <script src="/assets/app.js?v=10.26"></script>
 
     <script>
         (function () {

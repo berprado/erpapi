@@ -4,6 +4,22 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.26
+- Cambio funcional: en CONVERSOR, la captura de botellas se mueve de una
+  tarjeta inline al final del listado a una ventana modal (mismo estilo y
+  mecanismo de cierre — overlay, boton X, Esc — que "Guia Operativa" y
+  "Boletin"). Se quita el boton "Limpiar": cerrar la modal ya reinicia el
+  estado, ya que el modulo no persiste nada.
+
+## 10.25
+- Feature: nuevo modulo CONVERSOR — calculadora de peso a onzas para
+  cualquier producto pesable, disponible siempre sin importar el estado de
+  la operativa ni la barra activa. Permite elegir el modelo de botella (si
+  el producto tiene varios) y agregar multiples botellas para sumar su
+  equivalente en onzas (exacto y redondeado POS). No registra nada en BD:
+  el catalogo se carga una vez desde `GET /api/conversor/productos` y el
+  calculo se hace en cliente.
+
 ## 10.24
 - Cambio funcional: cuando la operativa no esta en INICIO CIERRE (estado 24),
   los modulos PALOTEO 1/2/3 ya no se bloquean. Permanecen accesibles en modo

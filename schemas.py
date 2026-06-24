@@ -109,6 +109,15 @@ class ProductoPendiente(BaseModel):
     onzas_por_botella_llena: float
 
 
+class ProductoConversorItem(BaseModel):
+    id_producto: int
+    codigo: str
+    nombre: str
+    id_categoria: Optional[int] = None
+    nombre_categoria: Optional[str] = None
+    perfiles: List[PerfilPesaje] = Field(default_factory=list)
+
+
 class InventarioDetalleRegistrado(BaseModel):
     id_producto: int
     botellas_cerradas: float

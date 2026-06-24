@@ -175,6 +175,14 @@ Reglas de barra operativa:
 
 Todos los endpoints de Pesaje requieren ademas que el usuario tenga el rol `ROLE_ADMINISTRADOR` (verificado contra `seg_permiso`/`seg_rol`), devolviendo `403` si no lo tiene.
 
+### Conversor (requiere JWT)
+
+| Metodo | Ruta | Descripcion |
+|---|---|---|
+| `GET` | `/api/conversor/productos` | Catalogo completo de productos pesables (`pesable=1`, excluye categorias 15, 18, 19 y 20), agrupados con sus perfiles. No filtra por operativa, barra ni movimiento reciente |
+
+A diferencia de `/api/inventario/pendientes`, este endpoint no requiere rol administrador (cualquier usuario autenticado puede usarlo) y no depende del estado de la operativa: alimenta el modulo CONVERSOR, una calculadora de peso a onzas sin persistencia (ver seccion "Modulo CONVERSOR" mas abajo).
+
 ### Reporte Paloteo 3 (requiere JWT)
 
 | Metodo | Ruta | Descripcion |
@@ -274,6 +282,7 @@ Flujo actual de navegacion:
 - PALOTEO 3 (captura ciega)
 - REPORTE (diferencias y exportacion PDF)
 - PESAJE (CRUD de modelos de botella y codigos de barra; solo visible/accesible para usuarios con rol `ROLE_ADMINISTRADOR`)
+- CONVERSOR (calculadora de peso a onzas, siempre disponible sin importar el estado de la operativa)
 
 Sincronizacion entre modulos:
 
@@ -313,9 +322,17 @@ sincronizada entre ambos modulos porque comparten el mismo origen de datos.
 - Los perfiles pesables con `peso_bruto` o `tara` nulos se marcan visualmente (borde de advertencia + icono + texto "Datos incompletos").
 - Excluye productos de las categorias 15, 18, 19 y 20 (tanto en el listado como en el filtro de categorias).
 
+### Modulo CONVERSOR: detalles de UI
+
+- Calculadora de peso a onzas para cualquier producto pesable, sin escribir nada en BD y sin las restricciones de los demas modulos: siempre visible en el menu, no depende del estado de la operativa (`24`) ni de `is_admin`.
+- Catalogo (`GET /api/conversor/productos`) se carga una sola vez por sesion (`conversorProductosCache` en `app.js`) y la busqueda/filtro corre en cliente; no hay roundtrip por cada tecla ni por cada peso ingresado.
+- Al seleccionar un producto en los resultados se abre una ventana modal (`#conversor-modal`) con el mismo patron visual y de cierre (overlay, boton X, tecla Esc) que los modales "Guia Operativa" y "Boletin" (`#dummy-content-dialog`).
+- Dentro de la modal se pueden agregar varias "botellas" (una fila por cada una), cada una con su propio selector de modelo si el producto tiene mas de un perfil (`resolverPerfilSeleccionado()`, reutilizado de PALOTEO). El calculo (`peso_liquido = max(0, peso - tara)`, `onzas = peso_liquido / gramos_por_oz`, redondeo HALF_UP con `redondearOnzasOperativas()`) se ejecuta en cliente y muestra tanto el total exacto como el redondeado POS.
+- Cerrar la modal reinicia el estado (no hay boton "Limpiar" separado), ya que el modulo no persiste nada entre aperturas.
+
 ### FAB "volver al inicio"
 
-Boton flotante reutilizable (clase `fab-scroll-top` + funcion `inicializarFabScrollTop(fabId, panelId)` en `app.js`) presente en PALOTEO 1, PALOTEO 3, REPORTE y PESAJE. Aparece al hacer scroll mas alla de un umbral y solo si su panel esta activo; al hacer click hace scroll suave al inicio de la pagina. Para agregarlo a un nuevo modulo: insertar un boton con esa clase dentro del panel y llamar a la funcion con sus ids.
+Boton flotante reutilizable (clase `fab-scroll-top` + funcion `inicializarFabScrollTop(fabId, panelId)` en `app.js`) presente en PALOTEO 1, PALOTEO 3, REPORTE, PESAJE y CONVERSOR. Aparece al hacer scroll mas alla de un umbral y solo si su panel esta activo; al hacer click hace scroll suave al inicio de la pagina. Para agregarlo a un nuevo modulo: insertar un boton con esa clase dentro del panel y llamar a la funcion con sus ids.
 
 Service Worker:
 

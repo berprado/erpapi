@@ -1091,6 +1091,193 @@ if (pesajeFiltroNoPesablesBtn) {
     });
 }
 
+// ==========================================
+// MODULO CONVERSOR: calculadora de peso -> onzas, sin estado de operativa
+// y sin persistencia. Carga el catálogo una sola vez y calcula todo en
+// cliente reutilizando redondearOnzasOperativas() y resolverPerfilSeleccionado().
+// ==========================================
+
+const conversorSearchInput      = document.getElementById('conversor-search');
+const conversorResultados       = document.getElementById('conversor-resultados');
+const conversorEmptyState       = document.getElementById('conversor-empty-state');
+const conversorModal            = document.getElementById('conversor-modal');
+const conversorModalOverlay     = document.getElementById('conversor-modal-overlay');
+const btnCloseConversorModal    = document.getElementById('btn-close-conversor-modal');
+const conversorProductoNombre   = document.getElementById('conversor-producto-nombre');
+const conversorProductoCodigo   = document.getElementById('conversor-producto-codigo');
+const conversorBotellasContainer = document.getElementById('conversor-botellas-container');
+const conversorBtnAgregar       = document.getElementById('conversor-btn-agregar');
+const conversorTotalExacto      = document.getElementById('conversor-total-exacto');
+const conversorTotalRedondeado  = document.getElementById('conversor-total-redondeado');
+
+let conversorProductosCache = null;
+let conversorProductoActual = null;
+
+async function cargarProductosConversor() {
+    if (conversorProductosCache !== null) {
+        renderizarResultadosConversor();
+        return;
+    }
+    try {
+        const response = await fetch(`${API_BASE}/conversor/productos`, {
+            headers: { 'Authorization': `Bearer ${currentToken}` }
+        });
+        if (response.status === 401) return btnLogout.click();
+        if (!response.ok) return;
+        conversorProductosCache = await response.json();
+        renderizarResultadosConversor();
+    } catch (error) {
+        conversorProductosCache = [];
+    }
+}
+
+function renderizarResultadosConversor() {
+    if (!conversorResultados || !conversorProductosCache) return;
+
+    const query = (conversorSearchInput ? conversorSearchInput.value : '').trim().toLowerCase();
+    const productos = query
+        ? conversorProductosCache.filter((p) =>
+            String(p.codigo || '').toLowerCase().includes(query) ||
+            String(p.nombre || '').toLowerCase().includes(query))
+        : conversorProductosCache;
+
+    conversorResultados.innerHTML = productos.map((p) => `
+        <button type="button" class="conversor-resultado-item w-full flex items-center justify-between gap-sm bg-surface-container border border-outline-variant rounded-md px-md py-sm text-left hover:border-primary-fixed-dim transition-colors" data-id-producto="${p.id_producto}">
+            <span class="min-w-0 truncate text-sm text-on-surface">${escapeHtml(p.nombre)}</span>
+            <span class="text-[11px] text-on-surface-variant font-data-tabular shrink-0">${escapeHtml(p.codigo)}</span>
+        </button>
+    `).join('');
+
+    conversorResultados.querySelectorAll('.conversor-resultado-item').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const producto = conversorProductosCache.find(
+                (p) => String(p.id_producto) === btn.dataset.idProducto
+            );
+            if (producto) seleccionarProductoConversor(producto);
+        });
+    });
+
+    conversorEmptyState.classList.toggle('hidden', productos.length > 0);
+}
+
+function seleccionarProductoConversor(producto) {
+    conversorProductoActual = producto;
+    conversorProductoNombre.textContent = producto.nombre;
+    conversorProductoCodigo.textContent = producto.codigo;
+    conversorBotellasContainer.innerHTML = '';
+    agregarBotellaConversor();
+    abrirModalConversor();
+}
+
+function abrirModalConversor() {
+    if (!conversorModal) return;
+    conversorModal.classList.remove('hidden');
+    conversorModal.setAttribute('aria-hidden', 'false');
+}
+
+function cerrarModalConversor() {
+    if (!conversorModal) return;
+    conversorModal.classList.add('hidden');
+    conversorModal.setAttribute('aria-hidden', 'true');
+    limpiarConversor();
+}
+
+function crearFilaBotellaConversor(perfiles) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'relative flex items-center item-peso-wrapper gap-sm';
+
+    let selectHTML = '';
+    if (perfiles.length > 1) {
+        selectHTML = `<select class="bg-surface-container-low text-data-tabular text-primary-fixed border border-outline-variant rounded-md px-sm py-xs focus:outline-none select-perfil mr-sm cursor-pointer font-semibold">`;
+        selectHTML += perfiles.map((pf, idx) =>
+            `<option value="${pf.id != null ? pf.id : idx}">${escapeHtml(pf.nombre_perfil)}</option>`
+        ).join('');
+        selectHTML += `</select>`;
+    }
+
+    wrapper.innerHTML = `
+        ${selectHTML}
+        <div class="relative flex-1">
+            <input type="number" min="0" step="1" class="w-full bg-surface border border-outline-variant rounded-md pl-md pr-lg py-sm text-on-surface input-peso focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus font-data-tabular" placeholder="Peso en gramos">
+            <button type="button" class="btn-remove-peso absolute right-sm top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-error transition-colors" aria-label="Eliminar botella">
+                ${renderCriticalIcon('close', 'ui-icon ui-icon-sm')}
+            </button>
+        </div>
+        <span class="conversor-fila-onzas shrink-0 text-[11px] text-secondary-fixed font-data-tabular w-16 text-right">0 oz</span>
+    `;
+
+    wrapper.querySelector('.input-peso').addEventListener('input', recalcularConversor);
+    const select = wrapper.querySelector('.select-perfil');
+    if (select) select.addEventListener('change', recalcularConversor);
+    wrapper.querySelector('.btn-remove-peso').addEventListener('click', () => {
+        wrapper.remove();
+        recalcularConversor();
+    });
+
+    return wrapper;
+}
+
+function agregarBotellaConversor() {
+    if (!conversorProductoActual) return;
+    const fila = crearFilaBotellaConversor(conversorProductoActual.perfiles);
+    conversorBotellasContainer.appendChild(fila);
+    recalcularConversor();
+}
+
+function recalcularConversor() {
+    if (!conversorProductoActual) return;
+    const perfiles = conversorProductoActual.perfiles;
+    let totalExacto = 0;
+
+    conversorBotellasContainer.querySelectorAll('.item-peso-wrapper').forEach((wrapper) => {
+        const inputPeso = wrapper.querySelector('.input-peso');
+        const select = wrapper.querySelector('.select-perfil');
+        const spanOnzas = wrapper.querySelector('.conversor-fila-onzas');
+
+        const { perfil } = resolverPerfilSeleccionado(perfiles, select);
+        const peso = parseFloat(inputPeso.value);
+        let onzas = 0;
+
+        if (perfil && !Number.isNaN(peso) && peso >= 0) {
+            const pesoLiquido = Math.max(0, peso - perfil.tara);
+            onzas = pesoLiquido / perfil.gramos_por_oz;
+        }
+
+        spanOnzas.textContent = `${onzas.toFixed(2)} oz`;
+        totalExacto += onzas;
+    });
+
+    conversorTotalExacto.textContent = totalExacto.toFixed(2);
+    conversorTotalRedondeado.textContent = (redondearOnzasOperativas(totalExacto) ?? 0).toFixed(1);
+}
+
+function limpiarConversor() {
+    conversorProductoActual = null;
+    conversorBotellasContainer.innerHTML = '';
+    conversorTotalExacto.textContent = '0';
+    conversorTotalRedondeado.textContent = '0';
+}
+
+if (conversorSearchInput) {
+    let conversorBusquedaTimeout = null;
+    conversorSearchInput.addEventListener('input', () => {
+        clearTimeout(conversorBusquedaTimeout);
+        conversorBusquedaTimeout = setTimeout(renderizarResultadosConversor, 200);
+    });
+}
+
+if (conversorBtnAgregar) {
+    conversorBtnAgregar.addEventListener('click', agregarBotellaConversor);
+}
+
+if (conversorModalOverlay) {
+    conversorModalOverlay.addEventListener('click', cerrarModalConversor);
+}
+
+if (btnCloseConversorModal) {
+    btnCloseConversorModal.addEventListener('click', cerrarModalConversor);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     if (currentToken) {
         mostrarPantallaApp();
@@ -1102,6 +1289,7 @@ document.addEventListener('DOMContentLoaded', () => {
     inicializarFabScrollTop('inventario-fab-scroll-top', 'panel-inventario');
     inicializarFabScrollTop('stock-fab-scroll-top', 'panel-stock');
     inicializarFabScrollTop('scan-fab-scroll-top', 'panel-scan');
+    inicializarFabScrollTop('conversor-fab-scroll-top', 'panel-conversor');
 
     // Configurar Password Toggle (El ojito)
     const togglePassword = document.getElementById('toggle-password');
@@ -1154,6 +1342,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (event.key === 'Escape') {
             cerrarMenuFlotanteTopbar();
             cerrarContenidoDummy();
+            cerrarModalConversor();
         }
     });
 
@@ -2476,6 +2665,7 @@ const TAB_PANEL_MAP = {
     scan:       'panel-scan',
     logs:       'panel-logs',
     pesaje:     'panel-pesaje',
+    conversor:  'panel-conversor',
 };
 
 /**
@@ -2508,6 +2698,10 @@ function navegarATab(tabName) {
 
     if (tabName === 'pesaje') {
         cargarPesaje();
+    }
+
+    if (tabName === 'conversor') {
+        cargarProductosConversor();
     }
 
     // Actualizar estado visual de tabs (excepto btn-guardar que tiene su propio estado)
