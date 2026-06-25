@@ -980,12 +980,27 @@ function crearFilaPerfilPesaje(producto, perfil) {
             if (!response.ok) {
                 errorEl.textContent = data.detail || 'No se pudo guardar.';
                 errorEl.classList.remove('hidden');
+                await mostrarDialogoResultado({
+                    tipo: 'error',
+                    titulo: 'No se pudo guardar',
+                    mensaje: data.detail || 'Ocurrió un error al guardar el modelo.',
+                });
                 return;
             }
             await cargarPesaje();
+            await mostrarDialogoResultado({
+                tipo: 'success',
+                titulo: 'Modelo guardado',
+                mensaje: `Se guardaron los cambios de "${perfil.nombre_perfil}" correctamente.`,
+            });
         } catch (error) {
             errorEl.textContent = 'Error de red al guardar.';
             errorEl.classList.remove('hidden');
+            await mostrarDialogoResultado({
+                tipo: 'error',
+                titulo: 'Error de red',
+                mensaje: 'No se pudo conectar con el servidor para guardar los cambios.',
+            });
         }
     });
 
