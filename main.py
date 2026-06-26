@@ -1141,10 +1141,17 @@ def _calcular_diferencias_paloteo(db: Session, id_barra: int, id_inventario_fisi
         FROM bar_detalle_fisico df
         LEFT JOIN vista_inventario_barra_con_filtro v
                ON v.id_almacen = df.id_producto
-              AND v.id_barra = :id_barra
+              AND v.nro_barra = :id_barra
         WHERE df.id_inventario_fisico = :id_fisico
           AND df.estado = 'HAB'
-          AND df.id_producto NOT IN (SELECT id_producto FROM inventario_excluido)
+          AND NOT EXISTS (
+              SELECT 1
+              FROM bar_inventario bi
+              INNER JOIN inventario_excluido ie ON ie.id = bi.id
+              WHERE bi.id_producto = df.id_producto
+                AND bi.id_barra = :id_barra
+                AND bi.estado = 'HAB'
+          )
     """)
 
     filas_dif = db.execute(query_diferencias, {
