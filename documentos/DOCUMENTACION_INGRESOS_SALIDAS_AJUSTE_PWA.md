@@ -676,6 +676,16 @@ ANULADO
 
 Estos estados son propios de la PWA y no deben confundirse con `parameter_table`, salvo que luego se decida crear parámetros oficiales para esta tabla.
 
+> **Estado de implementación** (rama `claude/adjustments-module-guide-xp8pt8`): implementado
+> `POST /api/inventario/consolidar/preview` y `POST /api/inventario/ajustes/aplicar` en
+> `main.py`. La tabla `app_paloteo_ajuste_control` se creó con el DDL de arriba en la BD de
+> test (`adminerp_copy`); **falta crearla en producción** antes de desplegar este endpoint ahí.
+> De los estados sugeridos solo se usa `APLICADO` (insertado una sola vez, al final, dentro de
+> la misma transacción que crea los movimientos); no se persisten `PREVIEW_GENERADO`,
+> `APLICANDO`, `ERROR` ni `ANULADO`. El frontend (módulo "AJUSTES", antes "Reporte") consume
+> `ya_aplicado`/`aplicado_por`/`aplicado_en` del preview para mostrar un badge en vez del botón
+> cuando ya existe una fila `APLICADO` para esa operativa/barra/inventario físico.
+
 ---
 
 ## 10. Recomendación de constantes backend

@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional, Literal
+from datetime import datetime
 
 # Esquema para lo que la API va a RECIBIR del cliente
 class UsuarioLogin(BaseModel):
@@ -20,6 +21,7 @@ class OperacionResponse(BaseModel):
     nombre: str
     titulo: str
     mensaje: str
+    estado_operacion: Optional[int] = None
 
 # Las reglas de validación para el paloteo
 
@@ -187,6 +189,9 @@ class ConsolidarAjustesPreviewResponse(BaseModel):
     id_barra: int
     id_inventario_pos: int
     observaciones: Optional[str] = None
+    ya_aplicado: bool = False
+    aplicado_por: Optional[str] = None
+    aplicado_en: Optional[datetime] = None
     resumen: dict
     sobrantes_paq: List[AjusteMovimientoPreview] = Field(default_factory=list)
     sobrantes_det: List[AjusteMovimientoPreview] = Field(default_factory=list)

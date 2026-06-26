@@ -460,6 +460,7 @@ def verificar_operacion_activa(
             content={
                 "detail": {
                     "id_operacion": operacion_actual.id,
+                    "estado_operacion": operacion_actual.estado_operacion,
                     "icon": "block",
                     "titulo": f"OPERATIVA {operacion_actual.id}: EN PROCESO",
                     "mensaje": "Inicia el cierre de la operativa para realizar el paloteo.",
@@ -475,6 +476,7 @@ def verificar_operacion_activa(
             content={
                 "detail": {
                     "id_operacion": operacion_actual.id,
+                    "estado_operacion": operacion_actual.estado_operacion,
                     "icon": "lock",
                     "titulo": f"OPERATIVA {operacion_actual.id}: CERRADA",
                     "mensaje": "El paloteo de esta operativa ya fue realizado.",
@@ -488,6 +490,7 @@ def verificar_operacion_activa(
         return {
             "id_operacion": operacion_actual.id,
             "nombre": operacion_actual.nombre_operacion,
+            "estado_operacion": operacion_actual.estado_operacion,
             "icon": "check_circle",
             "titulo": f"OPERATIVA {operacion_actual.id}: INICIO DE CIERRE",
             "mensaje": "Puedes realizar el paloteo de esta operativa.",
@@ -500,6 +503,7 @@ def verificar_operacion_activa(
         content={
             "detail": {
                 "id_operacion": operacion_actual.id,
+                "estado_operacion": operacion_actual.estado_operacion,
                 "icon": "warning",
                 "titulo": f"OPERATIVA {operacion_actual.id}: ESTADO NO VÁLIDO",
                 "mensaje": f"La operación no está en un estado válido para paloteo (Estado: {operacion_actual.estado_operacion}).",
@@ -1186,6 +1190,15 @@ def _calcular_diferencias_paloteo(db: Session, id_barra: int, id_inventario_fisi
     return deltas
 
 
+def _obtener_control_aplicado(db: Session, id_operacion: int, id_barra: int, id_inventario_fisico: int) -> models.PaloteoAjusteControl | None:
+    return db.query(models.PaloteoAjusteControl).filter(
+        models.PaloteoAjusteControl.id_operacion == id_operacion,
+        models.PaloteoAjusteControl.id_barra == id_barra,
+        models.PaloteoAjusteControl.id_inventario_fisico == id_inventario_fisico,
+        models.PaloteoAjusteControl.estado == 'APLICADO'
+    ).first()
+
+
 @app.post("/api/inventario/consolidar/preview", response_model=schemas.ConsolidarAjustesPreviewResponse)
 def previsualizar_consolidacion_ajustes(
     payload: schemas.ConsolidarAjustesRequest,
@@ -1214,6 +1227,13 @@ def previsualizar_consolidacion_ajustes(
             detail="No se encontró inventario físico registrado para la operativa/barra solicitadas."
         )
 
+    control_aplicado = _obtener_control_aplicado(db, payload.id_operacion, payload.id_barra, inv_fisico_cabecera.id)
+    info_control = {
+        "ya_aplicado": control_aplicado is not None,
+        "aplicado_por": control_aplicado.usuario_reg if control_aplicado else None,
+        "aplicado_en": control_aplicado.fecha_reg if control_aplicado else None,
+    }
+
     deltas = _calcular_diferencias_paloteo(db, payload.id_barra, inv_fisico_cabecera.id)
 
     if not deltas:
@@ -1223,6 +1243,7 @@ def previsualizar_consolidacion_ajustes(
             "id_barra": payload.id_barra,
             "id_inventario_pos": inv_fisico_cabecera.id,
             "observaciones": payload.observaciones,
+            **info_control,
             "resumen": {
                 "productos_evaluados": 0,
                 "productos_con_diferencia": 0,
@@ -1277,6 +1298,7 @@ def previsualizar_consolidacion_ajustes(
         "id_barra": payload.id_barra,
         "id_inventario_pos": inv_fisico_cabecera.id,
         "observaciones": payload.observaciones,
+        **info_control,
         "resumen": {
             "productos_evaluados": len(deltas),
             "productos_con_diferencia": productos_con_diferencia,
@@ -1327,12 +1349,7 @@ def aplicar_ajustes_inventario(
             detail="No se encontró inventario físico registrado para la operativa/barra solicitadas."
         )
 
-    control_existente = db.query(models.PaloteoAjusteControl).filter(
-        models.PaloteoAjusteControl.id_operacion == payload.id_operacion,
-        models.PaloteoAjusteControl.id_barra == payload.id_barra,
-        models.PaloteoAjusteControl.id_inventario_fisico == inv_fisico_cabecera.id,
-        models.PaloteoAjusteControl.estado == 'APLICADO'
-    ).first()
+    control_existente = _obtener_control_aplicado(db, payload.id_operacion, payload.id_barra, inv_fisico_cabecera.id)
     if control_existente:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -1599,9 +1616,9 @@ def exportar_pdf_paloteo3(
     pdf.ln(6)
 
     # — Tabla —
-    col_widths = [12, 20, 72, 18, 24, 24]   # ID | Codigo | Producto | Dif.Paq | Dif.Det | Dif.Det POS
-    headers   = ["ID", "CODIGO", "PRODUCTO", "DIF PAQ", "DIF DET", "DIF DET POS"]
-    aligns    = ["R", "L", "L", "R", "R", "R"]
+    col_widths = [12, 20, 86, 18, 34]   # ID | Codigo | Producto | Dif.Paq | Dif.Det POS
+    headers   = ["ID", "CODIGO", "PRODUCTO", "DIF PAQ", "DIF DET POS"]
+    aligns    = ["R", "L", "L", "R", "R"]
     row_h = 7
 
     # cabecera de tabla
@@ -1617,10 +1634,8 @@ def exportar_pdf_paloteo3(
     pdf.set_font("Helvetica", "", 8)
     for idx, fila in enumerate(payload.filas):
         texto_unid = ""
-        texto_oz_exacta = ""
         texto_oz_pos = ""
         color_unid = None
-        color_oz_exacta = None
         color_oz_pos = None
 
         if fila.difUnidades is not None:
@@ -1633,10 +1648,6 @@ def exportar_pdf_paloteo3(
             # Unificamos granularidad con POS: incrementos de 0.5 oz.
             dif_oz_pos = round(dif_oz_exacta * 2.0) * 0.5
 
-        if dif_oz_exacta is not None:
-            texto_oz_exacta = f"{'+' if dif_oz_exacta > 0 else ''}{dif_oz_exacta:.2f} oz"
-            color_oz_exacta = _color_diferencia(dif_oz_exacta)
-
         if dif_oz_pos is not None:
             texto_oz_pos = f"{'+' if dif_oz_pos > 0 else ''}{dif_oz_pos:.2f} oz"
             color_oz_pos = _color_diferencia(dif_oz_pos)
@@ -1644,10 +1655,10 @@ def exportar_pdf_paloteo3(
         fondo = (245, 245, 245) if idx % 2 == 1 else (255, 255, 255)
         pdf.set_fill_color(*fondo)
 
-        valores = [fila.idProducto, fila.codigo, fila.nombre, texto_unid, texto_oz_exacta, texto_oz_pos]
-        colores = [None, None, None, color_unid, color_oz_exacta, color_oz_pos]
+        valores = [fila.idProducto, fila.codigo, fila.nombre, texto_unid, texto_oz_pos]
+        colores = [None, None, None, color_unid, color_oz_pos]
         # Jerarquía visual: ID y CODIGO con menor peso visual que PRODUCTO
-        jerarquias = ["muted", "muted", "primary", "valor", "valor", "valor"]
+        jerarquias = ["muted", "muted", "primary", "valor", "valor"]
 
         for w, val, align, color, jerarquia in zip(col_widths, valores, aligns, colores, jerarquias):
             if color:

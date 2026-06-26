@@ -7,6 +7,7 @@ let currentToken = localStorage.getItem('token') || null;
 let currentOperacionId = null;
 let currentIdInventarioPOS = null; // Guardamos el ID del inventario ya registrado para correcciones
 let operativaPermitePaloteo = false;
+let currentEstadoOperacion = null; // estado_operacion crudo (22/23/24/...) de la operativa activa
 let idBarraActual = 1;
 let configuracionPaloteo = {
     selectorEnabled: false,
@@ -68,6 +69,11 @@ const reporteFiltroTodosBtn = document.getElementById('reporte-filtro-todos');
 const reporteFiltroIngresoBtn = document.getElementById('reporte-filtro-ingreso');
 const reporteFiltroSalidaBtn = document.getElementById('reporte-filtro-salida');
 const reporteSortBtns = Array.from(document.querySelectorAll('[data-reporte-sort]'));
+const ajustesAdminBlock = document.getElementById('ajustes-admin-block');
+const ajustesEstadoMsg = document.getElementById('ajustes-estado-msg');
+const ajustesAplicadoBadge = document.getElementById('ajustes-aplicado-badge');
+const ajustesAplicadoTexto = document.getElementById('ajustes-aplicado-texto');
+const ajustesBtnAplicar = document.getElementById('ajustes-btn-aplicar');
 const btnTopbarMenu = document.getElementById('btn-topbar-menu');
 const topbarMenuDropdown = document.getElementById('topbar-menu-dropdown');
 const dummyContentDialog = document.getElementById('dummy-content-dialog');
@@ -1505,10 +1511,12 @@ async function iniciarDashboard() {
             // Modo solo lectura: dejamos los módulos accesibles para consultar
             // el último paloteo registrado, sin permitir registrar ni corregir nada.
             currentOperacionId = detail.id_operacion || null;
+            currentEstadoOperacion = detail.estado_operacion ?? null;
             operativaPermitePaloteo = false;
             currentIdInventarioPOS = null;
             ocultarBannerCorreccion();
             mostrarBannerSoloLectura();
+            actualizarPanelAjustes();
 
             if (currentOperacionId) {
                 cargarProductos();
@@ -1520,10 +1528,12 @@ async function iniciarDashboard() {
 
         // Luz Verde: Guardamos el ID de operación (estado 24)
         currentOperacionId = dataOp.id_operacion;
+        currentEstadoOperacion = dataOp.estado_operacion ?? null;
         operativaPermitePaloteo = true;
         currentIdInventarioPOS = null; // Resetear el ID de inventario previo para nueva operativa
         ocultarBannerCorreccion(); // Ocultar banner de corrección hasta confirmar si hay inventario
         ocultarBannerSoloLectura();
+        actualizarPanelAjustes();
         const iconoExito = dataOp.icon || 'check_circle';
         estadoIcon.innerHTML = renderCriticalIcon(iconoExito);
         estadoIcon.classList.remove('animate-pulse', 'text-on-surface-variant', 'text-error', 'status-warning-icon', 'status-checking-icon', 'status-info-icon');
@@ -2277,6 +2287,137 @@ async function exportarReportePaloteo3Pdf() {
             reporteBtnPdf.innerHTML = textoOriginalBtnPdf;
         }
     }
+}
+
+// ==========================================
+// MÓDULO AJUSTES: aplicar diferencias paloteo-vs-POS (solo admin, operativa CERRADA)
+// ==========================================
+let ajustesPreviewActual = null; // último preview de BD cargado, usado para armar el mensaje de confirmación
+
+function _mostrarEstadoAjustes(mensaje) {
+    if (!ajustesEstadoMsg) return;
+    ajustesEstadoMsg.textContent = mensaje;
+    ajustesEstadoMsg.classList.remove('hidden');
+}
+
+function _ocultarEstadoAjustes() {
+    if (ajustesEstadoMsg) ajustesEstadoMsg.classList.add('hidden');
+}
+
+async function actualizarPanelAjustes() {
+    if (!ajustesAdminBlock) return;
+
+    if (!esUsuarioAdministrador()) {
+        ajustesAdminBlock.classList.add('hidden');
+        return;
+    }
+    ajustesAdminBlock.classList.remove('hidden');
+
+    if (ajustesBtnAplicar) ajustesBtnAplicar.classList.add('hidden');
+    if (ajustesAplicadoBadge) ajustesAplicadoBadge.classList.add('hidden');
+    ajustesPreviewActual = null;
+
+    if (!currentOperacionId || currentEstadoOperacion !== 23) {
+        _mostrarEstadoAjustes('Disponible solo cuando la operativa está CERRADA (estado 23).');
+        return;
+    }
+
+    _mostrarEstadoAjustes('Verificando diferencias contra la base de datos...');
+
+    try {
+        const resp = await fetch(`${API_BASE}/inventario/consolidar/preview`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${currentToken}`,
+                'X-Barra-Id': String(idBarraActual),
+            },
+            body: JSON.stringify({ id_operacion: currentOperacionId, id_barra: idBarraActual }),
+        });
+
+        if (resp.status === 401) return btnLogout.click();
+
+        const data = await resp.json();
+
+        if (!resp.ok) {
+            const detalle = typeof data.detail === 'string' ? data.detail : 'No se pudo verificar el estado de los ajustes.';
+            _mostrarEstadoAjustes(detalle);
+            return;
+        }
+
+        if (data.ya_aplicado) {
+            _ocultarEstadoAjustes();
+            if (ajustesAplicadoTexto) {
+                const fecha = data.aplicado_en ? new Date(data.aplicado_en).toLocaleString() : '';
+                ajustesAplicadoTexto.textContent = `Ajustes aplicados${data.aplicado_por ? ` por ${data.aplicado_por}` : ''}${fecha ? ` el ${fecha}` : ''}.`;
+            }
+            if (ajustesAplicadoBadge) ajustesAplicadoBadge.classList.remove('hidden');
+            return;
+        }
+
+        if (data.status === 'skipped') {
+            _mostrarEstadoAjustes('El inventario físico coincide con el ideal. No hay diferencias que ajustar.');
+            return;
+        }
+
+        ajustesPreviewActual = data;
+        _ocultarEstadoAjustes();
+        if (ajustesBtnAplicar) ajustesBtnAplicar.classList.remove('hidden');
+    } catch (_) {
+        _mostrarEstadoAjustes('Error de conexión al verificar los ajustes.');
+    }
+}
+
+async function aplicarAjustesInventario() {
+    if (!ajustesPreviewActual || !currentOperacionId) return;
+
+    const { productos_con_diferencia, movimientos_generados } = ajustesPreviewActual.resumen || {};
+    const confirmar = await mostrarDialogoConfirmacion({
+        titulo: 'Aplicar ajustes de inventario',
+        mensaje: `Se generarán ${movimientos_generados ?? '?'} movimiento(s) sobre ${productos_con_diferencia ?? '?'} producto(s) y se actualizará el inventario vivo. Esta acción es irreversible. ¿Continuar?`,
+    });
+    if (!confirmar) return;
+
+    const textoOriginal = ajustesBtnAplicar.innerHTML;
+    ajustesBtnAplicar.disabled = true;
+    ajustesBtnAplicar.setAttribute('aria-busy', 'true');
+    ajustesBtnAplicar.innerHTML = `${renderCriticalIcon('refresh', 'ui-icon animate-spin-ccw')} Aplicando...`;
+
+    try {
+        const resp = await fetch(`${API_BASE}/inventario/ajustes/aplicar`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${currentToken}`,
+                'X-Barra-Id': String(idBarraActual),
+            },
+            body: JSON.stringify({ id_operacion: currentOperacionId, id_barra: idBarraActual }),
+        });
+
+        if (resp.status === 401) return btnLogout.click();
+
+        const data = await resp.json();
+
+        if (resp.ok && data.status === 'success') {
+            await mostrarDialogoResultado({ tipo: 'success', titulo: 'Ajustes aplicados', mensaje: data.mensaje });
+        } else if (resp.ok && data.status === 'skipped') {
+            await mostrarDialogoResultado({ tipo: 'error', titulo: 'Sin diferencias', mensaje: data.mensaje });
+        } else {
+            const detalle = typeof data.detail === 'string' ? data.detail : 'No se pudo aplicar el ajuste de inventario.';
+            await mostrarDialogoResultado({ tipo: 'error', titulo: 'No se pudo aplicar', mensaje: detalle });
+        }
+    } catch (_) {
+        await mostrarDialogoResultado({ tipo: 'error', titulo: 'Error de red', mensaje: 'No se pudo conectar con el servidor para aplicar los ajustes.' });
+    } finally {
+        ajustesBtnAplicar.disabled = false;
+        ajustesBtnAplicar.removeAttribute('aria-busy');
+        ajustesBtnAplicar.innerHTML = textoOriginal;
+        await actualizarPanelAjustes();
+    }
+}
+
+if (ajustesBtnAplicar) {
+    ajustesBtnAplicar.addEventListener('click', aplicarAjustesInventario);
 }
 
 function syncFilaPaloteo3ConInventario(row) {
