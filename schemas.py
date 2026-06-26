@@ -193,3 +193,20 @@ class ConsolidarAjustesPreviewResponse(BaseModel):
     faltantes_paq: List[AjusteMovimientoPreview] = Field(default_factory=list)
     faltantes_det: List[AjusteMovimientoPreview] = Field(default_factory=list)
     deltas: List[AjusteDeltaPreview] = Field(default_factory=list)
+
+
+class AplicarAjustesRequest(BaseModel):
+    id_operacion: int = Field(..., gt=0)
+    id_barra: int = Field(..., gt=0)
+    observaciones: Optional[str] = None
+
+
+class AplicarAjustesResponse(BaseModel):
+    status: Literal['success', 'skipped']
+    id_operacion: int
+    id_barra: int
+    id_inventario_pos: int
+    id_ajuste: Optional[int] = None
+    id_salida_inventario: Optional[int] = None
+    productos_afectados: int
+    mensaje: str

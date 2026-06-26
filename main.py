@@ -1115,6 +1115,70 @@ def obtener_productos_conversor(
     return [p for p in productos_dict.values() if p["perfiles"]]
 
 
+def _calcular_diferencias_paloteo(db: Session, id_barra: int, id_inventario_fisico: int) -> list[dict]:
+    """Calcula delta_paq/delta_det por producto entre el físico (paloteo) y el ideal (POS).
+
+    Es la fuente de verdad única usada tanto por el preview de consolidación como por
+    el endpoint que aplica los ajustes definitivos, para garantizar que ambos vean
+    exactamente las mismas diferencias.
+    """
+    query_diferencias = text("""
+        SELECT
+            df.id_producto,
+            v.id_categoria,
+            CASE
+                WHEN EXISTS (
+                    SELECT 1
+                    FROM app_producto_pesaje_config_api p
+                    WHERE p.id_producto_almacen = df.id_producto
+                      AND p.pesable = 1
+                ) THEN 1 ELSE 0
+            END AS pesable,
+            COALESCE(df.cantidad_unidad, 0) AS real_paq,
+            COALESCE(df.cantidad_detalle, 0) AS real_det,
+            COALESCE(v.cantidad_paq, 0) AS ideal_paq,
+            COALESCE(v.cantidad_detalle, 0) AS ideal_det
+        FROM bar_detalle_fisico df
+        LEFT JOIN vista_inventario_barra_con_filtro v
+               ON v.id_almacen = df.id_producto
+              AND v.id_barra = :id_barra
+        WHERE df.id_inventario_fisico = :id_fisico
+          AND df.estado = 'HAB'
+          AND df.id_producto NOT IN (SELECT id_producto FROM inventario_excluido)
+    """)
+
+    filas_dif = db.execute(query_diferencias, {
+        "id_fisico": id_inventario_fisico,
+        "id_barra": id_barra,
+    }).mappings().all()
+
+    deltas = []
+    for fila in filas_dif:
+        real_paq = float(fila["real_paq"] or 0)
+        real_det = float(fila["real_det"] or 0)
+        delta_paq = real_paq - float(fila["ideal_paq"] or 0)
+        delta_det_exacto = real_det - float(fila["ideal_det"] or 0)
+
+        pesable = int(fila["pesable"] or 0)
+        id_categoria = int(fila["id_categoria"]) if fila["id_categoria"] is not None else None
+        tolerancia_oz = _obtener_tolerancia_operativa_oz(pesable, id_categoria)
+        delta_det_operativo = _cuantizar_delta_onzas_operativo(delta_det_exacto, tolerancia_oz)
+
+        deltas.append({
+            "id_producto": fila["id_producto"],
+            "id_categoria": id_categoria,
+            "pesable": pesable,
+            "tolerancia_oz": tolerancia_oz,
+            "real_paq": real_paq,
+            "real_det": real_det,
+            "delta_paq": float(delta_paq),
+            "delta_det_exacto": float(delta_det_exacto),
+            "delta_det_operativo": float(delta_det_operativo),
+        })
+
+    return deltas
+
+
 @app.post("/api/inventario/consolidar/preview", response_model=schemas.ConsolidarAjustesPreviewResponse)
 def previsualizar_consolidacion_ajustes(
     payload: schemas.ConsolidarAjustesRequest,
@@ -1143,37 +1207,9 @@ def previsualizar_consolidacion_ajustes(
             detail="No se encontró inventario físico registrado para la operativa/barra solicitadas."
         )
 
-    query_diferencias = text("""
-        SELECT
-            df.id_producto,
-            v.id_categoria,
-            CASE
-                WHEN EXISTS (
-                    SELECT 1
-                    FROM app_producto_pesaje_config_api p
-                    WHERE p.id_producto_almacen = df.id_producto
-                      AND p.pesable = 1
-                ) THEN 1 ELSE 0
-            END AS pesable,
-            COALESCE(df.cantidad_unidad, 0) AS real_paq,
-            COALESCE(df.cantidad_detalle, 0) AS real_det,
-            COALESCE(v.cantidad_paq, 0) AS ideal_paq,
-            COALESCE(v.cantidad_detalle, 0) AS ideal_det
-        FROM bar_detalle_fisico df
-        LEFT JOIN vista_inventario_barra_con_filtro v
-               ON v.id_almacen = df.id_producto
-              AND v.id_barra = :id_barra
-        WHERE df.id_inventario_fisico = :id_fisico
-          AND df.estado = 'HAB'
-          AND df.id_producto NOT IN (SELECT id_producto FROM inventario_excluido)
-    """)
+    deltas = _calcular_diferencias_paloteo(db, payload.id_barra, inv_fisico_cabecera.id)
 
-    filas_dif = db.execute(query_diferencias, {
-        "id_fisico": inv_fisico_cabecera.id,
-        "id_barra": payload.id_barra,
-    }).mappings().all()
-
-    if not filas_dif:
+    if not deltas:
         return {
             "status": "skipped",
             "id_operacion": payload.id_operacion,
@@ -1196,52 +1232,33 @@ def previsualizar_consolidacion_ajustes(
     sobrantes_det = []
     faltantes_paq = []
     faltantes_det = []
-    deltas = []
 
-    for fila in filas_dif:
-        delta_paq = float(fila["real_paq"] or 0) - float(fila["ideal_paq"] or 0)
-        delta_det_exacto = float(fila["real_det"] or 0) - float(fila["ideal_det"] or 0)
-
-        pesable = int(fila["pesable"] or 0)
-        id_categoria = int(fila["id_categoria"]) if fila["id_categoria"] is not None else None
-        tolerancia_oz = _obtener_tolerancia_operativa_oz(pesable, id_categoria)
-        delta_det_operativo = _cuantizar_delta_onzas_operativo(delta_det_exacto, tolerancia_oz)
-
-        if delta_paq > 0:
+    for d in deltas:
+        if d["delta_paq"] > 0:
             sobrantes_paq.append({
-                "id_producto": fila["id_producto"],
-                "cantidad": float(delta_paq),
+                "id_producto": d["id_producto"],
+                "cantidad": d["delta_paq"],
                 "ind_paq_detalle": '1',
             })
-        elif delta_paq < 0:
+        elif d["delta_paq"] < 0:
             faltantes_paq.append({
-                "id_producto": fila["id_producto"],
-                "cantidad": float(abs(delta_paq)),
+                "id_producto": d["id_producto"],
+                "cantidad": abs(d["delta_paq"]),
                 "ind_paq_detalle": '1',
             })
 
-        if delta_det_operativo > 0:
+        if d["delta_det_operativo"] > 0:
             sobrantes_det.append({
-                "id_producto": fila["id_producto"],
-                "cantidad": float(delta_det_operativo),
+                "id_producto": d["id_producto"],
+                "cantidad": d["delta_det_operativo"],
                 "ind_paq_detalle": '0',
             })
-        elif delta_det_operativo < 0:
+        elif d["delta_det_operativo"] < 0:
             faltantes_det.append({
-                "id_producto": fila["id_producto"],
-                "cantidad": float(abs(delta_det_operativo)),
+                "id_producto": d["id_producto"],
+                "cantidad": abs(d["delta_det_operativo"]),
                 "ind_paq_detalle": '0',
             })
-
-        deltas.append({
-            "id_producto": fila["id_producto"],
-            "id_categoria": id_categoria,
-            "pesable": pesable,
-            "tolerancia_oz": tolerancia_oz,
-            "delta_paq": float(delta_paq),
-            "delta_det_exacto": float(delta_det_exacto),
-            "delta_det_operativo": float(delta_det_operativo),
-        })
 
     movimientos_generados = len(sobrantes_paq) + len(sobrantes_det) + len(faltantes_paq) + len(faltantes_det)
     productos_con_diferencia = sum(1 for d in deltas if abs(d["delta_paq"]) > 0 or abs(d["delta_det_operativo"]) > 0)
@@ -1263,6 +1280,236 @@ def previsualizar_consolidacion_ajustes(
         "faltantes_paq": faltantes_paq,
         "faltantes_det": faltantes_det,
         "deltas": deltas,
+    }
+
+
+def _decimal2(valor: float) -> Decimal:
+    """Convierte a Decimal con 2 decimales para persistir cantidades (nunca float)."""
+    return Decimal(str(valor)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+@app.post("/api/inventario/ajustes/aplicar", response_model=schemas.AplicarAjustesResponse)
+def aplicar_ajustes_inventario(
+    payload: schemas.AplicarAjustesRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_usuario_administrador)
+):
+    """Aplica de forma definitiva las diferencias paloteo-vs-POS: genera bar_ajuste /
+    bar_salida_inventario (y sus detalles) y actualiza bar_inventario para que el stock
+    vivo quede igual al físico contado. Solo administrador, requiere operación CERRADA (23).
+    """
+    _validar_operacion_cerrada(db, payload.id_operacion)
+
+    barra_operativa = _resolver_barra_operativa(request)
+    if payload.id_barra != barra_operativa:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"La barra enviada ({payload.id_barra}) no coincide con la barra operativa configurada ({barra_operativa})."
+        )
+
+    inv_fisico_cabecera = db.query(models.InventarioFisicoPOS).filter(
+        models.InventarioFisicoPOS.id_operacion == payload.id_operacion,
+        models.InventarioFisicoPOS.id_barra == payload.id_barra,
+        models.InventarioFisicoPOS.estado == 'HAB'
+    ).first()
+
+    if not inv_fisico_cabecera:
+        raise HTTPException(
+            status_code=404,
+            detail="No se encontró inventario físico registrado para la operativa/barra solicitadas."
+        )
+
+    control_existente = db.query(models.PaloteoAjusteControl).filter(
+        models.PaloteoAjusteControl.id_operacion == payload.id_operacion,
+        models.PaloteoAjusteControl.id_barra == payload.id_barra,
+        models.PaloteoAjusteControl.id_inventario_fisico == inv_fisico_cabecera.id,
+        models.PaloteoAjusteControl.estado == 'APLICADO'
+    ).first()
+    if control_existente:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Los ajustes para esta operativa/barra ya fueron aplicados anteriormente."
+        )
+
+    deltas = _calcular_diferencias_paloteo(db, payload.id_barra, inv_fisico_cabecera.id)
+    deltas_con_diferencia = [
+        d for d in deltas if abs(d["delta_paq"]) > 0 or abs(d["delta_det_operativo"]) > 0
+    ]
+
+    if not deltas_con_diferencia:
+        return {
+            "status": "skipped",
+            "id_operacion": payload.id_operacion,
+            "id_barra": payload.id_barra,
+            "id_inventario_pos": inv_fisico_cabecera.id,
+            "id_ajuste": None,
+            "id_salida_inventario": None,
+            "productos_afectados": 0,
+            "mensaje": "No hay diferencias entre el inventario físico y el ideal; no se generaron movimientos.",
+        }
+
+    username_actual = current_user.usuario
+    fecha_actual = datetime.now(timezone.utc)
+    fecha_hoy = fecha_actual.date()
+    obs_final = payload.observaciones if payload.observaciones else "AJUSTE GENERADO VÍA API"
+
+    try:
+        ajuste_header = None
+        salida_header = None
+
+        tiene_sobrante = any(d["delta_paq"] > 0 or d["delta_det_operativo"] > 0 for d in deltas_con_diferencia)
+        tiene_faltante = any(d["delta_paq"] < 0 or d["delta_det_operativo"] < 0 for d in deltas_con_diferencia)
+
+        if tiene_sobrante:
+            ajuste_header = models.AjusteIngreso(
+                fecha=fecha_hoy,
+                numero_documento=None,
+                observaciones=obs_final,
+                recepcionado_por=username_actual,
+                ind_estado_ingreso=16,
+                ind_tipo_movimiento=84,
+                id_operacion=None,
+                id_barra=payload.id_barra,
+                usuario_reg=username_actual,
+                fecha_reg=fecha_hoy,
+                estado='HAB',
+            )
+            db.add(ajuste_header)
+            db.flush()
+
+        if tiene_faltante:
+            salida_header = models.AjusteSalida(
+                fecha_salida=fecha_hoy,
+                correlativo=None,
+                responsable=username_actual,
+                ind_estado_salida=16,
+                observaciones_salida=obs_final,
+                id_almacen=None,
+                id_barra=payload.id_barra,
+                id_operacion=None,
+                ind_tipo_salida=77,
+                usuario_reg=username_actual,
+                fecha_reg=fecha_hoy,
+                estado='HAB',
+            )
+            db.add(salida_header)
+            db.flush()
+
+        for d in deltas_con_diferencia:
+            id_producto = d["id_producto"]
+
+            if d["delta_paq"] > 0:
+                db.add(models.DetalleAjusteIngreso(
+                    cantidad=_decimal2(abs(d["delta_paq"])),
+                    precio_costo=Decimal("0"),
+                    ind_paq_detalle='1',
+                    id_ajuste=ajuste_header.id,
+                    id_producto=id_producto,
+                    usuario_reg=username_actual,
+                    fecha_reg=fecha_hoy,
+                    estado='HAB',
+                ))
+            elif d["delta_paq"] < 0:
+                db.add(models.DetalleAjusteSalida(
+                    cantidad=_decimal2(abs(d["delta_paq"])),
+                    ind_paq_detalle='1',
+                    id_salida_inventario=salida_header.id,
+                    id_producto=id_producto,
+                    usuario_reg=username_actual,
+                    fecha_reg=fecha_hoy,
+                    estado='HAB',
+                ))
+
+            if d["delta_det_operativo"] > 0:
+                db.add(models.DetalleAjusteIngreso(
+                    cantidad=_decimal2(abs(d["delta_det_operativo"])),
+                    precio_costo=Decimal("0"),
+                    ind_paq_detalle='0',
+                    id_ajuste=ajuste_header.id,
+                    id_producto=id_producto,
+                    usuario_reg=username_actual,
+                    fecha_reg=fecha_hoy,
+                    estado='HAB',
+                ))
+            elif d["delta_det_operativo"] < 0:
+                db.add(models.DetalleAjusteSalida(
+                    cantidad=_decimal2(abs(d["delta_det_operativo"])),
+                    ind_paq_detalle='0',
+                    id_salida_inventario=salida_header.id,
+                    id_producto=id_producto,
+                    usuario_reg=username_actual,
+                    fecha_reg=fecha_hoy,
+                    estado='HAB',
+                ))
+
+            # bar_inventario no tiene UNIQUE(id_barra, id_producto) a nivel de BD; se
+            # exige exactamente una fila HAB para evitar aplicar el ajuste sobre un
+            # registro ambiguo o inexistente.
+            filas_inventario = db.query(models.InventarioBarra).filter(
+                models.InventarioBarra.id_barra == payload.id_barra,
+                models.InventarioBarra.id_producto == id_producto,
+                models.InventarioBarra.estado == 'HAB'
+            ).all()
+
+            if len(filas_inventario) != 1:
+                raise HTTPException(
+                    status_code=500,
+                    detail=(
+                        f"Estado de datos inconsistente en bar_inventario para producto "
+                        f"{id_producto}/barra {payload.id_barra}: se encontraron "
+                        f"{len(filas_inventario)} filas HAB (se esperaba exactamente 1)."
+                    )
+                )
+
+            fila_inventario = filas_inventario[0]
+            fila_inventario.cantidad_paq = _decimal2(d["real_paq"])
+            fila_inventario.cantidad_detalle = _decimal2(d["real_det"])
+            fila_inventario.usuario_reg = username_actual
+            fila_inventario.fecha_mod = fecha_actual
+
+        if ajuste_header:
+            ajuste_header.ind_estado_ingreso = 20
+        if salida_header:
+            salida_header.ind_estado_salida = 20
+
+        control = models.PaloteoAjusteControl(
+            id_operacion=payload.id_operacion,
+            id_barra=payload.id_barra,
+            id_inventario_fisico=inv_fisico_cabecera.id,
+            id_ajuste=ajuste_header.id if ajuste_header else None,
+            id_salida_inventario=salida_header.id if salida_header else None,
+            estado='APLICADO',
+            payload_json=json.dumps({
+                "deltas": deltas_con_diferencia,
+                "observaciones": obs_final,
+            }, default=str),
+            usuario_reg=username_actual,
+            fecha_reg=fecha_actual,
+        )
+        db.add(control)
+
+        db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        logger.exception(
+            "Error aplicando ajustes de inventario para operación %s / barra %s",
+            payload.id_operacion, payload.id_barra,
+        )
+        raise HTTPException(status_code=500, detail="No se pudo aplicar el ajuste de inventario.") from exc
+
+    return {
+        "status": "success",
+        "id_operacion": payload.id_operacion,
+        "id_barra": payload.id_barra,
+        "id_inventario_pos": inv_fisico_cabecera.id,
+        "id_ajuste": ajuste_header.id if ajuste_header else None,
+        "id_salida_inventario": salida_header.id if salida_header else None,
+        "productos_afectados": len(deltas_con_diferencia),
+        "mensaje": f"Ajuste aplicado correctamente sobre {len(deltas_con_diferencia)} producto(s).",
     }
 
 # --- EXPORTACIÓN PDF PALOTEO 3 ---
