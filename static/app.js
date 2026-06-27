@@ -2842,14 +2842,19 @@ const TAB_PANEL_MAP = {
 };
 
 // ==========================================
-// BARRA DE BUSQUEDA UNICA (barra superior)
+// BARRA DE BUSQUEDA UNICA (icono expandible en el navbar superior)
 // Un solo input compartido por los modulos que necesitan buscar; se reconfigura
-// (placeholder + funcion de filtrado) segun el tab activo. Los modulos sin
-// busqueda (PALOTEO 1... no, PALOTEO 1 si tiene; AJUSTES no) simplemente la ocultan.
+// (placeholder + funcion de filtrado) segun el tab activo. En AJUSTES no aplica,
+// asi que el icono de buscar queda oculto. Colapsada por defecto para no competir
+// por espacio con el logo/selector de barra en pantallas chicas.
 // ==========================================
-const topbarSearchContainer = document.getElementById('topbar-search-container');
-const topbarSearchInput     = document.getElementById('topbar-search-input');
-const topbarSearchContador  = document.getElementById('topbar-search-contador');
+const topbarSearchContainer    = document.getElementById('topbar-search-container');
+const topbarSearchInput        = document.getElementById('topbar-search-input');
+const topbarSearchContador     = document.getElementById('topbar-search-contador');
+const btnTopbarSearchToggle    = document.getElementById('btn-topbar-search-toggle');
+const topbarSearchToggleIcon   = document.getElementById('topbar-search-toggle-icon');
+const navbarLogoFull           = document.getElementById('navbar-logo-full');
+const navbarLogoIsotipo        = document.getElementById('navbar-logo-isotipo');
 
 const BUSQUEDA_POR_TAB = {
     inventario: { placeholder: 'Buscar por ID, código o nombre...', handler: filtrarInventarioPaloteo1 },
@@ -2859,21 +2864,57 @@ const BUSQUEDA_POR_TAB = {
     conversor:  { placeholder: 'Buscar producto por código o nombre...', handler: filtrarConversor },
 };
 
-/** Muestra/oculta y reconfigura la barra de busqueda unica segun el tab activo. */
+let busquedaTopbarAbierta = false;
+
+/** Colapsa el buscador y restaura logo/selector de barra a su estado normal. */
+function cerrarBusquedaTopbar() {
+    busquedaTopbarAbierta = false;
+    if (topbarSearchContainer) topbarSearchContainer.classList.add('hidden');
+    if (navbarLogoFull) navbarLogoFull.classList.remove('hidden');
+    if (navbarLogoIsotipo) navbarLogoIsotipo.classList.add('hidden');
+    if (topbarSearchToggleIcon) topbarSearchToggleIcon.textContent = 'search';
+    if (btnTopbarSearchToggle) btnTopbarSearchToggle.setAttribute('aria-expanded', 'false');
+    aplicarConfiguracionBarraUI(); // restaura el selector de barra segun su config real
+
+    if (topbarSearchInput) topbarSearchInput.value = '';
+    if (topbarSearchContador) topbarSearchContador.classList.add('hidden');
+    const tabActivo = document.querySelector('[data-tab].active-tab')?.dataset.tab;
+    const config = BUSQUEDA_POR_TAB[tabActivo];
+    if (config) config.handler('');
+}
+
+/** Expande el buscador: oculta el logo completo y el selector de barra para dejarle espacio. */
+function abrirBusquedaTopbar() {
+    busquedaTopbarAbierta = true;
+    if (topbarSearchContainer) topbarSearchContainer.classList.remove('hidden');
+    if (navbarLogoFull) navbarLogoFull.classList.add('hidden');
+    if (navbarLogoIsotipo) navbarLogoIsotipo.classList.remove('hidden');
+    if (barraSelectorContainer) barraSelectorContainer.classList.add('hidden');
+    if (topbarSearchToggleIcon) topbarSearchToggleIcon.textContent = 'close';
+    if (btnTopbarSearchToggle) btnTopbarSearchToggle.setAttribute('aria-expanded', 'true');
+    if (topbarSearchInput) requestAnimationFrame(() => topbarSearchInput.focus());
+}
+
+/** Muestra/oculta el icono de buscar y reconfigura el filtro segun el tab activo. */
 function actualizarBarraBusqueda(tabName) {
-    if (!topbarSearchContainer || !topbarSearchInput) return;
+    if (busquedaTopbarAbierta) cerrarBusquedaTopbar();
 
     const config = BUSQUEDA_POR_TAB[tabName];
-    if (!config) {
-        topbarSearchContainer.classList.add('hidden');
-        return;
+    if (btnTopbarSearchToggle) btnTopbarSearchToggle.classList.toggle('hidden', !config);
+    if (config) {
+        if (topbarSearchInput) topbarSearchInput.placeholder = config.placeholder;
+        config.handler('');
     }
+}
 
-    topbarSearchContainer.classList.remove('hidden');
-    topbarSearchInput.placeholder = config.placeholder;
-    topbarSearchInput.value = '';
-    if (topbarSearchContador) topbarSearchContador.classList.add('hidden');
-    config.handler('');
+if (btnTopbarSearchToggle) {
+    btnTopbarSearchToggle.addEventListener('click', () => {
+        if (busquedaTopbarAbierta) {
+            cerrarBusquedaTopbar();
+        } else {
+            abrirBusquedaTopbar();
+        }
+    });
 }
 
 if (topbarSearchInput) {
@@ -3180,8 +3221,8 @@ function renderTarjetaCaptura(indice) {
     if (topbarContador) {
         if (buscandoActivo) {
             topbarContador.textContent = totalMatches > 0
-                ? `Coincidencia ${capturaEstado.matchIndex + 1} de ${totalMatches}`
-                : 'Sin coincidencias';
+                ? `${capturaEstado.matchIndex + 1}/${totalMatches}`
+                : 'Sin match';
             topbarContador.classList.remove('hidden');
         } else {
             topbarContador.classList.add('hidden');

@@ -4,6 +4,16 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.35
+- Cambio funcional: la barra de busqueda unica (10.34) deja de ser una fila fija
+  debajo del navbar y pasa a vivir dentro del navbar superior, colapsada por
+  defecto detras de un icono de lupa (`btn-topbar-search-toggle`). Al expandirla,
+  el logo horizontal se reemplaza por el isotipo compacto (`isotipo.png`) y se
+  oculta el selector de barra, para dejar espacio al input en pantallas chicas.
+  El icono solo aparece en los modulos con busqueda (oculto en AJUSTES). El
+  contador de PALOTEO 2 se acorta a "X/Y" / "Sin match" para caber en el espacio
+  reducido del navbar.
+
 ## 10.34
 - Feature: barra de busqueda unica en la parte superior, compartida por
   PALOTEO 1, PALOTEO 2, PALOTEO 3, PESAJE y CONVERSOR (oculta en AJUSTES).
