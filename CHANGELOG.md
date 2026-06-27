@@ -4,6 +4,19 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.32
+- Ajustes de forma en AJUSTES (PDF y pantalla):
+  - El PDF de "Reporte de Diferencias" ya no muestra "Paloteo 3" como subtitulo;
+    ahora dice "Stock Barra vs. Stock POS".
+  - Las columnas "DIF PAQ"/"DIF DET (POS)" se renombran a "DIF. PAQ."/"DIF. DET."
+    tanto en el PDF como en la tabla en pantalla.
+  - En el PDF, las columnas ID y CODIGO usan un gris mas oscuro (90,90,90 en vez
+    de 150,150,150) para mejorar legibilidad sobre fondo blanco.
+  - El banner sticky de "Modo solo lectura..." (visible mientras la operativa no
+    esta en INICIO CIERRE) se acorta a "Modo Lectura"; la explicacion completa
+    ahora se muestra una sola vez, en un dialogo, al entrar a ese modo
+    (`mostrarDialogoResultado` con un nuevo tipo `warning`).
+
 ## 10.31
 - Hardening (sugerencia de gemini-code-assist en el PR): `aplicar_ajustes_inventario`
   ahora usa `.with_for_update()` al leer la fila de `bar_inventario` que va a mutar,

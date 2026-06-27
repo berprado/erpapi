@@ -605,8 +605,8 @@ const btnResultadoCancelar   = document.getElementById('btn-resultado-cancelar')
 const btnResultadoConfirmar  = document.getElementById('btn-resultado-confirmar');
 
 /**
- * Muestra un modal de resultado (éxito o error) y resuelve cuando el usuario lo cierra.
- * @param {Object} opts - { tipo: 'success'|'error', titulo: string, mensaje: string }
+ * Muestra un modal de resultado (éxito, advertencia o error) y resuelve cuando el usuario lo cierra.
+ * @param {Object} opts - { tipo: 'success'|'warning'|'error', titulo: string, mensaje: string }
  * @returns {Promise<void>}
  */
 function mostrarDialogoResultado({ tipo = 'success', titulo, mensaje }) {
@@ -616,6 +616,10 @@ function mostrarDialogoResultado({ tipo = 'success', titulo, mensaje }) {
             resultadoIcono.textContent = 'check_circle';
             resultadoIcono.style.color = 'var(--color-primary-fixed-dim)';
             resultadoTituloTexto.style.color = '';
+        } else if (tipo === 'warning') {
+            resultadoIcono.textContent = 'visibility';
+            resultadoIcono.style.color = 'var(--semantic-warning, #facc15)';
+            resultadoTituloTexto.style.color = 'var(--semantic-warning, #facc15)';
         } else {
             resultadoIcono.textContent = 'error';
             resultadoIcono.style.color = 'var(--semantic-danger, #f87171)';
@@ -1744,7 +1748,18 @@ function ocultarBannerCorreccion() {
 
 function mostrarBannerSoloLectura() {
     const banner = document.getElementById('banner-solo-lectura');
-    if (banner) banner.classList.remove('hidden');
+    if (!banner) return;
+
+    const estabaOculto = banner.classList.contains('hidden');
+    banner.classList.remove('hidden');
+
+    if (estabaOculto) {
+        mostrarDialogoResultado({
+            tipo: 'warning',
+            titulo: 'Modo Lectura',
+            mensaje: 'Estás viendo el último paloteo registrado. No se pueden hacer cambios mientras la operativa no esté en estado de cierre.',
+        });
+    }
 }
 
 function ocultarBannerSoloLectura() {

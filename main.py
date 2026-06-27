@@ -1589,7 +1589,7 @@ def exportar_pdf_paloteo3(
     else:
         sufijo_archivo = ''
         titulo_reporte = 'REPORTE DE DIFERENCIAS'
-        subtitulo_reporte = 'Paloteo 3'
+        subtitulo_reporte = 'Stock Barra vs. Stock POS'
 
     nombre_archivo = f"PALOTEO_{payload.id_operacion}{sufijo_archivo}.pdf"
 
@@ -1639,7 +1639,7 @@ def exportar_pdf_paloteo3(
 
     # — Tabla —
     col_widths = [12, 20, 86, 18, 34]   # ID | Codigo | Producto | Dif.Paq | Dif.Det POS
-    headers   = ["ID", "CODIGO", "PRODUCTO", "DIF PAQ", "DIF DET POS"]
+    headers   = ["ID", "CODIGO", "PRODUCTO", "DIF. PAQ.", "DIF. DET."]
     aligns    = ["R", "L", "L", "R", "R"]
     row_h = 7
 
@@ -1687,7 +1687,7 @@ def exportar_pdf_paloteo3(
                 pdf.set_text_color(*color)
                 pdf.set_font("Helvetica", "B", 8)
             elif jerarquia == "muted":
-                pdf.set_text_color(150, 150, 150)
+                pdf.set_text_color(90, 90, 90)
                 pdf.set_font("Helvetica", "", 7)
             elif jerarquia == "primary":
                 pdf.set_text_color(17, 17, 17)
