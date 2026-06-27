@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import text, bindparam
+from sqlalchemy import text, bindparam, func
 from sqlalchemy.exc import IntegrityError
 from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
@@ -1199,25 +1199,57 @@ def _obtener_control_aplicado(db: Session, id_operacion: int, id_barra: int, id_
     ).first()
 
 
-@app.post("/api/inventario/consolidar/preview", response_model=schemas.ConsolidarAjustesPreviewResponse)
-def previsualizar_consolidacion_ajustes(
-    payload: schemas.ConsolidarAjustesRequest,
-    request: Request,
-    db: Session = Depends(get_db),
-    current_user: models.Usuario = Depends(get_usuario_actual)
-):
-    _validar_operacion_cerrada(db, payload.id_operacion)
+def _validar_cardinalidad_bar_inventario(db: Session, id_barra: int, ids_producto: list[int]) -> None:
+    """Exige exactamente una fila HAB en bar_inventario por producto/barra.
 
+    bar_inventario no tiene UNIQUE(id_barra, id_producto) a nivel de BD. Se valida
+    aqui mismo (compartido por preview y aplicar) para que el admin vea el problema
+    de datos en el preview, en vez de descubrirlo solo al confirmar el ajuste.
+    """
+    if not ids_producto:
+        return
+
+    filas = db.query(
+        models.InventarioBarra.id_producto,
+        func.count(models.InventarioBarra.id)
+    ).filter(
+        models.InventarioBarra.id_barra == id_barra,
+        models.InventarioBarra.id_producto.in_(ids_producto),
+        models.InventarioBarra.estado == 'HAB'
+    ).group_by(models.InventarioBarra.id_producto).all()
+
+    conteo_por_producto = {id_producto: cantidad for id_producto, cantidad in filas}
+
+    sin_registro = [p for p in ids_producto if conteo_por_producto.get(p, 0) == 0]
+    duplicados = [p for p in ids_producto if conteo_por_producto.get(p, 0) > 1]
+
+    if sin_registro or duplicados:
+        partes = []
+        if sin_registro:
+            partes.append(f"sin registro en bar_inventario: {sin_registro}")
+        if duplicados:
+            partes.append(f"con filas HAB duplicadas en bar_inventario: {duplicados}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Estado de datos inconsistente en bar_inventario para barra {id_barra} — productos " + "; ".join(partes) + "."
+        )
+
+
+def _resolver_inventario_fisico(db: Session, request: Request, id_operacion: int, id_barra: int) -> models.InventarioFisicoPOS:
+    """Valida que id_barra coincida con la barra operativa y devuelve la cabecera HAB
+    de InventarioFisicoPOS para operacion/barra, o lanza 400/404. Compartido por preview
+    y aplicar para que ambos vean exactamente la misma validacion.
+    """
     barra_operativa = _resolver_barra_operativa(request)
-    if payload.id_barra != barra_operativa:
+    if id_barra != barra_operativa:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"La barra enviada ({payload.id_barra}) no coincide con la barra operativa configurada ({barra_operativa})."
+            detail=f"La barra enviada ({id_barra}) no coincide con la barra operativa configurada ({barra_operativa})."
         )
 
     inv_fisico_cabecera = db.query(models.InventarioFisicoPOS).filter(
-        models.InventarioFisicoPOS.id_operacion == payload.id_operacion,
-        models.InventarioFisicoPOS.id_barra == payload.id_barra,
+        models.InventarioFisicoPOS.id_operacion == id_operacion,
+        models.InventarioFisicoPOS.id_barra == id_barra,
         models.InventarioFisicoPOS.estado == 'HAB'
     ).first()
 
@@ -1227,6 +1259,20 @@ def previsualizar_consolidacion_ajustes(
             detail="No se encontró inventario físico registrado para la operativa/barra solicitadas."
         )
 
+    return inv_fisico_cabecera
+
+
+@app.post("/api/inventario/consolidar/preview", response_model=schemas.ConsolidarAjustesPreviewResponse)
+def previsualizar_consolidacion_ajustes(
+    payload: schemas.ConsolidarAjustesRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_usuario_actual)
+):
+    _validar_operacion_cerrada(db, payload.id_operacion)
+
+    inv_fisico_cabecera = _resolver_inventario_fisico(db, request, payload.id_operacion, payload.id_barra)
+
     control_aplicado = _obtener_control_aplicado(db, payload.id_operacion, payload.id_barra, inv_fisico_cabecera.id)
     info_control = {
         "ya_aplicado": control_aplicado is not None,
@@ -1235,6 +1281,9 @@ def previsualizar_consolidacion_ajustes(
     }
 
     deltas = _calcular_diferencias_paloteo(db, payload.id_barra, inv_fisico_cabecera.id)
+
+    ids_con_diferencia = [d["id_producto"] for d in deltas if abs(d["delta_paq"]) > 0 or abs(d["delta_det_operativo"]) > 0]
+    _validar_cardinalidad_bar_inventario(db, payload.id_barra, ids_con_diferencia)
 
     if not deltas:
         return {
@@ -1289,7 +1338,7 @@ def previsualizar_consolidacion_ajustes(
             })
 
     movimientos_generados = len(sobrantes_paq) + len(sobrantes_det) + len(faltantes_paq) + len(faltantes_det)
-    productos_con_diferencia = sum(1 for d in deltas if abs(d["delta_paq"]) > 0 or abs(d["delta_det_operativo"]) > 0)
+    productos_con_diferencia = len(ids_con_diferencia)
     status_preview = "ok" if movimientos_generados > 0 else "skipped"
 
     return {
@@ -1330,24 +1379,7 @@ def aplicar_ajustes_inventario(
     """
     _validar_operacion_cerrada(db, payload.id_operacion)
 
-    barra_operativa = _resolver_barra_operativa(request)
-    if payload.id_barra != barra_operativa:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"La barra enviada ({payload.id_barra}) no coincide con la barra operativa configurada ({barra_operativa})."
-        )
-
-    inv_fisico_cabecera = db.query(models.InventarioFisicoPOS).filter(
-        models.InventarioFisicoPOS.id_operacion == payload.id_operacion,
-        models.InventarioFisicoPOS.id_barra == payload.id_barra,
-        models.InventarioFisicoPOS.estado == 'HAB'
-    ).first()
-
-    if not inv_fisico_cabecera:
-        raise HTTPException(
-            status_code=404,
-            detail="No se encontró inventario físico registrado para la operativa/barra solicitadas."
-        )
+    inv_fisico_cabecera = _resolver_inventario_fisico(db, request, payload.id_operacion, payload.id_barra)
 
     control_existente = _obtener_control_aplicado(db, payload.id_operacion, payload.id_barra, inv_fisico_cabecera.id)
     if control_existente:
@@ -1360,6 +1392,7 @@ def aplicar_ajustes_inventario(
     deltas_con_diferencia = [
         d for d in deltas if abs(d["delta_paq"]) > 0 or abs(d["delta_det_operativo"]) > 0
     ]
+    _validar_cardinalidad_bar_inventario(db, payload.id_barra, [d["id_producto"] for d in deltas_con_diferencia])
 
     if not deltas_con_diferencia:
         return {
@@ -1467,26 +1500,13 @@ def aplicar_ajustes_inventario(
                     estado='HAB',
                 ))
 
-            # bar_inventario no tiene UNIQUE(id_barra, id_producto) a nivel de BD; se
-            # exige exactamente una fila HAB para evitar aplicar el ajuste sobre un
-            # registro ambiguo o inexistente.
-            filas_inventario = db.query(models.InventarioBarra).filter(
+            # Cardinalidad ya validada por _validar_cardinalidad_bar_inventario antes
+            # de iniciar la transaccion; aqui solo se obtiene la fila para mutarla.
+            fila_inventario = db.query(models.InventarioBarra).filter(
                 models.InventarioBarra.id_barra == payload.id_barra,
                 models.InventarioBarra.id_producto == id_producto,
                 models.InventarioBarra.estado == 'HAB'
-            ).all()
-
-            if len(filas_inventario) != 1:
-                raise HTTPException(
-                    status_code=500,
-                    detail=(
-                        f"Estado de datos inconsistente en bar_inventario para producto "
-                        f"{id_producto}/barra {payload.id_barra}: se encontraron "
-                        f"{len(filas_inventario)} filas HAB (se esperaba exactamente 1)."
-                    )
-                )
-
-            fila_inventario = filas_inventario[0]
+            ).first()
             fila_inventario.cantidad_paq = _decimal2(d["real_paq"])
             fila_inventario.cantidad_detalle = _decimal2(d["real_det"])
             fila_inventario.usuario_reg = username_actual

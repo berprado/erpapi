@@ -4,6 +4,20 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.30
+- Fix (hallazgo de code review sobre el modulo AJUSTES): `_calcular_diferencias_paloteo`
+  no validaba que cada producto con diferencia tuviera exactamente una fila `HAB` en
+  `bar_inventario` para esa barra; esa validacion solo existia dentro del loop de
+  `aplicar_ajustes_inventario`, por lo que el preview podia mostrar un diff "limpio"
+  y el admin recien se enteraba del problema de datos al confirmar el ajuste (500).
+  Ahora `_validar_cardinalidad_bar_inventario` (compartida por preview y aplicar) lo
+  valida con una sola query batched antes de construir la respuesta, distinguiendo
+  productos sin registro de los que tienen filas duplicadas.
+- Refactor: se extrajo `_resolver_inventario_fisico` (validacion de barra + busqueda
+  de `InventarioFisicoPOS`) y se elimino el predicado "tiene diferencia" duplicado
+  entre `previsualizar_consolidacion_ajustes` y `aplicar_ajustes_inventario`, que
+  hasta ahora estaban copiados en ambos endpoints en vez de compartidos.
+
 ## 10.29
 - Feature: el modulo "Reporte" se renombra a "Ajustes". Administradores ven
   ademas un boton "Aplicar Ajustes" que, cuando la operativa esta CERRADA
