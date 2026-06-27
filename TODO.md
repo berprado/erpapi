@@ -24,6 +24,12 @@
   - El token actual expira en 10 horas (`ACCESS_TOKEN_EXPIRE_MINUTES = 600`).
   - Evaluar si se necesita un mecanismo de renovación automática.
 
+- [ ] **Tests automatizados para el modulo AJUSTES (`/api/inventario/consolidar/preview` y `/api/inventario/ajustes/aplicar`)**
+  - Motivacion: en la rama `claude/adjustments-module-guide-xp8pt8` un bug de SQL (join roto contra `inventario_excluido`/`vista_inventario_barra_con_filtro`) dejo `_calcular_diferencias_paloteo` siempre vacio en silencio; solo se detecto con pruebas manuales end-to-end armando data de prueba en BD. Un test automatizado lo habria detectado en el primer commit.
+  - Cubrir al menos: `_calcular_diferencias_paloteo` con diferencias reales (sobrante/faltante en paq y det), idempotencia (`409` en segundo intento de aplicar), validacion de cardinalidad de `bar_inventario` (`_validar_cardinalidad_bar_inventario`, producto sin fila vs duplicada), gating de admin (`403` sin `ROLE_ADMIN`), y operativa no en estado `23` (`400`).
+  - Requiere antes un setup minimo de pytest + fixtures de BD de test (hoy no existe ningun test en el repo).
+  - Una vez exista el setup, ampliar tambien a login correcto/fallido y paloteo valido/con operacion invalida.
+
 ## 🟢 Baja Prioridad / Mejoras Futuras
 
 - [ ] **Separar los endpoints en routers por módulo (FastAPI `APIRouter`)**
@@ -34,9 +40,6 @@
 
 - [ ] **Agregar manejo de errores global**
   - Implementar un `exception_handler` en FastAPI para respuestas de error consistentes.
-
-- [ ] **Tests automatizados**
-  - Cubrir al menos: login correcto, login fallido, paloteo válido, paloteo con operación inválida.
 
 - [ ] **Revisar si `engine` se necesita en algún módulo futuro**
   - Actualmente fue removido de `main.py` por no usarse.
