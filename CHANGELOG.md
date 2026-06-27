@@ -4,6 +4,21 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.34
+- Feature: barra de busqueda unica en la parte superior, compartida por
+  PALOTEO 1, PALOTEO 2, PALOTEO 3, PESAJE y CONVERSOR (oculta en AJUSTES).
+  Se reconfigura placeholder + logica de filtrado segun el tab activo
+  (`actualizarBarraBusqueda()` en `app.js`). Reemplaza los 3 buscadores
+  independientes que ya existian en PALOTEO 3/PESAJE/CONVERSOR.
+  - PALOTEO 1: ahora se puede filtrar la lista de productos por ID, codigo
+    o nombre (antes no existia busqueda; habia que scrollear).
+  - PALOTEO 2 (captura 1x1): al escribir, salta directo a la primera
+    coincidencia; mientras hay busqueda activa, PREV/SIGT recorren solo
+    las coincidencias (no todo el catalogo), con contador "Coincidencia
+    X de Y" junto al buscador.
+  - PALOTEO 3, PESAJE, CONVERSOR: mismo comportamiento de filtrado que
+    tenian antes, ahora alimentado por el input compartido.
+
 ## 10.33
 - Fix: en PALOTEO 2 (modo captura 1x1), navegar a la siguiente tarjeta mientras
   la operativa esta en modo solo lectura disparaba la validacion de "campos

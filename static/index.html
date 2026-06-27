@@ -772,6 +772,15 @@
         <!-- Área de Contenido -->
         <main class="flex-1 pb-28 overflow-y-auto" id="main-content">
 
+        <!-- Barra de busqueda unica: visible/configurada segun el modulo activo (ver actualizarBarraBusqueda en app.js) -->
+        <div id="topbar-search-container" class="hidden sticky top-0 z-10 bg-surface p-md pb-sm">
+            <div class="relative max-w-2xl mx-auto w-full">
+                <span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-outline-variant" style="font-size:1rem;">search</span>
+                <input type="text" id="topbar-search-input" placeholder="Buscar..." class="w-full bg-surface-container border border-outline-variant rounded-md pl-10 pr-[7.5rem] py-sm text-sm text-on-surface placeholder-outline/40 focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-body-base">
+                <span id="topbar-search-contador" class="hidden absolute right-sm top-1/2 -translate-y-1/2 text-[10px] font-label-mono text-on-surface-variant whitespace-nowrap bg-surface-container pl-xs"></span>
+            </div>
+        </div>
+
         <!-- ========== PANEL INVENTARIO (default) ========== -->
         <div id="panel-inventario" class="tab-panel p-md max-w-2xl mx-auto w-full">
             
@@ -859,11 +868,6 @@
                 </div>
             </div>
 
-            <!-- Buscador -->
-            <div class="relative mb-sm">
-                <span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-outline-variant" style="font-size:1rem;">search</span>
-                <input type="text" id="stock-search" placeholder="Buscar por ID, código o nombre..." class="w-full bg-surface-container border border-outline-variant rounded-md pl-10 pr-md py-sm text-sm text-on-surface placeholder-outline/40 focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-body-base">
-            </div>
 
             <!-- Progreso de captura: cuantos productos ya tienen unidades/peso ingresados -->
             <div id="stock-resumen-progreso" class="mb-sm flex items-center justify-between gap-sm bg-surface-container border border-outline-variant rounded-md px-md py-sm text-label-mono text-[10px] tracking-widest uppercase text-on-surface-variant">
@@ -985,11 +989,6 @@
                 </div>
             </div>
 
-            <!-- Buscador -->
-            <div class="relative mb-sm">
-                <span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-outline-variant" style="font-size:1rem;">search</span>
-                <input type="text" id="pesaje-search" placeholder="Buscar por nombre de producto..." class="w-full bg-surface-container border border-outline-variant rounded-md pl-10 pr-md py-sm text-sm text-on-surface placeholder-outline/40 focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-body-base">
-            </div>
 
             <!-- Filtro de categoría -->
             <div class="mb-sm">
@@ -1030,11 +1029,6 @@
                 </div>
             </div>
 
-            <!-- Buscador de producto -->
-            <div class="relative mb-sm">
-                <span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-outline-variant" style="font-size:1rem;">search</span>
-                <input type="text" id="conversor-search" placeholder="Buscar producto por código o nombre..." class="w-full bg-surface-container border border-outline-variant rounded-md pl-10 pr-md py-sm text-sm text-on-surface placeholder-outline/40 focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-body-base">
-            </div>
 
             <!-- Resultados de búsqueda -->
             <div id="conversor-resultados" class="space-y-xs mb-md"></div>
@@ -1250,7 +1244,7 @@
         </div>
     </div>
 
-    <script src="/assets/app.js?v=10.33"></script>
+    <script src="/assets/app.js?v=10.34"></script>
 
     <script>
         (function () {
@@ -1295,7 +1289,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/assets/sw.js?v=10.33')
+                navigator.serviceWorker.register('/assets/sw.js?v=10.34')
                     .then(reg => console.log('[PWA] Service Worker registrado:', reg.scope))
                     .catch(err => console.error('[PWA] Error al registrar SW:', err));
             });

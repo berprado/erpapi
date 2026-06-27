@@ -40,6 +40,10 @@ const capturaEstado = {
     indice: 0,
     idsOrdenados: [],
     completos: new Set(),
+    // Busqueda activa desde la barra superior: null = sin busqueda (navega todo
+    // el catalogo); array = solo navega entre los indices que matchean la query.
+    matches: null,
+    matchIndex: 0,
 };
 
 // Elementos del DOM
@@ -762,7 +766,6 @@ const pesajeEstado = {
     datos: [],
 };
 
-const pesajeSearchInput         = document.getElementById('pesaje-search');
 const pesajeCategoriaSel        = document.getElementById('pesaje-categoria');
 const pesajeFiltroPesablesBtn   = document.getElementById('pesaje-filtro-pesables');
 const pesajeFiltroNoPesablesBtn = document.getElementById('pesaje-filtro-no-pesables');
@@ -1085,14 +1088,12 @@ async function agregarModeloPesaje(producto) {
 }
 
 let pesajeBusquedaTimeout = null;
-if (pesajeSearchInput) {
-    pesajeSearchInput.addEventListener('input', () => {
-        clearTimeout(pesajeBusquedaTimeout);
-        pesajeBusquedaTimeout = setTimeout(() => {
-            pesajeEstado.nombre = pesajeSearchInput.value.trim();
-            cargarPesaje();
-        }, 350);
-    });
+function filtrarPesaje(query) {
+    pesajeEstado.nombre = query.trim();
+    clearTimeout(pesajeBusquedaTimeout);
+    pesajeBusquedaTimeout = setTimeout(() => {
+        cargarPesaje();
+    }, 350);
 }
 
 if (pesajeCategoriaSel) {
@@ -1122,7 +1123,6 @@ if (pesajeFiltroNoPesablesBtn) {
 // cliente reutilizando redondearOnzasOperativas() y resolverPerfilSeleccionado().
 // ==========================================
 
-const conversorSearchInput      = document.getElementById('conversor-search');
 const conversorResultados       = document.getElementById('conversor-resultados');
 const conversorEmptyState       = document.getElementById('conversor-empty-state');
 const conversorModal            = document.getElementById('conversor-modal');
@@ -1137,6 +1137,14 @@ const conversorTotalRedondeado  = document.getElementById('conversor-total-redon
 
 let conversorProductosCache = null;
 let conversorProductoActual = null;
+let conversorQueryActual = '';
+
+let conversorBusquedaTimeout = null;
+function filtrarConversor(query) {
+    conversorQueryActual = query;
+    clearTimeout(conversorBusquedaTimeout);
+    conversorBusquedaTimeout = setTimeout(renderizarResultadosConversor, 200);
+}
 
 async function cargarProductosConversor() {
     if (conversorProductosCache !== null) {
@@ -1159,7 +1167,7 @@ async function cargarProductosConversor() {
 function renderizarResultadosConversor() {
     if (!conversorResultados || !conversorProductosCache) return;
 
-    const query = (conversorSearchInput ? conversorSearchInput.value : '').trim().toLowerCase();
+    const query = conversorQueryActual.trim().toLowerCase();
     const productos = query
         ? conversorProductosCache.filter((p) =>
             String(p.codigo || '').toLowerCase().includes(query) ||
@@ -1281,14 +1289,6 @@ function limpiarConversor() {
     conversorBotellasContainer.innerHTML = '';
     conversorTotalExacto.textContent = '0';
     conversorTotalRedondeado.textContent = '0';
-}
-
-if (conversorSearchInput) {
-    let conversorBusquedaTimeout = null;
-    conversorSearchInput.addEventListener('input', () => {
-        clearTimeout(conversorBusquedaTimeout);
-        conversorBusquedaTimeout = setTimeout(renderizarResultadosConversor, 200);
-    });
 }
 
 if (conversorBtnAgregar) {
@@ -1780,6 +1780,8 @@ function crearTarjetaProductoElement(p, scope = 'inv') {
     div.className = "bg-surface-container border border-outline-variant rounded-md p-md shadow-lg product-card transition-colors focus-within:border-primary-fixed-dim chassis-panel";
     div.dataset.scope = scope;
     div.dataset.id = p.id_producto;
+    div.dataset.codigo = p.codigo || '';
+    div.dataset.search = `${p.id_producto || ''} ${p.codigo || ''} ${p.nombre || ''}`.toLowerCase();
     div.dataset.idCategoria = p.id_categoria || '';
     div.dataset.pesable = p.pesable || 0;
     div.dataset.nombre = p.nombre;
@@ -2839,6 +2841,49 @@ const TAB_PANEL_MAP = {
     conversor:  'panel-conversor',
 };
 
+// ==========================================
+// BARRA DE BUSQUEDA UNICA (barra superior)
+// Un solo input compartido por los modulos que necesitan buscar; se reconfigura
+// (placeholder + funcion de filtrado) segun el tab activo. Los modulos sin
+// busqueda (PALOTEO 1... no, PALOTEO 1 si tiene; AJUSTES no) simplemente la ocultan.
+// ==========================================
+const topbarSearchContainer = document.getElementById('topbar-search-container');
+const topbarSearchInput     = document.getElementById('topbar-search-input');
+const topbarSearchContador  = document.getElementById('topbar-search-contador');
+
+const BUSQUEDA_POR_TAB = {
+    inventario: { placeholder: 'Buscar por ID, código o nombre...', handler: filtrarInventarioPaloteo1 },
+    logs:       { placeholder: 'Buscar producto para saltar a su tarjeta...', handler: buscarYNavegarCaptura },
+    stock:      { placeholder: 'Buscar por ID, código o nombre...', handler: filtrarStockPaloteo3 },
+    pesaje:     { placeholder: 'Buscar por nombre de producto...', handler: filtrarPesaje },
+    conversor:  { placeholder: 'Buscar producto por código o nombre...', handler: filtrarConversor },
+};
+
+/** Muestra/oculta y reconfigura la barra de busqueda unica segun el tab activo. */
+function actualizarBarraBusqueda(tabName) {
+    if (!topbarSearchContainer || !topbarSearchInput) return;
+
+    const config = BUSQUEDA_POR_TAB[tabName];
+    if (!config) {
+        topbarSearchContainer.classList.add('hidden');
+        return;
+    }
+
+    topbarSearchContainer.classList.remove('hidden');
+    topbarSearchInput.placeholder = config.placeholder;
+    topbarSearchInput.value = '';
+    if (topbarSearchContador) topbarSearchContador.classList.add('hidden');
+    config.handler('');
+}
+
+if (topbarSearchInput) {
+    topbarSearchInput.addEventListener('input', () => {
+        const tabActivo = document.querySelector('[data-tab].active-tab')?.dataset.tab;
+        const config = BUSQUEDA_POR_TAB[tabActivo];
+        if (config) config.handler(topbarSearchInput.value);
+    });
+}
+
 /**
  * Muestra el panel correspondiente al tab y marca el tab como activo.
  * Si el tab no tiene panel asignado (ej. ENVIO), no cambia el panel visible.
@@ -2854,6 +2899,8 @@ function navegarATab(tabName) {
     // Mostrar el panel destino
     const panelDestino = document.getElementById(panelId);
     if (panelDestino) panelDestino.classList.remove('hidden');
+
+    actualizarBarraBusqueda(tabName);
 
     if (tabName === 'logs') {
         inicializarModoCaptura();
@@ -3116,8 +3163,11 @@ function renderTarjetaCaptura(indice) {
     botonSiguiente.className = `${claseBotonCapturaCompacto} w-[4.75rem] justify-self-end`;
     botonSiguiente.innerHTML = 'Sigt <span class="material-symbols-outlined text-[16px]">arrow_forward</span>';
 
-    const esPrimerProducto = indice <= 0;
-    const esUltimoProducto = indice >= (total - 1);
+    // Con busqueda activa, PREV/SIGT recorren solo las coincidencias.
+    const buscandoActivo = Array.isArray(capturaEstado.matches);
+    const totalMatches = buscandoActivo ? capturaEstado.matches.length : 0;
+    const esPrimerProducto = buscandoActivo ? (totalMatches === 0 || capturaEstado.matchIndex <= 0) : indice <= 0;
+    const esUltimoProducto = buscandoActivo ? (totalMatches === 0 || capturaEstado.matchIndex >= totalMatches - 1) : indice >= (total - 1);
     botonAnterior.classList.toggle('invisible', esPrimerProducto);
     botonAnterior.disabled = esPrimerProducto;
     botonSiguiente.classList.toggle('invisible', esUltimoProducto);
@@ -3125,6 +3175,18 @@ function renderTarjetaCaptura(indice) {
 
     botonAnterior.addEventListener('click', () => navegarCaptura(-1));
     botonSiguiente.addEventListener('click', () => navegarCaptura(1));
+
+    const topbarContador = document.getElementById('topbar-search-contador');
+    if (topbarContador) {
+        if (buscandoActivo) {
+            topbarContador.textContent = totalMatches > 0
+                ? `Coincidencia ${capturaEstado.matchIndex + 1} de ${totalMatches}`
+                : 'Sin coincidencias';
+            topbarContador.classList.remove('hidden');
+        } else {
+            topbarContador.classList.add('hidden');
+        }
+    }
 
     const contador = document.createElement('div');
     contador.className = 'justify-self-center flex items-center justify-center gap-1 text-center leading-none min-w-max';
@@ -3197,8 +3259,48 @@ async function navegarCaptura(delta = 1) {
         }
     }
 
-    const siguienteIndice = Math.max(0, Math.min(capturaEstado.idsOrdenados.length - 1, capturaEstado.indice + delta));
-    capturaEstado.indice = siguienteIndice;
+    if (capturaEstado.matches && capturaEstado.matches.length > 0) {
+        // Busqueda activa: PREV/SIGT recorren solo las coincidencias, no todo el catalogo.
+        const totalMatches = capturaEstado.matches.length;
+        const siguienteMatchIndex = Math.max(0, Math.min(totalMatches - 1, capturaEstado.matchIndex + delta));
+        capturaEstado.matchIndex = siguienteMatchIndex;
+        capturaEstado.indice = capturaEstado.matches[siguienteMatchIndex];
+    } else {
+        const siguienteIndice = Math.max(0, Math.min(capturaEstado.idsOrdenados.length - 1, capturaEstado.indice + delta));
+        capturaEstado.indice = siguienteIndice;
+    }
+    renderTarjetaCaptura(capturaEstado.indice);
+}
+
+/**
+ * Busqueda de la barra superior para PALOTEO 2: en vez de ocultar tarjetas (aqui
+ * solo se ve una a la vez), salta directo a la primera coincidencia y deja que
+ * PREV/SIGT recorran solo las coincidencias mientras la busqueda este activa.
+ */
+function buscarYNavegarCaptura(query) {
+    if (!capturaEstado.inicializado || capturaEstado.idsOrdenados.length === 0) return;
+
+    const q = query.trim().toLowerCase();
+    if (!q) {
+        capturaEstado.matches = null;
+        capturaEstado.matchIndex = 0;
+        renderTarjetaCaptura(capturaEstado.indice);
+        return;
+    }
+
+    const matches = [];
+    capturaEstado.idsOrdenados.forEach((idProducto, idx) => {
+        const producto = productosInventario.find(p => p.id_producto === idProducto);
+        if (!producto) return;
+        const texto = `${producto.id_producto || ''} ${producto.codigo || ''} ${producto.nombre || ''}`.toLowerCase();
+        if (texto.includes(q)) matches.push(idx);
+    });
+
+    capturaEstado.matches = matches;
+    capturaEstado.matchIndex = 0;
+    if (matches.length > 0) {
+        capturaEstado.indice = matches[0];
+    }
     renderTarjetaCaptura(capturaEstado.indice);
 }
 
@@ -3226,14 +3328,19 @@ document.querySelectorAll('[data-tab]').forEach(btn => {
 });
 
 // Buscador en panel Stock
-const stockSearchInput = document.getElementById('stock-search');
-if (stockSearchInput) {
-    stockSearchInput.addEventListener('input', () => {
-        const query = stockSearchInput.value.toLowerCase().trim();
-        document.querySelectorAll('#stock-list .stock-row').forEach(row => {
-            const searchText = row.dataset.search || '';
-            row.classList.toggle('hidden', query.length > 0 && !searchText.includes(query));
-        });
+function filtrarStockPaloteo3(query) {
+    const q = query.toLowerCase().trim();
+    document.querySelectorAll('#stock-list .stock-row').forEach(row => {
+        const searchText = row.dataset.search || '';
+        row.classList.toggle('hidden', q.length > 0 && !searchText.includes(q));
+    });
+}
+
+function filtrarInventarioPaloteo1(query) {
+    const q = query.toLowerCase().trim();
+    document.querySelectorAll('#lista-productos .product-card[data-scope="inv"]').forEach(card => {
+        const searchText = card.dataset.search || '';
+        card.classList.toggle('hidden', q.length > 0 && !searchText.includes(q));
     });
 }
 
