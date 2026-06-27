@@ -1502,11 +1502,13 @@ def aplicar_ajustes_inventario(
 
             # Cardinalidad ya validada por _validar_cardinalidad_bar_inventario antes
             # de iniciar la transaccion; aqui solo se obtiene la fila para mutarla.
+            # with_for_update(): bloquea la fila por el resto de la transaccion para
+            # evitar perder una escritura concurrente sobre el mismo bar_inventario.
             fila_inventario = db.query(models.InventarioBarra).filter(
                 models.InventarioBarra.id_barra == payload.id_barra,
                 models.InventarioBarra.id_producto == id_producto,
                 models.InventarioBarra.estado == 'HAB'
-            ).first()
+            ).with_for_update().first()
             fila_inventario.cantidad_paq = _decimal2(d["real_paq"])
             fila_inventario.cantidad_detalle = _decimal2(d["real_det"])
             fila_inventario.usuario_reg = username_actual

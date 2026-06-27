@@ -4,6 +4,13 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.31
+- Hardening (sugerencia de gemini-code-assist en el PR): `aplicar_ajustes_inventario`
+  ahora usa `.with_for_update()` al leer la fila de `bar_inventario` que va a mutar,
+  para evitar perder una escritura concurrente sobre la misma fila mientras dura la
+  transaccion. No cambia el manejo de la carrera entre dos aplicaciones simultaneas
+  del mismo ajuste (eso ya lo cubre el `UNIQUE KEY` de `app_paloteo_ajuste_control`).
+
 ## 10.30
 - Fix (hallazgo de code review sobre el modulo AJUSTES): `_calcular_diferencias_paloteo`
   no validaba que cada producto con diferencia tuviera exactamente una fila `HAB` en
