@@ -3186,8 +3186,10 @@ async function navegarCaptura(delta = 1) {
     if (!capturaEstado.inicializado || capturaEstado.idsOrdenados.length === 0) return;
     syncCapturaConInventario();
 
-    // Al avanzar, validar la tarjeta actual antes de navegar
-    if (delta > 0) {
+    // Al avanzar, validar la tarjeta actual antes de navegar — pero solo si se puede
+    // editar; en modo solo lectura los inputs estan deshabilitados y no tiene sentido
+    // pedir confirmar campos vacios de un paloteo que no se va a registrar.
+    if (delta > 0 && operativaPermitePaloteo) {
         const cardCaptura = capturaCardContainer.querySelector('.product-card[data-scope="captura"]');
         if (cardCaptura) {
             const valido = await ejecutarValidacionesGlobales([cardCaptura]);

@@ -4,6 +4,14 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.33
+- Fix: en PALOTEO 2 (modo captura 1x1), navegar a la siguiente tarjeta mientras
+  la operativa esta en modo solo lectura disparaba la validacion de "campos
+  vacios se registraran como 0" (dialogo de confirmacion), aunque los inputs
+  estan deshabilitados y no hay nada que registrar. `navegarCaptura` ahora
+  salta esa validacion cuando `!operativaPermitePaloteo`, permitiendo navegar
+  libremente entre tarjetas en modo lectura.
+
 ## 10.32
 - Ajustes de forma en AJUSTES (PDF y pantalla):
   - El PDF de "Reporte de Diferencias" ya no muestra "Paloteo 3" como subtitulo;
