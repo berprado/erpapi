@@ -211,6 +211,21 @@ Body ejemplo de exportacion:
 
 `tipo_reporte` admite: `general`, `ingreso`, `salida`.
 
+### Ajustes de Inventario (requiere JWT; aplicar requiere rol administrador)
+
+| Metodo | Ruta | Descripcion |
+|---|---|---|
+| `POST` | `/api/inventario/consolidar/preview` | Calcula (desde BD, sin escribir nada) las diferencias paloteo-vs-POS para una operativa/barra: cuantos productos tienen diferencia, sobrantes/faltantes por paquete y por detalle (oz), y si ya existe un ajuste `APLICADO` para esa combinacion (`ya_aplicado`, `aplicado_por`, `aplicado_en`) |
+| `POST` | `/api/inventario/ajustes/aplicar` | Aplica de forma definitiva las diferencias: crea `bar_ajuste`/`bar_salida_inventario` (con sus detalles) y actualiza `bar_inventario` para igualar el stock vivo al fisico contado. Solo administrador. Requiere operativa en estado `23` (CERRADA) e inventario fisico ya registrado |
+
+Reglas:
+
+1. Ambos endpoints exigen `_validar_operacion_cerrada` (operativa en estado `23`) y que `id_barra` coincida con la barra operativa resuelta (`_resolver_barra_operativa`).
+2. `_calcular_diferencias_paloteo` es la unica fuente de verdad para las diferencias, compartida entre preview y aplicar: solo evalua productos que tienen fila en `bar_detalle_fisico` para ese inventario fisico (productos no contados no generan ajuste, aunque el modulo AJUSTES de la PWA -que itera sobre todo el catalogo de la barra- pueda mostrarlos como diferencia si su input quedo vacio en pantalla).
+3. Si no hay diferencias, `aplicar` responde `status: "skipped"` sin crear nada.
+4. Idempotencia: la tabla `app_paloteo_ajuste_control` registra cada aplicacion con `UNIQUE KEY (id_operacion, id_barra, id_inventario_fisico)`. Un segundo intento sobre la misma combinacion responde `409`.
+5. Las cantidades se persisten con `Decimal`/`ROUND_HALF_UP` (nunca `float`), igual que el resto del modulo de pesaje.
+
 ---
 
 ## Validaciones Activas (Frontend + Backend)
@@ -225,9 +240,9 @@ En el flujo de inventario fisico/paloteo se aplican estas validaciones clave:
 
 ---
 
-## REPORTE (Paloteo 3)
+## AJUSTES (Paloteo 3)
 
-Funciones implementadas en la vista REPORTE:
+Vista renombrada de "REPORTE" a "AJUSTES" (mismo panel `#panel-scan`, mismos datos de diferencias). Funciones:
 
 1. Filtro por tipo de ajuste: `Todos`, `Ingreso (+)`, `Salida (-)`.
 2. Ordenamiento por columnas: `ID`, `COD`, `PRODUCTO`.
@@ -235,11 +250,23 @@ Funciones implementadas en la vista REPORTE:
   - `0`: verde
   - negativo: rojo
   - positivo: amarillo
-4. Exportacion PDF coherente con filtro activo:
+4. Exportacion PDF coherente con filtro activo (columnas `DIF PAQ` y `DIF DET POS` unicamente; ya no incluye el valor exacto pre-redondeo):
   - `PALOTEO_<id>.pdf`
   - `PALOTEO_<id>_INGRESO.pdf`
   - `PALOTEO_<id>_SALIDA.pdf`
 5. Generacion de PDF en memoria (sin escritura a disco) para evitar errores intermitentes en Windows.
+
+### Bloque "Aplicar Ajustes" (solo administradores)
+
+A diferencia de la tabla/PDF anteriores (calculados en cliente desde el catalogo completo de la barra, con `0` para productos sin valor capturado), el boton "Aplicar Ajustes" usa la fuente autoritativa de BD (`POST /api/inventario/consolidar/preview`), que solo considera productos con fila real en `bar_detalle_fisico`. Esto evita generar ajustes sobre productos que nunca se contaron.
+
+Logica en `app.js` (`actualizarPanelAjustes()` / `aplicarAjustesInventario()`):
+
+1. Bloque oculto por completo si el usuario no es administrador.
+2. Si la operativa no esta en estado `23`, o no hay diferencias (`status: "skipped"`), se muestra un mensaje informativo en vez del boton.
+3. Si ya existe un ajuste `APLICADO` para esa operativa/barra (`ya_aplicado` del preview), se muestra un badge "Ajustes aplicados por X el Y" en vez del boton.
+4. Si hay diferencias sin aplicar, el boton queda habilitado; al hacer clic pide confirmacion con el resumen (productos/movimientos) antes de llamar a `POST /api/inventario/ajustes/aplicar`.
+5. Maneja exito, `skipped`, `409` (ya aplicado por otra sesion) y errores de red/servidor con los dialogos `mostrarDialogoResultado`/`mostrarDialogoConfirmacion` existentes.
 
 ---
 
@@ -268,6 +295,10 @@ Para cada botella abierta:
 | `bar_inventario_fisico` | Cabecera inventario fisico POS |
 | `bar_detalle_fisico` | Detalle inventario fisico POS |
 | `app_paloteo_registro_crudo` | Auditoria cruda de pesajes |
+| `bar_inventario` | Stock vivo por barra/producto (actualizado por `POST /api/inventario/ajustes/aplicar`) |
+| `bar_ajuste` / `bar_detalle_ajuste` | Cabecera/detalle de ingresos por ajuste generados al aplicar diferencias |
+| `bar_salida_inventario` / `bar_detalle_salida_inv` | Cabecera/detalle de salidas por ajuste generadas al aplicar diferencias |
+| `app_paloteo_ajuste_control` | Control de idempotencia: una fila `APLICADO` por `(id_operacion, id_barra, id_inventario_fisico)`. DDL en [documentos/DOCUMENTACION_INGRESOS_SALIDAS_AJUSTE_PWA.md](documentos/DOCUMENTACION_INGRESOS_SALIDAS_AJUSTE_PWA.md) |
 
 ---
 
@@ -280,7 +311,7 @@ Flujo actual de navegacion:
 - PALOTEO 1
 - PALOTEO 2
 - PALOTEO 3 (captura ciega)
-- REPORTE (diferencias y exportacion PDF)
+- AJUSTES (diferencias, exportacion PDF y, solo administradores, aplicar el ajuste definitivo contra `bar_inventario`)
 - PESAJE (CRUD de modelos de botella y codigos de barra; solo visible/accesible para usuarios con rol `ROLE_ADMINISTRADOR`)
 - CONVERSOR (calculadora de peso a onzas, siempre disponible sin importar el estado de la operativa)
 
@@ -294,8 +325,8 @@ Sincronizacion entre modulos:
 
 El paloteo compara el inventario ideal (segun el POS) contra el inventario
 real (conteo fisico de cerradas + peso de abiertas convertido a onzas); la
-diferencia es lo que el futuro modulo de Ajustes materializa como
-ingreso/salida. Por eso PALOTEO 3 es "captura ciega": a diferencia de
+diferencia es lo que el modulo AJUSTES materializa como ingreso/salida
+(ver "Ajustes de Inventario" mas arriba). Por eso PALOTEO 3 es "captura ciega": a diferencia de
 PALOTEO 1/2, no muestra el ideal del sistema ni el delta en tiempo real,
 para que quien cuenta fisicamente no pueda ajustar su conteo para disimular
 faltantes.
@@ -332,7 +363,7 @@ sincronizada entre ambos modulos porque comparten el mismo origen de datos.
 
 ### FAB "volver al inicio"
 
-Boton flotante reutilizable (clase `fab-scroll-top` + funcion `inicializarFabScrollTop(fabId, panelId)` en `app.js`) presente en PALOTEO 1, PALOTEO 3, REPORTE, PESAJE y CONVERSOR. Aparece al hacer scroll mas alla de un umbral y solo si su panel esta activo; al hacer click hace scroll suave al inicio de la pagina. Para agregarlo a un nuevo modulo: insertar un boton con esa clase dentro del panel y llamar a la funcion con sus ids.
+Boton flotante reutilizable (clase `fab-scroll-top` + funcion `inicializarFabScrollTop(fabId, panelId)` en `app.js`) presente en PALOTEO 1, PALOTEO 3, AJUSTES, PESAJE y CONVERSOR. Aparece al hacer scroll mas alla de un umbral y solo si su panel esta activo; al hacer click hace scroll suave al inicio de la pagina. Para agregarlo a un nuevo modulo: insertar un boton con esa clase dentro del panel y llamar a la funcion con sus ids.
 
 Service Worker:
 
@@ -346,7 +377,7 @@ Service Worker:
 - Verificacion de contrasena con SHA-256 (compatibilidad POS).
 - JWT con expiracion de 10 horas.
 - Endpoints de negocio protegidos con HTTPBearer.
-- Control de acceso por rol (`ROLE_ADMINISTRADOR` via `seg_permiso`/`seg_rol`) para el modulo PESAJE. La respuesta de login incluye `is_admin` para que el frontend oculte la opcion de menu a usuarios sin ese rol.
+- Control de acceso por rol (`ROLE_ADMINISTRADOR` via `seg_permiso`/`seg_rol`) para el modulo PESAJE y para `POST /api/inventario/ajustes/aplicar`. La respuesta de login incluye `is_admin` para que el frontend oculte la opcion de menu/boton a usuarios sin ese rol.
 - Validacion de longitud minima de `SECRET_KEY` en configuracion.
 - CORS habilitado para clientes web.
 

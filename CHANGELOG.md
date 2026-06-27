@@ -4,6 +4,47 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.31
+- Hardening (sugerencia de gemini-code-assist en el PR): `aplicar_ajustes_inventario`
+  ahora usa `.with_for_update()` al leer la fila de `bar_inventario` que va a mutar,
+  para evitar perder una escritura concurrente sobre la misma fila mientras dura la
+  transaccion. No cambia el manejo de la carrera entre dos aplicaciones simultaneas
+  del mismo ajuste (eso ya lo cubre el `UNIQUE KEY` de `app_paloteo_ajuste_control`).
+
+## 10.30
+- Fix (hallazgo de code review sobre el modulo AJUSTES): `_calcular_diferencias_paloteo`
+  no validaba que cada producto con diferencia tuviera exactamente una fila `HAB` en
+  `bar_inventario` para esa barra; esa validacion solo existia dentro del loop de
+  `aplicar_ajustes_inventario`, por lo que el preview podia mostrar un diff "limpio"
+  y el admin recien se enteraba del problema de datos al confirmar el ajuste (500).
+  Ahora `_validar_cardinalidad_bar_inventario` (compartida por preview y aplicar) lo
+  valida con una sola query batched antes de construir la respuesta, distinguiendo
+  productos sin registro de los que tienen filas duplicadas.
+- Refactor: se extrajo `_resolver_inventario_fisico` (validacion de barra + busqueda
+  de `InventarioFisicoPOS`) y se elimino el predicado "tiene diferencia" duplicado
+  entre `previsualizar_consolidacion_ajustes` y `aplicar_ajustes_inventario`, que
+  hasta ahora estaban copiados en ambos endpoints en vez de compartidos.
+
+## 10.29
+- Feature: el modulo "Reporte" se renombra a "Ajustes". Administradores ven
+  ademas un boton "Aplicar Ajustes" que, cuando la operativa esta CERRADA
+  (estado 23) y hay diferencias entre el paloteo y el ideal POS, llama a
+  `POST /api/inventario/ajustes/aplicar` (creado en rama
+  claude/adjustments-module-guide-xp8pt8) para generar los movimientos de
+  ingreso/salida y actualizar el inventario vivo. Si ya se aplico antes,
+  se muestra un badge en vez del boton. `/api/operacion/activa` ahora expone
+  `estado_operacion` y el preview de consolidacion expone `ya_aplicado` para
+  soportar este gating.
+- Fix: el reporte PDF de diferencias ya no muestra la columna "DIF DET"
+  (valor exacto pre-redondeo); solo "DIF PAQ" y "DIF DET POS".
+- Fix (backend, commit `556f8cd`, sin bump propio de version): el calculo de
+  diferencias paloteo-vs-POS (`_calcular_diferencias_paloteo`) tenia un join
+  roto contra `inventario_excluido` (columna inexistente resuelta como
+  subconsulta correlacionada, excluyendo el 100% de los productos siempre) y
+  comparaba `vista_inventario_barra_con_filtro.id_barra` (en realidad
+  `bar_inventario.id`) en vez de `nro_barra`. El endpoint de aplicar ajustes
+  era inoperante hasta este fix.
+
 ## 10.26
 - Cambio funcional: en CONVERSOR, la captura de botellas se mueve de una
   tarjeta inline al final del listado a una ventana modal (mismo estilo y

@@ -82,7 +82,7 @@ class InventarioFisicoPOS(Base):
 
 class DetalleFisicoPOS(Base):
     __tablename__ = "bar_detalle_fisico"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     cantidad_unidad = Column(Numeric(10, 2)) # Botellas cerradas
     cantidad_detalle = Column(Numeric(10, 2)) # Onzas calculadas
@@ -92,3 +92,110 @@ class DetalleFisicoPOS(Base):
     fecha_reg = Column(Date)
     fecha_mod = Column(Date) # Fecha de última corrección
     estado = Column(String(3), default='HAB')
+
+# Modelos del módulo de AJUSTES: cabeceras/detalles de ingreso y salida por ajuste,
+# replicando el mismo flujo que usa el POS para igualar bar_inventario al físico.
+# NOTA: el COMMENT real de bar_ajuste.ind_estado_ingreso dice "0: pendiente, 1: procesaro,
+# 3: cancelado", pero está desactualizado: los valores reales son 16 (PENDIETE) y 20
+# (PROCESADO), igual que bar_salida_inventario.ind_estado_salida (confirmado contra
+# parameter_table y un trace SQL real de ejecución del POS).
+
+class AjusteIngreso(Base):
+    __tablename__ = "bar_ajuste"
+
+    id = Column(Integer, primary_key=True, index=True)
+    fecha = Column(Date)
+    numero_documento = Column(String(255))
+    observaciones = Column(String(255))
+    recepcionado_por = Column(String(255))
+    ind_estado_ingreso = Column(Integer)
+    ind_tipo_movimiento = Column(Integer)
+    id_operacion = Column(Integer)
+    id_barra = Column(Integer)
+    usuario_reg = Column(String(255))
+    fecha_reg = Column(Date)
+    fecha_mod = Column(Date)
+    estado = Column(String(3), default='HAB')
+
+
+class DetalleAjusteIngreso(Base):
+    __tablename__ = "bar_detalle_ajuste"
+
+    id = Column(Integer, primary_key=True, index=True)
+    cantidad = Column(Numeric(10, 2))
+    precio_costo = Column(Numeric(10, 2))
+    precio_costo_real = Column(Numeric(10, 5))
+    observaciones = Column(String(255))
+    ind_paq_detalle = Column(String(1)) # '1': paq/display, '0': detalle/onzas
+    id_ajuste = Column(Integer)
+    id_producto = Column(Integer)
+    usuario_reg = Column(String(255))
+    fecha_reg = Column(Date)
+    fecha_mod = Column(Date)
+    estado = Column(String(3), default='HAB')
+
+
+class AjusteSalida(Base):
+    __tablename__ = "bar_salida_inventario"
+
+    id = Column(Integer, primary_key=True, index=True)
+    fecha_salida = Column(Date)
+    correlativo = Column(Integer)
+    responsable = Column(String(255))
+    ind_estado_salida = Column(Integer)
+    observaciones_salida = Column(String(255))
+    fecha_recepcion = Column(Date)
+    observaciones_recepcion = Column(String(255))
+    responsable_recepcion = Column(String(255))
+    id_almacen = Column(Integer)
+    id_barra = Column(Integer)
+    id_operacion = Column(Integer)
+    ind_tipo_salida = Column(Integer)
+    usuario_reg = Column(String(255))
+    fecha_reg = Column(Date)
+    fecha_mod = Column(Date)
+    estado = Column(String(3), default='HAB')
+
+
+class DetalleAjusteSalida(Base):
+    __tablename__ = "bar_detalle_salida_inv"
+
+    id = Column(Integer, primary_key=True, index=True)
+    cantidad = Column(Numeric(10, 2))
+    ind_paq_detalle = Column(String(1)) # '1': paq/display, '0': detalle/onzas
+    id_salida_inventario = Column(Integer)
+    id_producto = Column(Integer)
+    usuario_reg = Column(String(255))
+    fecha_reg = Column(Date)
+    fecha_mod = Column(Date)
+    estado = Column(String(3), default='HAB')
+
+
+class InventarioBarra(Base):
+    __tablename__ = "bar_inventario"
+
+    id = Column(Integer, primary_key=True, index=True)
+    cantidad_paq = Column(Numeric(10, 2))
+    cantidad_detalle = Column(Numeric(10, 2))
+    id_producto = Column(Integer)
+    id_barra = Column(Integer)
+    usuario_reg = Column(String(255))
+    fecha_reg = Column(Date)
+    fecha_mod = Column(DateTime)
+    estado = Column(String(3), default='HAB')
+
+
+class PaloteoAjusteControl(Base):
+    __tablename__ = "app_paloteo_ajuste_control"
+
+    id = Column(Integer, primary_key=True, index=True)
+    id_operacion = Column(Integer)
+    id_barra = Column(Integer)
+    id_inventario_fisico = Column(Integer)
+    id_ajuste = Column(Integer)
+    id_salida_inventario = Column(Integer)
+    estado = Column(String(20))
+    payload_json = Column(Text)
+    usuario_reg = Column(String(255))
+    fecha_reg = Column(DateTime)
+    fecha_mod = Column(DateTime)
