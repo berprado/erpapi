@@ -24,6 +24,10 @@
   - El token actual expira en 10 horas (`ACCESS_TOKEN_EXPIRE_MINUTES = 600`).
   - Evaluar si se necesita un mecanismo de renovación automática.
 
+- [ ] **Identificar focos de recetas mal configuradas en `bar_detalle_combo_bar`**
+  - Motivacion: todas las recetas vigentes (828 filas activas con `ind_paq_detalle='0'`) usan cantidades multiplo de 0.5 oz, pero se encontraron 5 ventas historicas (2025-08-02 a 2025-09-14, `bar_detalle_sal_combo_coctel`) que descontaron 0.07 oz de Coca Cola via el combo "V BUHO NEGRO" (id 392) — un valor que no coincide con la receta actual de ese combo (4.00 oz). La receta ya fue corregida, pero el residuo ya aplicado a `bar_inventario` en su momento nunca se corrigio retroactivamente y se arrastra entre operativas via `bar_inventario_cierre`.
+  - Revisar si existen otros combos con historial de cantidades atipicas (no multiplo de 0.5) en `bar_detalle_sal_combo_coctel`, mas alla de este caso ya cerrado.
+
 - [ ] **Tests automatizados para el modulo AJUSTES (`/api/inventario/consolidar/preview` y `/api/inventario/ajustes/aplicar`)**
   - Motivacion: en la rama `claude/adjustments-module-guide-xp8pt8` un bug de SQL (join roto contra `inventario_excluido`/`vista_inventario_barra_con_filtro`) dejo `_calcular_diferencias_paloteo` siempre vacio en silencio; solo se detecto con pruebas manuales end-to-end armando data de prueba en BD. Un test automatizado lo habria detectado en el primer commit.
   - Cubrir al menos: `_calcular_diferencias_paloteo` con diferencias reales (sobrante/faltante en paq y det), idempotencia (`409` en segundo intento de aplicar), validacion de cardinalidad de `bar_inventario` (`_validar_cardinalidad_bar_inventario`, producto sin fila vs duplicada), gating de admin (`403` sin `ROLE_ADMIN`), y operativa no en estado `23` (`400`).

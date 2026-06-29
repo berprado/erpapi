@@ -214,4 +214,5 @@ class AplicarAjustesResponse(BaseModel):
     id_ajuste: Optional[int] = None
     id_salida_inventario: Optional[int] = None
     productos_afectados: int
+    igualacion_verificada: bool
     mensaje: str

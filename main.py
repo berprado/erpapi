@@ -1403,6 +1403,7 @@ def aplicar_ajustes_inventario(
             "id_ajuste": None,
             "id_salida_inventario": None,
             "productos_afectados": 0,
+            "igualacion_verificada": True,
             "mensaje": "No hay diferencias entre el inventario físico y el ideal; no se generaron movimientos.",
         }
 
@@ -1453,6 +1454,7 @@ def aplicar_ajustes_inventario(
             db.add(salida_header)
             db.flush()
 
+        filas_inventario_tocadas = []
         for d in deltas_con_diferencia:
             id_producto = d["id_producto"]
 
@@ -1513,6 +1515,32 @@ def aplicar_ajustes_inventario(
             fila_inventario.cantidad_detalle = _decimal2(d["real_det"])
             fila_inventario.usuario_reg = username_actual
             fila_inventario.fecha_mod = fecha_actual
+            filas_inventario_tocadas.append((fila_inventario, d))
+
+        # Verificacion de igualacion: relee desde la BD (no desde el objeto en memoria)
+        # cada fila que se acaba de actualizar y confirma que quedo exactamente igual
+        # al fisico contado. Es una garantia en runtime de que la asignacion directa de
+        # arriba realmente se aplico, no una suposicion basada en la lectura del codigo.
+        db.flush()
+        productos_no_igualados = []
+        for fila_inventario, d in filas_inventario_tocadas:
+            db.refresh(fila_inventario)
+            esperado_paq = _decimal2(d["real_paq"])
+            esperado_det = _decimal2(d["real_det"])
+            if fila_inventario.cantidad_paq != esperado_paq or fila_inventario.cantidad_detalle != esperado_det:
+                productos_no_igualados.append({
+                    "id_producto": d["id_producto"],
+                    "esperado_paq": float(esperado_paq),
+                    "esperado_det": float(esperado_det),
+                    "obtenido_paq": float(fila_inventario.cantidad_paq),
+                    "obtenido_det": float(fila_inventario.cantidad_detalle),
+                })
+
+        if productos_no_igualados:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"La igualación de bar_inventario no coincide con el físico contado para: {productos_no_igualados}"
+            )
 
         if ajuste_header:
             ajuste_header.ind_estado_ingreso = 20
@@ -1555,6 +1583,7 @@ def aplicar_ajustes_inventario(
         "id_ajuste": ajuste_header.id if ajuste_header else None,
         "id_salida_inventario": salida_header.id if salida_header else None,
         "productos_afectados": len(deltas_con_diferencia),
+        "igualacion_verificada": True,
         "mensaje": f"Ajuste aplicado correctamente sobre {len(deltas_con_diferencia)} producto(s).",
     }
 

@@ -4,6 +4,14 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.36
+- Backend: `/api/inventario/ajustes/aplicar` ahora verifica, dentro de la misma
+  transaccion y antes del commit, que cada fila de `bar_inventario` actualizada
+  quede exactamente igual al inventario fisico contado (relectura desde BD, no
+  desde el objeto en memoria). Si no coincide, hace rollback y devuelve 500 en
+  vez de comitear un ajuste inconsistente. La respuesta ahora incluye
+  `igualacion_verificada`.
+
 ## 10.35
 - Cambio funcional: la barra de busqueda unica (10.34) deja de ser una fila fija
   debajo del navbar y pasa a vivir dentro del navbar superior, colapsada por
