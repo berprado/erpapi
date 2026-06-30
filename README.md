@@ -146,16 +146,19 @@ Docs: `http://localhost:8000/docs`
 | Metodo | Ruta | Descripcion |
 |---|---|---|
 | `GET` | `/api/inventario/pendientes` | Lista productos vendidos + traspasados a barra con configuracion de pesaje |
+| `GET` | `/api/inventario/catalogo/buscar` | Busca en el catalogo completo de la barra (sin filtrar por movimiento), para agregar manualmente al conteo un producto que no tuvo movimiento esta operativa. Requiere `?busqueda=` (min. 2 caracteres), devuelve hasta 15 resultados con la misma forma que `/pendientes` |
 | `POST` | `/api/inventario/paloteo` | Registra inventario fisico completo |
 | `GET` | `/api/inventario/paloteo/{id_operacion}` | Obtiene inventario registrado y si puede editarse |
 | `PUT` | `/api/inventario/paloteo/{id_inventario_pos}` | Corrige inventario fisico existente |
+| `DELETE` | `/api/inventario/paloteo/{id_inventario_pos}/producto/{id_producto}` | Da de baja (soft-delete) el detalle de un solo producto, para deshacer una alta manual por error. A diferencia de `PUT` (upsert-only, nunca borra), este endpoint si elimina una fila puntual. No afecta `app_paloteo_registro_crudo` |
 
 Reglas de correccion actuales:
 
 1. Solo se corrige si la operativa sigue en estado `24`.
 2. `id_operacion` e `id_barra` del payload deben coincidir con la cabecera existente.
-3. La correccion actualiza de forma selectiva los productos enviados; los no enviados se conservan.
+3. La correccion actualiza de forma selectiva los productos enviados; los no enviados se conservan (no se borran).
 4. Si la operativa cambia de estado, la API bloquea la correccion.
+5. Para eliminar un producto puntual (no solo dejarlo sin enviar), usar `DELETE /api/inventario/paloteo/{id_inventario_pos}/producto/{id_producto}`.
 
 Reglas de barra operativa:
 

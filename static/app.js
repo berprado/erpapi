@@ -211,6 +211,11 @@ function _snapshotAutosaveActual() {
         };
     }).filter((item) => !Number.isNaN(item.id_producto));
 
+    // Productos agregados manualmente (sin movimiento esta operativa): /pendientes
+    // nunca los devuelve, asi que se guarda el objeto completo para poder recrear
+    // su tarjeta al hidratar el borrador, antes de aplicarle cerradas/pesos.
+    const productosManuales = productosInventario.filter((p) => p._agregadoManual);
+
     return {
         schema_version: AUTOSAVE_SCHEMA_VERSION,
         id_operacion: currentOperacionId,
@@ -219,6 +224,7 @@ function _snapshotAutosaveActual() {
         observaciones: inputObservaciones ? inputObservaciones.value : '',
         saved_at: new Date().toISOString(),
         items,
+        productos_manuales: productosManuales,
     };
 }
 
@@ -319,6 +325,14 @@ function hydrateAutosaveDraft() {
         if (snapshot.id_inventario_pos && !currentIdInventarioPOS) {
             currentIdInventarioPOS = snapshot.id_inventario_pos;
         }
+
+        // Recrea primero las tarjetas de productos agregados manualmente (no vienen
+        // en /pendientes), para que el forEach de abajo encuentre su card al aplicar
+        // cerradas/pesos.
+        (snapshot.productos_manuales || []).forEach((producto) => {
+            if (productosInventario.some((p) => p.id_producto === producto.id_producto)) return;
+            agregarProductoManual(producto, { enfocar: false });
+        });
 
         (snapshot.items || []).forEach((item) => {
             const card = document.querySelector(`#lista-productos .product-card[data-id="${item.id_producto}"]`);
@@ -2855,11 +2869,13 @@ const btnTopbarSearchToggle    = document.getElementById('btn-topbar-search-togg
 const topbarSearchToggleIcon   = document.getElementById('topbar-search-toggle-icon');
 const navbarLogoFull           = document.getElementById('navbar-logo-full');
 const navbarLogoIsotipo        = document.getElementById('navbar-logo-isotipo');
+const topbarSearchCatalogoPanel = document.getElementById('topbar-search-catalogo-resultados');
+const topbarSearchCatalogoLista = document.getElementById('topbar-search-catalogo-lista');
 
 const BUSQUEDA_POR_TAB = {
-    inventario: { placeholder: 'Buscar por ID, código o nombre...', handler: filtrarInventarioPaloteo1 },
-    logs:       { placeholder: 'Buscar producto para saltar a su tarjeta...', handler: buscarYNavegarCaptura },
-    stock:      { placeholder: 'Buscar por ID, código o nombre...', handler: filtrarStockPaloteo3 },
+    inventario: { placeholder: 'Buscar por ID, código o nombre...', handler: filtrarInventarioPaloteo1, permiteAgregarCatalogo: true },
+    logs:       { placeholder: 'Buscar producto para saltar a su tarjeta...', handler: buscarYNavegarCaptura, permiteAgregarCatalogo: true },
+    stock:      { placeholder: 'Buscar por ID, código o nombre...', handler: filtrarStockPaloteo3, permiteAgregarCatalogo: true },
     pesaje:     { placeholder: 'Buscar por nombre de producto...', handler: filtrarPesaje },
     conversor:  { placeholder: 'Buscar producto por código o nombre...', handler: filtrarConversor },
 };
@@ -2878,6 +2894,7 @@ function cerrarBusquedaTopbar() {
 
     if (topbarSearchInput) topbarSearchInput.value = '';
     if (topbarSearchContador) topbarSearchContador.classList.add('hidden');
+    ocultarResultadosCatalogo();
     const tabActivo = document.querySelector('[data-tab].active-tab')?.dataset.tab;
     const config = BUSQUEDA_POR_TAB[tabActivo];
     if (config) config.handler('');
@@ -2921,8 +2938,294 @@ if (topbarSearchInput) {
     topbarSearchInput.addEventListener('input', () => {
         const tabActivo = document.querySelector('[data-tab].active-tab')?.dataset.tab;
         const config = BUSQUEDA_POR_TAB[tabActivo];
-        if (config) config.handler(topbarSearchInput.value);
+        if (!config) return;
+
+        config.handler(topbarSearchInput.value);
+
+        if (config.permiteAgregarCatalogo) {
+            manejarBusquedaCatalogo(topbarSearchInput.value, tabActivo);
+        }
     });
+}
+
+// ==========================================
+// AGREGAR PRODUCTO SIN MOVIMIENTO (busqueda en catalogo completo)
+// Cuando la busqueda local (productos con movimiento) no encuentra nada,
+// se ofrece buscar en el catalogo completo de la barra y agregar el
+// resultado al conteo activo. Ver documentos del plan "agregar productos
+// sin movimiento" para el contexto de negocio.
+// ==========================================
+let catalogoBusquedaDebounceTimer = null;
+const CATALOGO_BUSQUEDA_DEBOUNCE_MS = 300;
+const CATALOGO_BUSQUEDA_MIN_CHARS = 2;
+
+/** Cuenta cuantas tarjetas/filas locales quedaron visibles tras filtrar, por tab. */
+function contarCoincidenciasLocales(tabName) {
+    if (tabName === 'inventario') {
+        return document.querySelectorAll('#lista-productos .product-card[data-scope="inv"]:not(.hidden)').length;
+    }
+    if (tabName === 'stock') {
+        return document.querySelectorAll('#stock-list .stock-row:not(.hidden)').length;
+    }
+    if (tabName === 'logs') {
+        return Array.isArray(capturaEstado.matches) ? capturaEstado.matches.length : capturaEstado.idsOrdenados.length;
+    }
+    return Infinity; // tabs sin soporte de catalogo: nunca dispara la busqueda
+}
+
+function ocultarResultadosCatalogo() {
+    if (catalogoBusquedaDebounceTimer) {
+        clearTimeout(catalogoBusquedaDebounceTimer);
+        catalogoBusquedaDebounceTimer = null;
+    }
+    if (topbarSearchCatalogoPanel) topbarSearchCatalogoPanel.classList.add('hidden');
+    if (topbarSearchCatalogoLista) topbarSearchCatalogoLista.innerHTML = '';
+}
+
+/** Decide si hay que ir a buscar en el catalogo completo (debounced) segun los resultados locales. */
+function manejarBusquedaCatalogo(query, tabName) {
+    if (catalogoBusquedaDebounceTimer) clearTimeout(catalogoBusquedaDebounceTimer);
+
+    const q = query.trim();
+    if (q.length < CATALOGO_BUSQUEDA_MIN_CHARS) {
+        ocultarResultadosCatalogo();
+        return;
+    }
+
+    if (contarCoincidenciasLocales(tabName) > 0) {
+        ocultarResultadosCatalogo();
+        return;
+    }
+
+    catalogoBusquedaDebounceTimer = setTimeout(() => buscarEnCatalogoYMostrar(q), CATALOGO_BUSQUEDA_DEBOUNCE_MS);
+}
+
+async function buscarEnCatalogoYMostrar(query) {
+    try {
+        const response = await fetch(`${API_BASE}/inventario/catalogo/buscar?busqueda=${encodeURIComponent(query)}`, {
+            headers: {
+                'Authorization': `Bearer ${currentToken}`,
+                'X-Barra-Id': String(idBarraActual),
+            }
+        });
+
+        if (response.status === 401) return btnLogout.click();
+        if (!response.ok) { ocultarResultadosCatalogo(); return; }
+
+        const resultados = await response.json();
+        const idsYaCargados = new Set(productosInventario.map(p => p.id_producto));
+        const nuevos = resultados.filter(p => !idsYaCargados.has(p.id_producto));
+
+        renderizarResultadosCatalogo(nuevos);
+    } catch (error) {
+        console.error('Error buscando en catalogo completo', error);
+        ocultarResultadosCatalogo();
+    }
+}
+
+function renderizarResultadosCatalogo(productos) {
+    if (!topbarSearchCatalogoPanel || !topbarSearchCatalogoLista) return;
+
+    if (!productos.length) {
+        ocultarResultadosCatalogo();
+        return;
+    }
+
+    topbarSearchCatalogoLista.innerHTML = '';
+    productos.forEach(p => {
+        const fila = document.createElement('button');
+        fila.type = 'button';
+        fila.className = 'w-full flex items-center justify-between gap-sm px-sm py-sm text-left hover:bg-surface-container-highest transition-colors border-b border-outline-variant last:border-b-0';
+        fila.innerHTML = `
+            <span class="min-w-0 truncate text-sm text-on-surface">
+                <span class="text-on-surface-variant text-xs">${escapeHtml(String(p.codigo || ''))}</span>
+                ${escapeHtml(p.nombre || '')}
+            </span>
+            <span class="shrink-0 text-[11px] font-label-mono uppercase tracking-widest text-primary-fixed flex items-center gap-1">
+                <span class="material-symbols-outlined" style="font-size:1rem;">add</span> Agregar
+            </span>
+        `;
+        fila.addEventListener('click', () => agregarProductoManual(p));
+        topbarSearchCatalogoLista.appendChild(fila);
+    });
+
+    topbarSearchCatalogoPanel.classList.remove('hidden');
+}
+
+/**
+ * Crea el boton "x" para quitar un producto agregado manualmente. Oculto en
+ * modo solo-lectura. variante='absoluta' lo posiciona en la esquina superior
+ * derecha de una card de bloque (PALOTEO 1/2); variante='inline' lo deja como
+ * un boton mas dentro de una fila flex densa (PALOTEO 3).
+ */
+function crearBotonQuitarManual(producto, variante = 'inline') {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    // Mismo estilo que los botones de cerrar de GUIA OPERATIVA/BOLETIN DUMMY
+    // (#btn-close-dummy-content) y del icono de busqueda/menu del navbar.
+    btn.className = variante === 'absoluta'
+        ? 'btn-quitar-manual topbar-icon-btn absolute top-xs right-xs'
+        : 'btn-quitar-manual topbar-icon-btn ml-auto';
+    btn.setAttribute('aria-label', 'Quitar producto (agregado sin movimiento)');
+    btn.title = 'Quitar producto (agregado sin movimiento)';
+    btn.innerHTML = '<span class="material-symbols-outlined text-base">close</span>';
+    if (!operativaPermitePaloteo) btn.classList.add('hidden');
+    btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        quitarProductoManual(producto);
+    });
+    return btn;
+}
+
+/**
+ * Agrega un producto que no tuvo movimiento esta operativa al conteo activo,
+ * replicando exactamente lo que hace cargarProductos() para uno cargado por
+ * movimiento: misma forma de dato, mismas tarjetas/filas, mismo pipeline de
+ * envio (construirPayloadInventario lee siempre #lista-productos). No-op si
+ * el producto ya esta cargado.
+ */
+function agregarProductoManual(producto, { enfocar = true } = {}) {
+    if (productosInventario.some(p => p.id_producto === producto.id_producto)) return;
+
+    producto._agregadoManual = true;
+    productosInventario.push(producto);
+
+    const card = crearTarjetaProductoElement(producto, 'inv');
+    card.classList.add('card-agregado-manual', 'relative');
+    card.appendChild(crearBotonQuitarManual(producto, 'absoluta'));
+    listaProductos.appendChild(card);
+    recalcularTarjeta(card);
+
+    const stockListEl = document.getElementById('stock-list');
+    if (stockListEl) {
+        const emptyState = document.getElementById('stock-empty-state');
+        if (emptyState) emptyState.classList.add('hidden');
+        const fila = crearFilaPaloteo3(producto);
+        fila.classList.add('card-agregado-manual');
+        const lineaCodigoNombre = fila.querySelector('.col-span-full');
+        if (lineaCodigoNombre) lineaCodigoNombre.appendChild(crearBotonQuitarManual(producto, 'inline'));
+        stockListEl.appendChild(fila);
+    }
+
+    if (capturaEstado.inicializado) {
+        capturaEstado.idsOrdenados.push(producto.id_producto);
+    }
+
+    actualizarResumenProductos(productosInventario);
+
+    if (!enfocar) return; // hidratacion de autosave: recrear en silencio, sin tocar el buscador ni la vista
+
+    ocultarResultadosCatalogo();
+    if (topbarSearchInput) topbarSearchInput.value = '';
+    const tabActivo = document.querySelector('[data-tab].active-tab')?.dataset.tab;
+    const config = BUSQUEDA_POR_TAB[tabActivo];
+    if (config) config.handler('');
+
+    enfocarProductoRecienAgregado(producto, tabActivo, card);
+    scheduleAutosave();
+}
+
+/** Lleva la atencion del usuario a la tarjeta/fila recien agregada, en el tab activo. */
+function enfocarProductoRecienAgregado(producto, tabActivo, cardInventario) {
+    if (tabActivo === 'inventario') {
+        cardInventario.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const input = cardInventario.querySelector('.input-cerradas');
+        if (input) requestAnimationFrame(() => focarYSeleccionar(input));
+        return;
+    }
+
+    if (tabActivo === 'stock') {
+        const fila = document.querySelector(`#stock-list .stock-row[data-id="${producto.id_producto}"]`);
+        if (fila) {
+            fila.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const input = fila.querySelector('.input-cerradas');
+            if (input) requestAnimationFrame(() => focarYSeleccionar(input));
+        }
+        return;
+    }
+
+    if (tabActivo === 'logs' && capturaEstado.inicializado) {
+        capturaEstado.matches = null;
+        capturaEstado.matchIndex = 0;
+        capturaEstado.indice = capturaEstado.idsOrdenados.length - 1;
+        renderTarjetaCaptura(capturaEstado.indice);
+    }
+}
+
+/**
+ * Quita del conteo activo un producto agregado manualmente (deshace un alta
+ * por error). Si el paloteo ya se guardo (currentIdInventarioPOS existe),
+ * primero da de baja la fila en bar_detalle_fisico via DELETE; si la
+ * confirmacion del backend falla, no toca nada local para no desincronizar
+ * la UI de la BD.
+ */
+async function quitarProductoManual(producto) {
+    const confirmado = await mostrarDialogoConfirmacion({
+        titulo: 'Quitar producto',
+        mensaje: `¿Quitar "${producto.nombre}" del conteo? Fue agregado manualmente (sin movimiento esta operativa).`,
+    });
+    if (!confirmado) return;
+
+    if (currentIdInventarioPOS) {
+        try {
+            const response = await fetch(`${API_BASE}/inventario/paloteo/${currentIdInventarioPOS}/producto/${producto.id_producto}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${currentToken}`,
+                    'X-Barra-Id': String(idBarraActual),
+                }
+            });
+
+            if (response.status === 401) return btnLogout.click();
+
+            if (!response.ok) {
+                const data = await response.json().catch(() => ({}));
+                await mostrarDialogoResultado({
+                    tipo: 'error',
+                    titulo: 'No se pudo quitar',
+                    mensaje: data.detail || 'No se pudo quitar el producto del inventario guardado.',
+                });
+                return;
+            }
+        } catch (error) {
+            console.error('Error quitando producto manual', error);
+            await mostrarDialogoResultado({
+                tipo: 'error',
+                titulo: 'Error de conexión',
+                mensaje: 'No se pudo conectar con el servidor para quitar el producto.',
+            });
+            return;
+        }
+    }
+
+    const idx = productosInventario.findIndex(p => p.id_producto === producto.id_producto);
+    if (idx !== -1) productosInventario.splice(idx, 1);
+
+    document.querySelector(`#lista-productos .product-card[data-id="${producto.id_producto}"]`)?.remove();
+    document.querySelector(`#stock-list .stock-row[data-id="${producto.id_producto}"]`)?.remove();
+
+    const stockListEl = document.getElementById('stock-list');
+    if (stockListEl && stockListEl.querySelectorAll('.stock-row').length === 0) {
+        const emptyState = document.getElementById('stock-empty-state');
+        if (emptyState) emptyState.classList.remove('hidden');
+    }
+
+    const posCaptura = capturaEstado.idsOrdenados.indexOf(producto.id_producto);
+    if (posCaptura !== -1) {
+        capturaEstado.idsOrdenados.splice(posCaptura, 1);
+        capturaEstado.matches = null;
+        capturaEstado.matchIndex = 0;
+        if (capturaEstado.indice >= capturaEstado.idsOrdenados.length) {
+            capturaEstado.indice = Math.max(0, capturaEstado.idsOrdenados.length - 1);
+        }
+        const tabActivo = document.querySelector('[data-tab].active-tab')?.dataset.tab;
+        if (tabActivo === 'logs') {
+            renderTarjetaCaptura(capturaEstado.indice);
+        }
+    }
+
+    actualizarResumenProductos(productosInventario);
+    scheduleAutosave();
 }
 
 /**

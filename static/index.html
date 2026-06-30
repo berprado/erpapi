@@ -511,6 +511,18 @@
             border: 1px solid rgba(239, 68, 68, 0.3);
         }
         
+        .badge-info {
+            color: var(--semantic-info);
+            background: rgba(45, 212, 255, 0.1);
+            border: 1px solid rgba(45, 212, 255, 0.3);
+        }
+
+        /* Card/fila agregada manualmente (producto sin movimiento esta operativa) */
+        .card-agregado-manual {
+            border-color: var(--semantic-info) !important;
+            box-shadow: 0 0 0 1px var(--semantic-info), 0 0 8px rgba(45, 212, 255, 0.12);
+        }
+
         .badge-danger {
             color: var(--semantic-danger);
             background: rgba(239, 68, 68, 0.1);
@@ -722,6 +734,13 @@
                         <span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-outline-variant" style="font-size:1rem;">search</span>
                         <input type="text" id="topbar-search-input" placeholder="Buscar..." class="w-full bg-surface border border-outline-variant rounded-md pl-10 pr-[5.5rem] py-xs text-sm text-on-surface placeholder-outline/40 focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-body-base">
                         <span id="topbar-search-contador" class="hidden absolute right-sm top-1/2 -translate-y-1/2 text-[10px] font-label-mono text-on-surface-variant whitespace-nowrap"></span>
+                    </div>
+                    <!-- Resultados del catalogo completo: aparece solo cuando la busqueda local
+                         (productos con movimiento) no encuentra nada. Permite agregar al conteo
+                         un producto que no tuvo movimiento esta operativa. Ver app.js. -->
+                    <div id="topbar-search-catalogo-resultados" class="hidden absolute left-0 right-0 top-full mt-1 bg-surface-container border border-outline-variant rounded-md shadow-lg z-30 max-h-64 overflow-y-auto">
+                        <div class="px-sm py-xs text-[10px] font-label-mono uppercase tracking-widest text-on-surface-variant border-b border-outline-variant">Sin movimiento esta operativa — agregar al conteo</div>
+                        <div id="topbar-search-catalogo-lista"></div>
                     </div>
                 </div>
             </div>
@@ -1249,7 +1268,7 @@
         </div>
     </div>
 
-    <script src="/assets/app.js?v=10.36"></script>
+    <script src="/assets/app.js?v=10.38"></script>
 
     <script>
         (function () {
@@ -1294,7 +1313,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/assets/sw.js?v=10.36')
+                navigator.serviceWorker.register('/assets/sw.js?v=10.38')
                     .then(reg => console.log('[PWA] Service Worker registrado:', reg.scope))
                     .catch(err => console.error('[PWA] Error al registrar SW:', err));
             });

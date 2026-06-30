@@ -1,7 +1,7 @@
 # 📋 Documentación: Proceso de Almacenamiento de Paloteo
 
-**Versión:** 1.1  
-**Fecha:** 11 de junio de 2026  
+**Versión:** 1.2  
+**Fecha:** 30 de junio de 2026  
 **Proyecto:** BackStage | Live Dashboard - Sistema de Inventario POS  
 **Rama:** experiment/glitch-no-glow
 
@@ -58,6 +58,10 @@ El propósito es mantener control riguroso del inventario y detectar discrepanci
 │    └─ Obtiene lista de productos con movimiento en la jornada   │
 │    └─ Carga perfiles de pesaje desde app_producto_pesaje_config_api │
 │    └─ Retorna stock ideal (sistema) para comparación            │
+│    └─ (v10.37+) Usuario puede agregar manualmente un producto   │
+│       sin movimiento via busqueda en catalogo completo, y       │
+│       quitarlo despues si se agrego por error (v10.38+, ver     │
+│       P12/P13 en FAQ)                                           │
 └─────────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────────┐
@@ -1153,6 +1157,25 @@ Si expira:
 
 ---
 
+### P12: ¿Qué pasa si un producto necesita contarse pero no tuvo movimiento esta operativa?
+
+**R:** Desde v10.37, PALOTEO 1/2/3 permiten agregarlo manualmente al conteo activo.
+
+1. Caso típico: un producto se dio de baja por error en un cierre previo (ej. una botella que en realidad sí estaba en barra pero quedó oculta detrás de otras), y como no tuvo movimiento en la operativa siguiente, `GET /api/inventario/pendientes` nunca lo carga.
+2. La misma barra de búsqueda única de PALOTEO 1/2/3 — al no encontrar coincidencias entre los productos ya cargados — ofrece resultados del catálogo completo de la barra vía `GET /api/inventario/catalogo/buscar?busqueda=` (mismo shape que `/pendientes`, sin el filtro de movimiento).
+3. Al agregarlo, se crea su tarjeta/fila en las tres vistas (PALOTEO 1, 2 y 3), distinguible con un borde/realce propio, y se captura igual que cualquier otro producto — entra al mismo pipeline de `POST/PUT /api/inventario/paloteo`, sin tratamiento especial en backend.
+4. Se persiste en el autosave local igual que el resto del borrador (sobrevive un refresh de página).
+
+### P13: ¿Se puede deshacer un producto agregado por error?
+
+**R:** Sí, desde v10.38. Cada producto agregado manualmente (no los que tuvieron movimiento real) muestra un botón "×" que pide confirmación antes de quitarlo.
+
+- Si el paloteo todavía no se había guardado, quitar el producto es una operación puramente local (UI + borrador), no toca el backend.
+- Si el paloteo ya se había guardado, además se llama a `DELETE /api/inventario/paloteo/{id_inventario_pos}/producto/{id_producto}`, que da de baja (`estado='DES'`) solo esa fila de `bar_detalle_fisico`. A diferencia de `PUT` (que es upsert-only y nunca borra una fila omitida del payload), este endpoint sí elimina una fila puntual.
+- No se toca `app_paloteo_registro_crudo`: la captura original que se quitó sigue siendo rastreable como auditoría.
+
+---
+
 ## Resumen de Flujo
 
 ```
@@ -1207,5 +1230,5 @@ Este sistema proporciona:
 ---
 
 **Documentación preparada por:** Backend Architecture Team  
-**Última actualización:** 11 de junio de 2026  
-**Versión:** 1.1
+**Última actualización:** 30 de junio de 2026  
+**Versión:** 1.2

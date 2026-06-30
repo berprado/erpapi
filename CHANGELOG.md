@@ -4,6 +4,23 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.38
+- Permite deshacer un producto agregado por error (sin movimiento esta
+  operativa): boton "x" en su tarjeta/fila, con dialogo de confirmacion. Si
+  el paloteo ya se habia guardado, da de baja la fila correspondiente en
+  `bar_detalle_fisico` via el nuevo endpoint
+  `DELETE /api/inventario/paloteo/{id}/producto/{id}` (no toca el log de
+  auditoria `app_paloteo_registro_crudo`). Oculto en modo solo-lectura.
+
+## 10.37
+- Nueva funcionalidad: permite agregar al conteo activo un producto que no tuvo
+  movimiento esta operativa (ej. una botella mal contada como faltante en un
+  cierre previo). Se busca en la misma barra de busqueda unica de PALOTEO 1/2/3;
+  si no hay coincidencias entre los productos cargados, se ofrece un resultado
+  del catalogo completo (`GET /api/inventario/catalogo/buscar`) para agregarlo
+  con un toque. El producto agregado se persiste en el autosave local y se
+  distingue visualmente con un borde/realce propio en su tarjeta.
+
 ## 10.36
 - Backend: `/api/inventario/ajustes/aplicar` ahora verifica, dentro de la misma
   transaccion y antes del commit, que cada fila de `bar_inventario` actualizada

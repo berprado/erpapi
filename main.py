@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import text, bindparam, func
 from sqlalchemy.exc import IntegrityError
-from fastapi import FastAPI, Depends, HTTPException, status, Request
+from fastapi import FastAPI, Depends, HTTPException, status, Request, Query
 from fastapi.responses import FileResponse, JSONResponse, Response
 import hashlib
 import json
@@ -696,6 +696,64 @@ def corregir_paloteo(
         "productos_omitidos": productos_omitidos,
     }
 
+
+@app.delete("/api/inventario/paloteo/{id_inventario_pos}/producto/{id_producto}", response_model=schemas.EliminarProductoPaloteoResponse)
+def eliminar_producto_paloteo(
+    id_inventario_pos: int,
+    id_producto: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_usuario_actual)
+):
+    """
+    Da de baja (soft-delete) el detalle de un solo producto dentro de un inventario
+    físico ya registrado. Pensado para deshacer un producto agregado manualmente
+    por error (ver /api/inventario/catalogo/buscar): a diferencia de PUT, que es
+    upsert-only y nunca borra filas omitidas del payload, este endpoint sí elimina
+    explícitamente una fila puntual.
+
+    No toca app_paloteo_registro_crudo: es un log de auditoría append-only, la
+    captura original (incluso si luego se quita) debe seguir siendo rastreable.
+    """
+    inventario = db.query(models.InventarioFisicoPOS).filter(
+        models.InventarioFisicoPOS.id == id_inventario_pos,
+        models.InventarioFisicoPOS.estado == 'HAB'
+    ).first()
+    if not inventario:
+        raise HTTPException(status_code=404, detail="Inventario físico no encontrado o inactivo.")
+
+    _validar_operacion_inicio_cierre(db, inventario.id_operacion)
+
+    barra_operativa = _resolver_barra_operativa(request)
+    if inventario.id_barra != barra_operativa:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"La barra operativa configurada ({barra_operativa}) no coincide con la del inventario físico ({inventario.id_barra})."
+        )
+
+    detalle = db.query(models.DetalleFisicoPOS).filter(
+        models.DetalleFisicoPOS.id_inventario_fisico == id_inventario_pos,
+        models.DetalleFisicoPOS.id_producto == id_producto,
+        models.DetalleFisicoPOS.estado == 'HAB'
+    ).first()
+
+    existia = detalle is not None
+    if detalle:
+        fecha_actual = datetime.now(timezone.utc).date()
+        detalle.estado = 'DES'
+        detalle.fecha_mod = fecha_actual
+        inventario.fecha_mod = fecha_actual
+        db.commit()
+
+    return {
+        "status": "success",
+        "id_inventario_pos": id_inventario_pos,
+        "id_producto": id_producto,
+        "existia": existia,
+        "mensaje": "Producto quitado del inventario físico." if existia else "El producto no estaba guardado; no había nada que quitar.",
+    }
+
+
 @app.post("/api/pesaje/perfiles", response_model=schemas.PerfilPesaje)
 def crear_perfil_pesaje(
     payload: schemas.CrearPerfilPesajeRequest,
@@ -962,57 +1020,11 @@ def eliminar_pesaje_config(
 
 # OBTENEMOS LOS PRODUCTOS PARA EL PALOTEO
 
-@app.get("/api/inventario/pendientes", response_model=List[schemas.ProductoPendiente])
-def obtener_productos_pendientes(
-    request: Request,
-    db: Session = Depends(get_db),
-    current_user: models.Usuario = Depends(get_usuario_actual) # <-- CANDADO AQUÍ
-    ):
+def _agrupar_filas_producto_pesaje(rows) -> list[dict]:
+    """Agrupa filas planas (producto x perfil de pesaje) en una lista de productos
+    con su array de perfiles. Compartido por /pendientes y /catalogo/buscar para
+    no duplicar la logica de agrupacion entre ambos endpoints.
     """
-    Devuelve la lista de productos que tuvieron movimiento en la operación activa,
-    junto con su stock ideal y parámetros de pesaje.
-    """
-    id_barra_operativa = _resolver_barra_operativa(request)
-
-    query = text("""
-        SELECT 
-            a.id AS id_producto, a.codigo, a.nombre, a.ind_permite_comandar,
-            i.cantidad_paq AS stock_ideal_unidades, i.cantidad_detalle AS stock_ideal_onzas,
-            i.id_categoria, i.categoria_nombre,
-            p.id AS perfil_id, p.pesable, p.nombre_perfil, p.peso_bruto, p.tara, p.gramos_por_oz, p.tolerancia_oz, p.barcode,
-            a.cantidad_detalle AS onzas_por_botella_llena
-        FROM (
-            SELECT DISTINCT d.id_producto_receta AS id_producto
-            FROM comandas_v9_detallada d
-            INNER JOIN bar_comanda c ON d.id_comanda = c.id
-            WHERE d.id_operacion = (SELECT MAX(id_operacion) FROM bar_comanda)
-            AND c.estado_comanda = 26
-            AND d.id_producto_receta IS NOT NULL
-
-            UNION
-
-            SELECT DISTINCT dsi.id_producto AS id_producto
-            FROM alm_salida_inventario asi
-            INNER JOIN alm_detalle_salida_inv dsi ON dsi.id_salida_inventario = asi.id
-            WHERE asi.id_operacion = (SELECT MAX(id_operacion) FROM bar_comanda)
-            AND asi.estado = 'HAB'
-            AND dsi.estado = 'HAB'
-            AND asi.id_barra = :id_barra
-            AND asi.ind_tipo_movimiento = 83
-            AND asi.ind_tipo_salida = 34
-            AND asi.ind_estado_salida = 21
-        ) mov
-        INNER JOIN alm_producto a ON mov.id_producto = a.id
-        INNER JOIN vista_inventario_barra_con_filtro i ON a.id = i.id_almacen 
-        LEFT JOIN app_producto_pesaje_config_api p ON a.id = p.id_producto_almacen AND p.estado = 'HAB'
-        ORDER BY a.nombre ASC, p.id ASC;
- 
-          """)
-
-    rows = db.execute(query, {"id_barra": id_barra_operativa}).mappings().all()
-
-    # Agrupamos perfiles de pesaje por producto porque ahora puede haber
-    # múltiples modelos de botella para el mismo id_producto.
     productos_dict = {}
     for row in rows:
         prod_id = row["id_producto"]
@@ -1056,6 +1068,104 @@ def obtener_productos_pendientes(
             })
 
     return list(productos_dict.values())
+
+
+@app.get("/api/inventario/pendientes", response_model=List[schemas.ProductoPendiente])
+def obtener_productos_pendientes(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_usuario_actual) # <-- CANDADO AQUÍ
+    ):
+    """
+    Devuelve la lista de productos que tuvieron movimiento en la operación activa,
+    junto con su stock ideal y parámetros de pesaje.
+    """
+    id_barra_operativa = _resolver_barra_operativa(request)
+
+    query = text("""
+        SELECT
+            a.id AS id_producto, a.codigo, a.nombre, a.ind_permite_comandar,
+            i.cantidad_paq AS stock_ideal_unidades, i.cantidad_detalle AS stock_ideal_onzas,
+            i.id_categoria, i.categoria_nombre,
+            p.id AS perfil_id, p.pesable, p.nombre_perfil, p.peso_bruto, p.tara, p.gramos_por_oz, p.tolerancia_oz, p.barcode,
+            a.cantidad_detalle AS onzas_por_botella_llena
+        FROM (
+            SELECT DISTINCT d.id_producto_receta AS id_producto
+            FROM comandas_v9_detallada d
+            INNER JOIN bar_comanda c ON d.id_comanda = c.id
+            WHERE d.id_operacion = (SELECT MAX(id_operacion) FROM bar_comanda)
+            AND c.estado_comanda = 26
+            AND d.id_producto_receta IS NOT NULL
+
+            UNION
+
+            SELECT DISTINCT dsi.id_producto AS id_producto
+            FROM alm_salida_inventario asi
+            INNER JOIN alm_detalle_salida_inv dsi ON dsi.id_salida_inventario = asi.id
+            WHERE asi.id_operacion = (SELECT MAX(id_operacion) FROM bar_comanda)
+            AND asi.estado = 'HAB'
+            AND dsi.estado = 'HAB'
+            AND asi.id_barra = :id_barra
+            AND asi.ind_tipo_movimiento = 83
+            AND asi.ind_tipo_salida = 34
+            AND asi.ind_estado_salida = 21
+        ) mov
+        INNER JOIN alm_producto a ON mov.id_producto = a.id
+        INNER JOIN vista_inventario_barra_con_filtro i ON a.id = i.id_almacen
+        LEFT JOIN app_producto_pesaje_config_api p ON a.id = p.id_producto_almacen AND p.estado = 'HAB'
+        ORDER BY a.nombre ASC, p.id ASC;
+
+          """)
+
+    rows = db.execute(query, {"id_barra": id_barra_operativa}).mappings().all()
+
+    return _agrupar_filas_producto_pesaje(rows)
+
+
+@app.get("/api/inventario/catalogo/buscar", response_model=List[schemas.ProductoPendiente])
+def buscar_productos_catalogo(
+    request: Request,
+    busqueda: str = Query(..., min_length=2, description="Texto a buscar en nombre o código"),
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_usuario_actual)
+    ):
+    """
+    Busca productos en el catálogo completo de la barra operativa, sin filtrar
+    por movimiento en la operación activa. Alimenta el flujo de "agregar producto
+    sin movimiento" en PALOTEO 1/2/3: el usuario encontró físicamente un producto
+    que no tuvo comandas/salidas esta operativa (ej. estaba oculto, o se dio de
+    baja por error en un cierre previo) y necesita poder contarlo igual.
+
+    Misma forma de respuesta que /pendientes (schemas.ProductoPendiente) para que
+    el frontend trate un resultado de búsqueda exactamente igual que uno cargado
+    por movimiento, sin mapeos especiales.
+    """
+    # Resuelve y valida la barra operativa (X-Barra-Id) aunque no se use en el
+    # WHERE: vista_inventario_barra_con_filtro ya viene fijada a la barra activa,
+    # igual que en /pendientes; aqui solo nos interesa el efecto de validacion.
+    _resolver_barra_operativa(request)
+
+    query = text("""
+        SELECT
+            a.id AS id_producto, a.codigo, a.nombre, a.ind_permite_comandar,
+            i.cantidad_paq AS stock_ideal_unidades, i.cantidad_detalle AS stock_ideal_onzas,
+            i.id_categoria, i.categoria_nombre,
+            p.id AS perfil_id, p.pesable, p.nombre_perfil, p.peso_bruto, p.tara, p.gramos_por_oz, p.tolerancia_oz, p.barcode,
+            a.cantidad_detalle AS onzas_por_botella_llena
+        FROM alm_producto a
+        INNER JOIN vista_inventario_barra_con_filtro i ON a.id = i.id_almacen
+        LEFT JOIN app_producto_pesaje_config_api p ON a.id = p.id_producto_almacen AND p.estado = 'HAB'
+        WHERE a.estado = 'HAB'
+          AND (a.nombre LIKE :patron OR a.codigo LIKE :patron)
+        ORDER BY a.nombre ASC, p.id ASC
+        LIMIT 15
+    """)
+
+    rows = db.execute(query, {
+        "patron": f"%{busqueda.strip()}%",
+    }).mappings().all()
+
+    return _agrupar_filas_producto_pesaje(rows)
 
 
 # CATALOGO PARA EL MODULO CONVERSOR (calculadora de peso -> onzas, sin estado de operativa)

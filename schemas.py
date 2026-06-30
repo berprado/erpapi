@@ -144,6 +144,14 @@ class PaloteoOperacionResponse(BaseModel):
     productos_omitidos: List[int]
 
 
+class EliminarProductoPaloteoResponse(BaseModel):
+    status: Literal['success']
+    id_inventario_pos: int
+    id_producto: int
+    existia: bool
+    mensaje: str
+
+
 class FilaDiferenciaPdf(BaseModel):
     idProducto: str
     codigo: str

@@ -38,6 +38,9 @@
   - Requiere antes un setup minimo de pytest + fixtures de BD de test (hoy no existe ningun test en el repo).
   - Una vez exista el setup, ampliar tambien a login correcto/fallido y paloteo valido/con operacion invalida.
 
+- [ ] **Bloquear la busqueda-en-catalogo (agregar producto sin movimiento) en modo solo-lectura**
+  - Motivacion: el flujo de "agregar producto sin movimiento" (v10.37) no verifica `operativaPermitePaloteo` antes de mostrar resultados del catalogo y permitir agregarlos. La card/fila resultante sí queda con sus inputs deshabilitados (igual que el resto en modo solo-lectura), asi que no hay impacto funcional ni de seguridad, pero la busqueda deja agregar una card "muerta" que no se puede llenar. Evaluar ocultar el resultado de catalogo (o el boton "+ Agregar") cuando `!operativaPermitePaloteo`.
+
 ## 🟢 Baja Prioridad / Mejoras Futuras
 
 - [ ] **Separar los endpoints en routers por módulo (FastAPI `APIRouter`)**
