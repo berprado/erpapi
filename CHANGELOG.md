@@ -4,6 +4,14 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.39
+- Unifica tolerancia operativa a 0.5 oz para todos los productos pesables
+  (antes: 0.5 oz para VINOS/MEZCLADORES, 0.25 oz para el resto). Elimina la
+  distincion por categoria en `_obtener_tolerancia_operativa_oz`. Decision
+  respaldada por verificacion en BD: todos los ideales pesables en
+  `bar_inventario` son multiplos de 0.5, por lo que el delta nunca introduce
+  distorsion al cuantizarse a la misma grilla.
+
 ## 10.38
 - Permite deshacer un producto agregado por error (sin movimiento esta
   operativa): boton "x" en su tarjeta/fila, con dialogo de confirmacion. Si

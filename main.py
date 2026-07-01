@@ -68,15 +68,16 @@ def _obtener_pesos_crudos_por_producto(db: Session, id_operacion: int) -> dict[i
     return pesos_por_producto
 
 
-def _obtener_tolerancia_operativa_oz(pesable: int | None, id_categoria: int | None) -> float:
-    """Define la banda muerta operativa por producto pesable según su categoría."""
+def _obtener_tolerancia_operativa_oz(pesable: int | None) -> float:
+    """Banda muerta operativa uniforme: 0.5 oz para todos los productos pesables.
+
+    0.5 oz coincide con el paso mínimo del POS (grilla de redondeo), por lo que
+    cualquier delta que supere la banda ya cae en un múltiplo de 0.5 sin distorsión
+    al cuantizarse. Ver documentos/redondeo_y_tolerancia.md para el análisis completo.
+    """
     if int(pesable or 0) != 1:
         return 0.0
-
-    if int(id_categoria or 0) in {6, 22}:
-        return 0.5
-
-    return 0.25
+    return 0.5
 
 
 def _cuantizar_delta_onzas_operativo(delta_exacto: float, tolerancia_oz: float) -> float:
@@ -840,7 +841,7 @@ def crear_perfil_pesaje(
         peso_bruto=float(payload.peso_bruto),
         tara=float(payload.tara),
         gramos_por_oz=gramos_por_oz,
-        tolerancia_oz=_obtener_tolerancia_operativa_oz(1, None),
+        tolerancia_oz=_obtener_tolerancia_operativa_oz(1),
         barcode=barcode,
     )
 
@@ -1063,7 +1064,7 @@ def _agrupar_filas_producto_pesaje(rows) -> list[dict]:
                 "peso_bruto": float(row["peso_bruto"]),
                 "tara": float(row["tara"]),
                 "gramos_por_oz": float(row["gramos_por_oz"]),
-                "tolerancia_oz": _obtener_tolerancia_operativa_oz(row["pesable"], row["id_categoria"]),
+                "tolerancia_oz": _obtener_tolerancia_operativa_oz(row["pesable"]),
                 "barcode": row["barcode"]
             })
 
@@ -1222,7 +1223,7 @@ def obtener_productos_conversor(
             "peso_bruto": float(row["peso_bruto"]),
             "tara": float(row["tara"]),
             "gramos_por_oz": float(row["gramos_por_oz"]),
-            "tolerancia_oz": _obtener_tolerancia_operativa_oz(row["pesable"], row["id_categoria"]),
+            "tolerancia_oz": _obtener_tolerancia_operativa_oz(row["pesable"]),
             "barcode": row["barcode"]
         })
 
@@ -1282,7 +1283,7 @@ def _calcular_diferencias_paloteo(db: Session, id_barra: int, id_inventario_fisi
 
         pesable = int(fila["pesable"] or 0)
         id_categoria = int(fila["id_categoria"]) if fila["id_categoria"] is not None else None
-        tolerancia_oz = _obtener_tolerancia_operativa_oz(pesable, id_categoria)
+        tolerancia_oz = _obtener_tolerancia_operativa_oz(pesable)
         delta_det_operativo = _cuantizar_delta_onzas_operativo(delta_det_exacto, tolerancia_oz)
 
         deltas.append({
