@@ -1778,9 +1778,9 @@ def exportar_pdf_paloteo3(
     pdf.ln(6)
 
     # — Tabla —
-    col_widths = [12, 20, 86, 18, 34]   # ID | Codigo | Producto | Dif.Paq | Dif.Det POS
-    headers   = ["ID", "CODIGO", "PRODUCTO", "DIF. PAQ.", "DIF. DET."]
-    aligns    = ["R", "L", "L", "R", "R"]
+    col_widths = [10, 14, 90, 16, 20, 20]   # ID(max 4 dig) | COD(max 5 car) | Producto | Dif.Paq | Dif.Real | Dif.Op
+    headers   = ["ID", "COD", "PRODUCTO", "DIF. PAQ.", "DIF REAL", "DIF OP"]
+    aligns    = ["R", "L", "L", "R", "R", "R"]
     row_h = 7
 
     # cabecera de tabla
@@ -1796,8 +1796,10 @@ def exportar_pdf_paloteo3(
     pdf.set_font("Helvetica", "", 8)
     for idx, fila in enumerate(payload.filas):
         texto_unid = ""
+        texto_oz_real = ""
         texto_oz_pos = ""
         color_unid = None
+        color_oz_real = None
         color_oz_pos = None
 
         if fila.difUnidades is not None:
@@ -1805,6 +1807,10 @@ def exportar_pdf_paloteo3(
             color_unid = _color_diferencia(fila.difUnidades)
 
         dif_oz_exacta = fila.difOnzasExactas if fila.difOnzasExactas is not None else fila.difOnzas
+        if dif_oz_exacta is not None:
+            texto_oz_real = f"{'+' if dif_oz_exacta > 0 else ''}{dif_oz_exacta:.2f} oz"
+            color_oz_real = _color_diferencia(dif_oz_exacta)
+
         dif_oz_pos = fila.difOnzasPos
         if dif_oz_pos is None and dif_oz_exacta is not None:
             # Unificamos granularidad con POS: incrementos de 0.5 oz.
@@ -1817,10 +1823,10 @@ def exportar_pdf_paloteo3(
         fondo = (245, 245, 245) if idx % 2 == 1 else (255, 255, 255)
         pdf.set_fill_color(*fondo)
 
-        valores = [fila.idProducto, fila.codigo, fila.nombre, texto_unid, texto_oz_pos]
-        colores = [None, None, None, color_unid, color_oz_pos]
+        valores = [fila.idProducto, fila.codigo, fila.nombre, texto_unid, texto_oz_real, texto_oz_pos]
+        colores = [None, None, None, color_unid, color_oz_real, color_oz_pos]
         # Jerarquía visual: ID y CODIGO con menor peso visual que PRODUCTO
-        jerarquias = ["muted", "muted", "primary", "valor", "valor"]
+        jerarquias = ["muted", "muted", "primary", "valor", "valor", "valor"]
 
         for w, val, align, color, jerarquia in zip(col_widths, valores, aligns, colores, jerarquias):
             if color:

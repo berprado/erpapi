@@ -4,6 +4,20 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.41
+- Grid on-screen de AJUSTES: alinea las columnas `DIF. PAQ.` y `DIF. DET.`
+  (cabecera y valores) a la derecha, para que se lean como numeros en vez de
+  texto. El grid on-screen sigue mostrando solo los datos que van al POS (sin
+  la diferencia real sin redondear, que quedo reservada al PDF en v10.40).
+
+## 10.40
+- PDF de "Reporte de Diferencias" (AJUSTES): repone la columna con la
+  diferencia real sin redondear (`DIF REAL`), retirada en v10.29, entre
+  `DIF. PAQ.` y la columna renombrada `DIF DET` -> `DIF OP` (delta operativo,
+  redondeado a 0.5 oz). Cabecera `CODIGO` -> `COD` y columnas `ID`/`COD`
+  angostadas (max. 4 digitos / 5 caracteres) para dar espacio a la nueva
+  columna sin agrandar el ancho total de la tabla.
+
 ## 10.39
 - Unifica tolerancia operativa a 0.5 oz para todos los productos pesables
   (antes: 0.5 oz para VINOS/MEZCLADORES, 0.25 oz para el resto). Elimina la

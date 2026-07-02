@@ -2231,8 +2231,8 @@ function renderizarReportePaloteo3() {
             <span class="text-data-tabular text-on-surface-variant/80 text-left text-[10px] font-normal truncate" title="${escapeHtml(String(fila.idProducto))}">${escapeHtml(String(fila.idProducto))}</span>
             <span class="text-data-tabular text-on-surface-variant text-left text-[10px] font-normal truncate" title="${escapeHtml(codigoUpper)}">${escapeHtml(codigoUpper)}</span>
             <span class="text-[12px] sm:text-[13px] font-semibold text-on-surface truncate uppercase" title="${escapeHtml(nombreUpper)}">${escapeHtml(nombreUpper)}</span>
-            <span class="text-left text-[11px] font-semibold" style="color: ${colorUnid}">${textoUnid}</span>
-            <span class="text-left text-[11px] font-semibold" style="color: ${colorOz}">${textoOz}</span>
+            <span class="text-right text-[11px] font-semibold" style="color: ${colorUnid}">${textoUnid}</span>
+            <span class="text-right text-[11px] font-semibold" style="color: ${colorOz}">${textoOz}</span>
         `;
         reporteList.appendChild(row);
     });
