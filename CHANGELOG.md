@@ -4,6 +4,17 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.43
+- Corrige PDF de AJUSTES (Paloteo 3): el reporte de la pestaña `SALIDA (-)`
+  podia mostrar columnas `DIF REAL`/`DIF OP` en onzas que en realidad
+  pertenecian al sentido contrario (ingreso), porque `aplicarEstadoReporte`
+  anulaba `difUnidades`/`difOnzas` segun el signo al filtrar por pestaña pero
+  no anulaba `difOnzasExactas`, y `exportarReportePaloteo3Pdf` preferia ese
+  valor sin anular al armar el PDF. Ahora `difOnzasExactas` se anula en el
+  mismo filtro, asi cada PDF (`INGRESO (+)` / `SALIDA (-)`) muestra unicamente
+  los valores de onzas que corresponden a su propio sentido, igual que ya
+  ocurria con `DIF. PAQ.`.
+
 ## 10.42
 - Corrige AJUSTES (Paloteo 3): la banda de tolerancia se aplicaba sobre el
   peso crudo sin redondear en vez del total ya redondeado a grilla POS

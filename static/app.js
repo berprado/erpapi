@@ -2116,10 +2116,14 @@ function aplicarEstadoReporte(filasBase) {
         if (reporteEstado.filtro === 'ingreso') {
             clon.difUnidades = clon.difUnidades > 0 ? clon.difUnidades : null;
             clon.difOnzas = clon.difOnzas > 0 ? clon.difOnzas : null;
+            // difOnzasExactas debe seguir a difOnzas: si la ounces operativa no
+            // clasifica como ingreso, la cruda tampoco puede filtrarse al PDF.
+            clon.difOnzasExactas = clon.difOnzas != null ? clon.difOnzasExactas : null;
         }
         if (reporteEstado.filtro === 'salida') {
             clon.difUnidades = clon.difUnidades < 0 ? clon.difUnidades : null;
             clon.difOnzas = clon.difOnzas < 0 ? clon.difOnzas : null;
+            clon.difOnzasExactas = clon.difOnzas != null ? clon.difOnzasExactas : null;
         }
         return clon;
     });
