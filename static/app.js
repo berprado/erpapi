@@ -2038,11 +2038,21 @@ function obtenerFilasReportePaloteo3() {
         // cada peso y suma correctamente todas las botellas pesadas. Recalcularlo
         // aquí de forma independiente (perfiles[0] + un solo input) producía un
         // delta distinto al mostrado en la franja DELTA de Paloteo 1/2.
+        // difOnzas parte del total YA REDONDEADO a grilla POS (igual que backend real_det),
+        // para que la tolerancia se aplique sobre la misma base que /aplicar. difOnzasExactas
+        // es el crudo sin redondear, solo para auditoría/columna "DIF REAL" del PDF.
         let difOnzas = null;
+        let difOnzasExactas = null;
         const cardInventario = document.querySelector(`#lista-productos .product-card[data-id="${idProducto}"]`);
-        if (cardInventario && cardInventario.dataset.pesable === '1' && cardInventario.dataset.difDetExacta !== undefined) {
-            const valor = parseFloat(cardInventario.dataset.difDetExacta);
-            difOnzas = Number.isNaN(valor) ? null : valor;
+        if (cardInventario && cardInventario.dataset.pesable === '1') {
+            if (cardInventario.dataset.difDetOperativoBase !== undefined) {
+                const valorOperativo = parseFloat(cardInventario.dataset.difDetOperativoBase);
+                difOnzas = Number.isNaN(valorOperativo) ? null : valorOperativo;
+            }
+            if (cardInventario.dataset.difDetExacta !== undefined) {
+                const valorExacto = parseFloat(cardInventario.dataset.difDetExacta);
+                difOnzasExactas = Number.isNaN(valorExacto) ? null : valorExacto;
+            }
         }
 
         filas.push({
@@ -2052,6 +2062,7 @@ function obtenerFilasReportePaloteo3() {
             toleranciaOz: parseFloat(row.dataset.tolerancia) || 0,
             difUnidades: unidadesReales - idealUnidades,
             difOnzas,
+            difOnzasExactas,
         });
     });
 
@@ -2084,8 +2095,9 @@ function aplicarEstadoReporte(filasBase) {
     const filasNormalizadas = filasBase.map((fila) => {
         const clon = { ...fila };
 
-        // Conservamos exacta para auditoria/exportacion y mostramos en UI la operativa con tolerancia.
-        clon.difOnzasExactas = clon.difOnzas;
+        // difOnzasExactas ya viene crudo desde obtenerFilasReportePaloteo3 (auditoria/exportacion).
+        // difOnzas ya viene en base al total redondeado a grilla POS; acá solo se le aplica
+        // la banda de tolerancia para decidir el ajuste operativo real.
         clon.difOnzas = cuantizarDeltaOnzas(clon.difOnzas, clon.toleranciaOz || 0);
 
         return clon;
@@ -4016,13 +4028,19 @@ function recalcularTarjeta(card) {
 
         const detBarraOperativo = redondearOnzasOperativas(detBarra) ?? 0;
         const difDetExacta = detBarra - detSist;
+        // Base para tolerancia/ajuste: igual que el backend, que compara el YA REDONDEADO
+        // bar_detalle_fisico.cantidad_detalle contra el ideal (no el peso crudo). Usar
+        // difDetExacta acá desalinea la banda de tolerancia con lo que aplica /aplicar
+        // (ver documentos/redondeo_y_tolerancia.md).
+        const difDetOperativoBase = detBarraOperativo - detSist;
 
         // Fuente canónica para REPORTE: ya respeta el perfil de botella
         // seleccionado por input y suma todas las botellas pesadas.
         card.dataset.difDetExacta = String(difDetExacta);
+        card.dataset.difDetOperativoBase = String(difDetOperativoBase);
 
         if (spanDet) spanDet.textContent = detBarraOperativo.toFixed(2);
-        if (difDetSpan) difDetSpan.innerHTML = formatearDiferencia(difDetExacta, true, tolerancia);
+        if (difDetSpan) difDetSpan.innerHTML = formatearDiferencia(difDetOperativoBase, true, tolerancia);
     }
 }
 

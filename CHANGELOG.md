@@ -4,6 +4,16 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.42
+- Corrige AJUSTES (Paloteo 3): la banda de tolerancia se aplicaba sobre el
+  peso crudo sin redondear en vez del total ya redondeado a grilla POS
+  (`bar_detalle_fisico.cantidad_detalle`), lo que podia mostrar `DIF OP: 0`
+  en pantalla/PDF para un producto que el backend si iba a ajustar al
+  aplicar (detectado en prueba end-to-end: CAMPARI 750ML con delta crudo
+  +0.39 oz vs delta operativo real +0.5 oz). Afectaba el chip `DIF DET` de
+  Paloteo 1/2, el grid de AJUSTES y la columna `DIF OP` del PDF; el boton
+  "Aplicar Ajustes" (que ya usaba el preview del backend) no estaba afectado.
+
 ## 10.41
 - Grid on-screen de AJUSTES: alinea las columnas `DIF. PAQ.` y `DIF. DET.`
   (cabecera y valores) a la derecha, para que se lean como numeros en vez de
