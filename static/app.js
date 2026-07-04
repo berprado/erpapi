@@ -2043,8 +2043,17 @@ function obtenerFilasReportePaloteo3() {
         // es el crudo sin redondear, solo para auditoría/columna "DIF REAL" del PDF.
         let difOnzas = null;
         let difOnzasExactas = null;
+        // DET POS/DET BAR (columnas de contexto del PDF): mismo origen que las franjas
+        // SISTEMA (IDEAL) / BARRA (REAL) de las tarjetas de Paloteo 1/2. detBar se deriva
+        // de detPos + difOnzas (ya redondeado a grilla POS) en vez de recalcular el peso,
+        // por la misma razon que difOnzas: es la unica fuente que ya respeta el perfil de
+        // botella seleccionado por input y suma todas las botellas pesadas.
+        let detPos = null;
+        let detBar = null;
         const cardInventario = document.querySelector(`#lista-productos .product-card[data-id="${idProducto}"]`);
         if (cardInventario && cardInventario.dataset.pesable === '1') {
+            const valorDetSist = parseFloat(cardInventario.dataset.detsist);
+            detPos = Number.isNaN(valorDetSist) ? null : valorDetSist;
             if (cardInventario.dataset.difDetOperativoBase !== undefined) {
                 const valorOperativo = parseFloat(cardInventario.dataset.difDetOperativoBase);
                 difOnzas = Number.isNaN(valorOperativo) ? null : valorOperativo;
@@ -2053,6 +2062,9 @@ function obtenerFilasReportePaloteo3() {
                 const valorExacto = parseFloat(cardInventario.dataset.difDetExacta);
                 difOnzasExactas = Number.isNaN(valorExacto) ? null : valorExacto;
             }
+            if (detPos !== null && difOnzas !== null) {
+                detBar = detPos + difOnzas;
+            }
         }
 
         filas.push({
@@ -2060,6 +2072,10 @@ function obtenerFilasReportePaloteo3() {
             codigo,
             nombre,
             toleranciaOz: parseFloat(row.dataset.tolerancia) || 0,
+            paqPos: idealUnidades,
+            paqBar: unidadesReales,
+            detPos,
+            detBar,
             difUnidades: unidadesReales - idealUnidades,
             difOnzas,
             difOnzasExactas,
@@ -2291,6 +2307,10 @@ async function exportarReportePaloteo3Pdf() {
                 idProducto: f.idProducto,
                 codigo: f.codigo,
                 nombre: f.nombre,
+                paqPos: f.paqPos,
+                paqBar: f.paqBar,
+                detPos: f.detPos,
+                detBar: f.detBar,
                 difUnidades: f.difUnidades,
                 difOnzas: f.difOnzas,
             })),

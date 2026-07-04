@@ -4,6 +4,22 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.44
+- Rediseña el PDF de AJUSTES (Paloteo 3) para consistencia visual y mas
+  contexto por producto:
+  - Tipografia: se embebe Space Grotesk (Regular/Bold, `static/fonts/`,
+    misma fuente que `--font-family` en `cellar-sync-tokens.css`) en vez de
+    la Helvetica por defecto de fpdf2, que rompia la identidad visual de la
+    PWA (notorio en las columnas `ID`/`COD`).
+  - Columnas nuevas `PAQ POS` / `PAQ BAR` / `DET POS` / `DET BAR` (cantidad
+    de paquetes y onzas segun el POS vs. lo contado en barra), tomadas de la
+    misma fuente que las franjas SISTEMA (IDEAL) / BARRA (REAL) de las
+    tarjetas de Paloteo 1/2 (`card.dataset.paqsist/detsist` + el real
+    capturado). Se agregan a los 3 tipos de reporte (general/ingreso/salida).
+  - El PDF pasa de A4 vertical a A4 horizontal: con 10 columnas, el ancho
+    util vertical (170mm) dejaba el nombre del producto ilegible; horizontal
+    da 257mm utiles.
+
 ## 10.43
 - Corrige PDF de AJUSTES (Paloteo 3): el reporte de la pestaña `SALIDA (-)`
   podia mostrar columnas `DIF REAL`/`DIF OP` en onzas que en realidad

@@ -1704,6 +1704,12 @@ import os
 from fpdf import FPDF
 
 _LOGO_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "imgs", "backstage_horizontal_banner.png")
+_FONTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "fonts")
+_FONT_REGULAR_PATH = os.path.join(_FONTS_DIR, "SpaceGrotesk-Regular.ttf")
+_FONT_BOLD_PATH = os.path.join(_FONTS_DIR, "SpaceGrotesk-Bold.ttf")
+# Misma tipografia que la PWA (--font-family: "Space Grotesk", static/cellar-sync-tokens.css)
+# para que el PDF exportado sea visualmente consistente con la app.
+_FONT_FAMILY = "SpaceGrotesk"
 
 def _color_diferencia(valor: float):
     if valor > 0:
@@ -1711,6 +1717,18 @@ def _color_diferencia(valor: float):
     if valor < 0:
         return (239, 68, 68)    # rojo  (#EF4444)
     return (72, 232, 152)       # verde (#48E898)
+
+def _fmt_cantidad_paq(valor):
+    return "" if valor is None else str(round(valor))
+
+def _fmt_cantidad_oz(valor):
+    return "" if valor is None else f"{valor:.2f} oz"
+
+def _fmt_diff_paq(valor):
+    return "" if valor is None else f"{'+' if valor > 0 else ''}{round(valor)}"
+
+def _fmt_diff_oz(valor):
+    return "" if valor is None else f"{'+' if valor > 0 else ''}{valor:.2f} oz"
 
 @app.post("/api/paloteo3/exportar-pdf")
 def exportar_pdf_paloteo3(
@@ -1736,24 +1754,30 @@ def exportar_pdf_paloteo3(
     ahora = datetime.now()
     fecha_hora = ahora.strftime("%d/%m/%Y %H:%M:%S")
 
-    pdf = FPDF(orientation="P", unit="mm", format="A4")
+    # Horizontal: 10 columnas (se agregaron PAQ POS/BAR y DET POS/BAR) no entran
+    # con un ancho legible en A4 vertical (170mm utiles).
+    pdf = FPDF(orientation="L", unit="mm", format="A4")
     pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.add_font(_FONT_FAMILY, "", _FONT_REGULAR_PATH)
+    pdf.add_font(_FONT_FAMILY, "B", _FONT_BOLD_PATH)
     pdf.add_page()
     pdf.set_margins(20, 15, 20)
+    ancho_util = pdf.w - 40  # 297mm - 20mm margen izq. - 20mm margen der.
+    x_derecha = pdf.w - 20
 
     # — Encabezado: logo + título —
     if os.path.exists(_LOGO_PATH):
         pdf.image(_LOGO_PATH, x=20, y=12, h=14)
-    pdf.set_font("Helvetica", "B", 10)
+    pdf.set_font(_FONT_FAMILY, "B", 10)
     pdf.set_text_color(51, 51, 51)
     pdf.set_xy(20, 13)
-    pdf.cell(0, 5, titulo_reporte, align="R")
+    pdf.cell(ancho_util, 5, titulo_reporte, align="R")
     pdf.set_xy(20, 18)
-    pdf.cell(0, 5, subtitulo_reporte, align="R")
+    pdf.cell(ancho_util, 5, subtitulo_reporte, align="R")
 
     # línea divisoria
     pdf.set_draw_color(200, 200, 200)
-    pdf.line(20, 28, 190, 28)
+    pdf.line(20, 28, x_derecha, 28)
     pdf.ln(20)
 
     # — Metadata —
@@ -1770,77 +1794,79 @@ def exportar_pdf_paloteo3(
         x = 20 + (label_w + value_w) * (i % 2)
         y = meta_y0 + (i // 2) * row_h
         pdf.set_xy(x, y)
-        pdf.set_font("Helvetica", "B", 9)
+        pdf.set_font(_FONT_FAMILY, "B", 9)
         pdf.cell(label_w, row_h, etiqueta)
-        pdf.set_font("Helvetica", "", 9)
+        pdf.set_font(_FONT_FAMILY, "", 9)
         pdf.cell(value_w, row_h, valor)
     pdf.set_y(meta_y0 + (len(meta) // 2) * row_h + 4)
     pdf.ln(6)
 
     # — Tabla —
-    col_widths = [10, 14, 90, 16, 20, 20]   # ID(max 4 dig) | COD(max 5 car) | Producto | Dif.Paq | Dif.Real | Dif.Op
-    headers   = ["ID", "COD", "PRODUCTO", "DIF. PAQ.", "DIF REAL", "DIF OP"]
-    aligns    = ["R", "L", "L", "R", "R", "R"]
+    # ID | COD | Producto | Paq.Pos | Paq.Bar | Det.Pos | Det.Bar | Dif.Paq | Dif.Real | Dif.Op
+    col_widths = [10, 16, 75, 20, 20, 24, 24, 20, 24, 24]  # suma = 257mm = ancho_util
+    headers    = ["ID", "COD", "PRODUCTO", "PAQ POS", "PAQ BAR", "DET POS", "DET BAR", "DIF. PAQ.", "DIF REAL", "DIF OP"]
+    aligns     = ["R", "L", "L", "R", "R", "R", "R", "R", "R", "R"]
+    # Jerarquía visual: ID/COD con menor peso, PRODUCTO en negrita, cantidades
+    # absolutas (paq/det) en texto neutro, diferencias con color semántico.
+    jerarquias = ["muted", "muted", "primary", "neutral", "neutral", "neutral", "neutral", "diff", "diff", "diff"]
     row_h = 7
 
     # cabecera de tabla
     pdf.set_fill_color(242, 242, 242)
     pdf.set_draw_color(204, 204, 204)
     pdf.set_text_color(17, 17, 17)
-    pdf.set_font("Helvetica", "B", 8)
+    pdf.set_font(_FONT_FAMILY, "B", 7.5)
     for w, h, a in zip(col_widths, headers, aligns):
         pdf.cell(w, row_h, h, border=1, align=a, fill=True)
     pdf.ln()
 
     # filas de datos
-    pdf.set_font("Helvetica", "", 8)
     for idx, fila in enumerate(payload.filas):
-        texto_unid = ""
-        texto_oz_real = ""
-        texto_oz_pos = ""
-        color_unid = None
-        color_oz_real = None
-        color_oz_pos = None
-
-        if fila.difUnidades is not None:
-            texto_unid = f"{'+' if fila.difUnidades > 0 else ''}{round(fila.difUnidades)}"
-            color_unid = _color_diferencia(fila.difUnidades)
-
         dif_oz_exacta = fila.difOnzasExactas if fila.difOnzasExactas is not None else fila.difOnzas
-        if dif_oz_exacta is not None:
-            texto_oz_real = f"{'+' if dif_oz_exacta > 0 else ''}{dif_oz_exacta:.2f} oz"
-            color_oz_real = _color_diferencia(dif_oz_exacta)
-
         dif_oz_pos = fila.difOnzasPos
         if dif_oz_pos is None and dif_oz_exacta is not None:
             # Unificamos granularidad con POS: incrementos de 0.5 oz.
             dif_oz_pos = round(dif_oz_exacta * 2.0) * 0.5
 
-        if dif_oz_pos is not None:
-            texto_oz_pos = f"{'+' if dif_oz_pos > 0 else ''}{dif_oz_pos:.2f} oz"
-            color_oz_pos = _color_diferencia(dif_oz_pos)
+        valores = [
+            fila.idProducto,
+            fila.codigo,
+            fila.nombre,
+            _fmt_cantidad_paq(fila.paqPos),
+            _fmt_cantidad_paq(fila.paqBar),
+            _fmt_cantidad_oz(fila.detPos),
+            _fmt_cantidad_oz(fila.detBar),
+            _fmt_diff_paq(fila.difUnidades),
+            _fmt_diff_oz(dif_oz_exacta),
+            _fmt_diff_oz(dif_oz_pos),
+        ]
+        colores = [
+            None, None, None,
+            None, None, None, None,
+            _color_diferencia(fila.difUnidades) if fila.difUnidades is not None else None,
+            _color_diferencia(dif_oz_exacta) if dif_oz_exacta is not None else None,
+            _color_diferencia(dif_oz_pos) if dif_oz_pos is not None else None,
+        ]
 
         fondo = (245, 245, 245) if idx % 2 == 1 else (255, 255, 255)
         pdf.set_fill_color(*fondo)
 
-        valores = [fila.idProducto, fila.codigo, fila.nombre, texto_unid, texto_oz_real, texto_oz_pos]
-        colores = [None, None, None, color_unid, color_oz_real, color_oz_pos]
-        # Jerarquía visual: ID y CODIGO con menor peso visual que PRODUCTO
-        jerarquias = ["muted", "muted", "primary", "valor", "valor", "valor"]
-
         for w, val, align, color, jerarquia in zip(col_widths, valores, aligns, colores, jerarquias):
             if color:
                 pdf.set_text_color(*color)
-                pdf.set_font("Helvetica", "B", 8)
+                pdf.set_font(_FONT_FAMILY, "B", 7.5)
             elif jerarquia == "muted":
                 pdf.set_text_color(90, 90, 90)
-                pdf.set_font("Helvetica", "", 7)
+                pdf.set_font(_FONT_FAMILY, "", 7)
             elif jerarquia == "primary":
                 pdf.set_text_color(17, 17, 17)
-                pdf.set_font("Helvetica", "B", 8)
+                pdf.set_font(_FONT_FAMILY, "B", 8)
+            elif jerarquia == "neutral":
+                pdf.set_text_color(85, 85, 85)
+                pdf.set_font(_FONT_FAMILY, "", 7.5)
             else:
                 pdf.set_text_color(17, 17, 17)
-                pdf.set_font("Helvetica", "", 8)
+                pdf.set_font(_FONT_FAMILY, "", 7.5)
             pdf.cell(w, row_h, str(val), border=1, align=align, fill=True)
         pdf.ln()
 

@@ -156,6 +156,10 @@ class FilaDiferenciaPdf(BaseModel):
     idProducto: str
     codigo: str
     nombre: str
+    paqPos: Optional[float] = None
+    paqBar: Optional[float] = None
+    detPos: Optional[float] = None
+    detBar: Optional[float] = None
     difUnidades: Optional[float] = None
     difOnzas: Optional[float] = None
     difOnzasExactas: Optional[float] = None
