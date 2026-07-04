@@ -341,8 +341,16 @@ necesidad de recargar la pagina:
   todo lo listado en ese momento (sea el catalogo completo o el resultado de
   una busqueda puntual, ej. una categoria), pidiendo confirmacion antes por
   el volumen que puede implicar.
-- Los productos agregados asi quedan marcados (`card-agregado-manual` en el
-  DOM) y se pueden quitar individualmente (`DELETE
+- Los productos agregados asi quedan marcados visualmente en las tres vistas
+  (PALOTEO 1, PALOTEO 2 y PALOTEO 3): borde/glow distintivo (`card-agregado-manual`)
+  y badge "Sin movimiento" junto al ID/Codigo. La marca se decide en runtime
+  a partir de `producto._agregadoManual` dentro de `crearTarjetaProductoElement`/
+  `crearFilaPaloteo3` (no se aplica una sola vez desde afuera), para que
+  sobreviva a cualquier re-render — `refrescarPaloteo3DesdeInventario()` se
+  dispara en cada tecla escrita en PALOTEO 1, y `renderTarjetaCaptura()`
+  reconstruye la tarjeta de PALOTEO 2 en cada navegacion.
+- Se pueden quitar individualmente desde cualquiera de las tres vistas (boton
+  "x", oculto en modo solo lectura) (`DELETE
   /api/inventario/paloteo/{id}/producto/{id_producto}` si el paloteo ya se
   guardo). Pasan por las mismas validaciones que cualquier otro producto del
   conteo (ver "Validaciones Activas"): si sus campos quedan vacios, se

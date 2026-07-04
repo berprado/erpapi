@@ -1811,9 +1811,10 @@ function crearTarjetaProductoElement(p, scope = 'inv') {
     let html = `
         ${p.categoria_nombre ? `<span class="text-label-mono font-label-mono tracking-widest uppercase text-on-surface-variant mb-xs block">${escapeHtml(p.categoria_nombre)}</span>` : ''}
         <h4 class="text-primary-fixed font-headline-md text-lg mb-xs neon-text-primary">${escapeHtml(p.nombre)}</h4>
-        <div class="text-data-tabular text-on-surface-variant mb-md flex gap-md">
+        <div class="id-codigo-row text-data-tabular text-on-surface-variant mb-md flex items-center flex-wrap gap-md">
             <span>ID: ${p.id_producto}</span>
             <span class="border-l border-outline-variant pl-sm">Cód: ${escapeHtml(p.codigo)}</span>
+            ${p._agregadoManual ? `<span class="badge-info text-[9px] font-label-mono uppercase tracking-widest px-xs py-[1px] rounded ml-auto">Sin movimiento</span>` : ''}
         </div>
 
         <div class="space-y-sm mb-lg text-data-tabular font-semibold">
@@ -1891,6 +1892,21 @@ function crearTarjetaProductoElement(p, scope = 'inv') {
     `;
 
     div.innerHTML = html;
+
+    if (p._agregadoManual) {
+        div.classList.add('card-agregado-manual');
+        if (esCaptura) {
+            // El header de navegacion Prev/Sigt de PALOTEO 2 ocupa la esquina
+            // superior; el boton de quitar va inline junto a ID/Codigo en vez
+            // de superpuesto arriba (variante 'absoluta').
+            const filaIdCodigo = div.querySelector('.id-codigo-row');
+            if (filaIdCodigo) filaIdCodigo.appendChild(crearBotonQuitarManual(p, 'inline'));
+        } else {
+            div.classList.add('relative');
+            div.appendChild(crearBotonQuitarManual(p, 'absoluta'));
+        }
+    }
+
     return div;
 }
 
@@ -1957,6 +1973,7 @@ function crearFilaPaloteo3(producto) {
             <div class="col-span-full flex items-center gap-xs min-h-10">
                 <span class="text-data-tabular text-on-surface text-right text-xs font-semibold bg-surface-container-low px-xs py-[2px] rounded min-w-max" title="${escapeHtml(String(producto.codigo ?? ''))}">${escapeHtml(String(producto.codigo ?? '—'))}</span>
                 <span class="text-xs text-on-surface truncate" title="${escapeHtml(producto.nombre || '')}">${escapeHtml(producto.nombre || '')}</span>
+                ${producto._agregadoManual ? `<span class="badge-info text-[9px] font-label-mono uppercase tracking-widest px-xs py-[1px] rounded shrink-0 ml-auto">Sin movimiento</span>` : ''}
             </div>
 
             <!-- Segunda línea: input de unidades y, si aplica, pesos con botones integrados -->
@@ -1983,6 +2000,12 @@ function crearFilaPaloteo3(producto) {
             </div>
         </div>
     `;
+
+    if (producto._agregadoManual) {
+        row.classList.add('card-agregado-manual');
+        const lineaCodigoNombre = row.querySelector('.col-span-full');
+        if (lineaCodigoNombre) lineaCodigoNombre.appendChild(crearBotonQuitarManual(producto, 'inline'));
+    }
 
     // Precarga: si ya hay datos capturados en la tarjeta de inventario (PALOTEO 1/2),
     // refleja unidades, todos los pesos abiertos y el perfil elegido en cada uno.
@@ -3173,8 +3196,9 @@ function renderizarResultadosCatalogo(productos) {
 /**
  * Crea el boton "x" para quitar un producto agregado manualmente. Oculto en
  * modo solo-lectura. variante='absoluta' lo posiciona en la esquina superior
- * derecha de una card de bloque (PALOTEO 1/2); variante='inline' lo deja como
- * un boton mas dentro de una fila flex densa (PALOTEO 3).
+ * derecha de una card de bloque (PALOTEO 1); variante='inline' lo deja como
+ * un boton mas dentro de una fila/linea flex (PALOTEO 3, y PALOTEO 2 porque
+ * ahi la esquina superior ya la ocupa el header Prev/Sigt de la captura).
  */
 function crearBotonQuitarManual(producto, variante = 'inline') {
     const btn = document.createElement('button');
@@ -3208,9 +3232,11 @@ function agregarProductoManual(producto, { enfocar = true } = {}) {
     producto._agregadoManual = true;
     productosInventario.push(producto);
 
+    // La marca visual (card-agregado-manual + badge) y el boton de quitar se
+    // aplican dentro de crearTarjetaProductoElement/crearFilaPaloteo3 segun
+    // producto._agregadoManual, para que sobrevivan a cualquier re-render
+    // (refrescarPaloteo3DesdeInventario, renderTarjetaCaptura, hidratacion).
     const card = crearTarjetaProductoElement(producto, 'inv');
-    card.classList.add('card-agregado-manual', 'relative');
-    card.appendChild(crearBotonQuitarManual(producto, 'absoluta'));
     listaProductos.appendChild(card);
     recalcularTarjeta(card);
 
@@ -3219,9 +3245,6 @@ function agregarProductoManual(producto, { enfocar = true } = {}) {
         const emptyState = document.getElementById('stock-empty-state');
         if (emptyState) emptyState.classList.add('hidden');
         const fila = crearFilaPaloteo3(producto);
-        fila.classList.add('card-agregado-manual');
-        const lineaCodigoNombre = fila.querySelector('.col-span-full');
-        if (lineaCodigoNombre) lineaCodigoNombre.appendChild(crearBotonQuitarManual(producto, 'inline'));
         stockListEl.appendChild(fila);
     }
 
