@@ -146,7 +146,7 @@ Docs: `http://localhost:8000/docs`
 | Metodo | Ruta | Descripcion |
 |---|---|---|
 | `GET` | `/api/inventario/pendientes` | Lista productos vendidos + traspasados a barra con configuracion de pesaje |
-| `GET` | `/api/inventario/catalogo/buscar` | Busca en el catalogo completo de la barra (sin filtrar por movimiento), para agregar manualmente al conteo un producto que no tuvo movimiento esta operativa. Requiere `?busqueda=` (min. 2 caracteres), devuelve hasta 15 resultados con la misma forma que `/pendientes` |
+| `GET` | `/api/inventario/catalogo/buscar` | Busca en el catalogo completo de la barra (sin filtrar por movimiento), para agregar manualmente al conteo productos que no tuvieron movimiento esta operativa. `?busqueda=` es opcional (si se omite o va vacio, min. 2 caracteres si se especifica), devuelve resultados con la misma forma que `/pendientes`. `?limite=` (1-500, default 15) ajusta el tope de resultados; con `busqueda` vacia y `limite` alto trae el catalogo completo, para el flujo de "paloteo completo" |
 | `POST` | `/api/inventario/paloteo` | Registra inventario fisico completo |
 | `GET` | `/api/inventario/paloteo/{id_operacion}` | Obtiene inventario registrado y si puede editarse |
 | `PUT` | `/api/inventario/paloteo/{id_inventario_pos}` | Corrige inventario fisico existente |
@@ -323,6 +323,31 @@ Sincronizacion entre modulos:
 1. Cambios en PALOTEO 1, PALOTEO 2 y PALOTEO 3 se reflejan entre vistas.
 2. El payload final se construye desde el inventario canonico.
 3. Autosave guarda y recupera borradores locales por `operativa + barra + usuario`.
+
+### Agregar productos sin movimiento (paloteo completo)
+
+El buscador unico del navbar (compartido por PALOTEO 1/2/3) permite agregar al
+conteo activo productos que no tuvieron movimiento esta operativa, sin
+necesidad de recargar la pagina:
+
+- Al tipear (2+ caracteres) y no haber coincidencias locales, se ofrece
+  buscar en el catalogo completo de la barra (`GET /api/inventario/catalogo/buscar`)
+  y agregar un resultado puntual al conteo.
+- El boton "Ver catalogo completo" (icono junto al buscador) trae de una vez
+  el catalogo entero de la barra, con y sin movimiento, para el caso de un
+  **paloteo completo** (recontar todo el inventario, no solo lo que tuvo
+  movimiento).
+- El boton "Agregar todos (N)" en el panel de resultados agrega en bloque
+  todo lo listado en ese momento (sea el catalogo completo o el resultado de
+  una busqueda puntual, ej. una categoria), pidiendo confirmacion antes por
+  el volumen que puede implicar.
+- Los productos agregados asi quedan marcados (`card-agregado-manual` en el
+  DOM) y se pueden quitar individualmente (`DELETE
+  /api/inventario/paloteo/{id}/producto/{id_producto}` si el paloteo ya se
+  guardo). Pasan por las mismas validaciones que cualquier otro producto del
+  conteo (ver "Validaciones Activas"): si sus campos quedan vacios, se
+  ofrece confirmarlos como `0` antes de enviar, exactamente igual que un
+  producto con movimiento.
 
 ### PALOTEO 3: captura ciega y botones de ajuste
 

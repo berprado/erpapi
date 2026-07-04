@@ -1126,7 +1126,8 @@ def obtener_productos_pendientes(
 @app.get("/api/inventario/catalogo/buscar", response_model=List[schemas.ProductoPendiente])
 def buscar_productos_catalogo(
     request: Request,
-    busqueda: str = Query(..., min_length=2, description="Texto a buscar en nombre o código"),
+    busqueda: str = Query("", description="Texto a buscar en nombre o código; vacío devuelve el catálogo completo"),
+    limite: int = Query(15, ge=1, le=500, description="Máximo de productos a devolver"),
     db: Session = Depends(get_db),
     current_user: models.Usuario = Depends(get_usuario_actual)
     ):
@@ -1137,6 +1138,10 @@ def buscar_productos_catalogo(
     que no tuvo comandas/salidas esta operativa (ej. estaba oculto, o se dio de
     baja por error en un cierre previo) y necesita poder contarlo igual.
 
+    Con `busqueda` vacía y `limite` alto, alimenta también el flujo de "paloteo
+    completo": listar/agregar de una vez todos los productos de la barra, con o
+    sin movimiento, para cuando corresponde recontar el catálogo entero.
+
     Misma forma de respuesta que /pendientes (schemas.ProductoPendiente) para que
     el frontend trate un resultado de búsqueda exactamente igual que uno cargado
     por movimiento, sin mapeos especiales.
@@ -1146,7 +1151,13 @@ def buscar_productos_catalogo(
     # igual que en /pendientes; aqui solo nos interesa el efecto de validacion.
     _resolver_barra_operativa(request)
 
-    query = text("""
+    patron = busqueda.strip()
+    if patron and len(patron) < 2:
+        raise HTTPException(status_code=400, detail="La búsqueda debe tener al menos 2 caracteres.")
+
+    filtro_nombre = "AND (a.nombre LIKE :patron OR a.codigo LIKE :patron)" if patron else ""
+
+    query = text(f"""
         SELECT
             a.id AS id_producto, a.codigo, a.nombre, a.ind_permite_comandar,
             i.cantidad_paq AS stock_ideal_unidades, i.cantidad_detalle AS stock_ideal_onzas,
@@ -1157,13 +1168,14 @@ def buscar_productos_catalogo(
         INNER JOIN vista_inventario_barra_con_filtro i ON a.id = i.id_almacen
         LEFT JOIN app_producto_pesaje_config_api p ON a.id = p.id_producto_almacen AND p.estado = 'HAB'
         WHERE a.estado = 'HAB'
-          AND (a.nombre LIKE :patron OR a.codigo LIKE :patron)
+          {filtro_nombre}
         ORDER BY a.nombre ASC, p.id ASC
-        LIMIT 15
+        LIMIT :limite
     """)
 
     rows = db.execute(query, {
-        "patron": f"%{busqueda.strip()}%",
+        "patron": f"%{patron}%",
+        "limite": limite,
     }).mappings().all()
 
     return _agrupar_filas_producto_pesaje(rows)

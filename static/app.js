@@ -2907,6 +2907,8 @@ const navbarLogoFull           = document.getElementById('navbar-logo-full');
 const navbarLogoIsotipo        = document.getElementById('navbar-logo-isotipo');
 const topbarSearchCatalogoPanel = document.getElementById('topbar-search-catalogo-resultados');
 const topbarSearchCatalogoLista = document.getElementById('topbar-search-catalogo-lista');
+const btnVerCatalogoCompleto    = document.getElementById('btn-ver-catalogo-completo');
+const btnAgregarTodosCatalogo   = document.getElementById('btn-agregar-todos-catalogo');
 
 const BUSQUEDA_POR_TAB = {
     inventario: { placeholder: 'Buscar por ID, código o nombre...', handler: filtrarInventarioPaloteo1, permiteAgregarCatalogo: true },
@@ -2954,6 +2956,7 @@ function actualizarBarraBusqueda(tabName) {
 
     const config = BUSQUEDA_POR_TAB[tabName];
     if (btnTopbarSearchToggle) btnTopbarSearchToggle.classList.toggle('hidden', !config);
+    if (btnVerCatalogoCompleto) btnVerCatalogoCompleto.classList.toggle('hidden', !config?.permiteAgregarCatalogo);
     if (config) {
         if (topbarSearchInput) topbarSearchInput.placeholder = config.placeholder;
         config.handler('');
@@ -2984,16 +2987,38 @@ if (topbarSearchInput) {
     });
 }
 
+if (btnVerCatalogoCompleto) {
+    btnVerCatalogoCompleto.addEventListener('click', () => {
+        if (topbarSearchInput) topbarSearchInput.value = '';
+        cargarCatalogoCompletoYMostrar();
+    });
+}
+
+if (btnAgregarTodosCatalogo) {
+    btnAgregarTodosCatalogo.addEventListener('click', () => agregarTodosDelCatalogo());
+}
+
 // ==========================================
 // AGREGAR PRODUCTO SIN MOVIMIENTO (busqueda en catalogo completo)
 // Cuando la busqueda local (productos con movimiento) no encuentra nada,
 // se ofrece buscar en el catalogo completo de la barra y agregar el
 // resultado al conteo activo. Ver documentos del plan "agregar productos
 // sin movimiento" para el contexto de negocio.
+//
+// "Paloteo completo": btn-ver-catalogo-completo trae el catalogo entero
+// (con y sin movimiento) en el mismo panel, y btn-agregar-todos-catalogo
+// agrega de una vez todo lo listado (sea el catalogo completo o el
+// resultado de una busqueda puntual), para recontar sin cargar producto
+// por producto.
 // ==========================================
 let catalogoBusquedaDebounceTimer = null;
 const CATALOGO_BUSQUEDA_DEBOUNCE_MS = 300;
 const CATALOGO_BUSQUEDA_MIN_CHARS = 2;
+const CATALOGO_COMPLETO_LIMITE = 500;
+
+/** Ultima lista de productos renderizada en el panel de catalogo, para que
+ * "Agregar todos" sepa exactamente que agregar sin repetir la busqueda. */
+let ultimosResultadosCatalogo = [];
 
 /** Cuenta cuantas tarjetas/filas locales quedaron visibles tras filtrar, por tab. */
 function contarCoincidenciasLocales(tabName) {
@@ -3016,6 +3041,8 @@ function ocultarResultadosCatalogo() {
     }
     if (topbarSearchCatalogoPanel) topbarSearchCatalogoPanel.classList.add('hidden');
     if (topbarSearchCatalogoLista) topbarSearchCatalogoLista.innerHTML = '';
+    if (btnAgregarTodosCatalogo) btnAgregarTodosCatalogo.classList.add('hidden');
+    ultimosResultadosCatalogo = [];
 }
 
 /** Decide si hay que ir a buscar en el catalogo completo (debounced) segun los resultados locales. */
@@ -3059,12 +3086,67 @@ async function buscarEnCatalogoYMostrar(query) {
     }
 }
 
+/**
+ * Trae TODO el catalogo de la barra (con y sin movimiento), para "paloteo
+ * completo": recontar el catalogo entero en vez de solo lo que tuvo
+ * movimiento. Disparado explicitamente por btn-ver-catalogo-completo, no por
+ * el debounce de tipeo (por eso ignora contarCoincidenciasLocales).
+ */
+async function cargarCatalogoCompletoYMostrar() {
+    try {
+        const response = await fetch(`${API_BASE}/inventario/catalogo/buscar?limite=${CATALOGO_COMPLETO_LIMITE}`, {
+            headers: {
+                'Authorization': `Bearer ${currentToken}`,
+                'X-Barra-Id': String(idBarraActual),
+            }
+        });
+
+        if (response.status === 401) return btnLogout.click();
+        if (!response.ok) { ocultarResultadosCatalogo(); return; }
+
+        const resultados = await response.json();
+        const idsYaCargados = new Set(productosInventario.map(p => p.id_producto));
+        const nuevos = resultados.filter(p => !idsYaCargados.has(p.id_producto));
+
+        renderizarResultadosCatalogo(nuevos);
+    } catch (error) {
+        console.error('Error cargando el catalogo completo', error);
+        ocultarResultadosCatalogo();
+    }
+}
+
+/** Agrega de una vez todos los productos listados actualmente en el panel de
+ * catalogo (ya sea de una busqueda puntual o del catalogo completo). Pide
+ * confirmacion porque puede tratarse de decenas/cientos de productos. */
+async function agregarTodosDelCatalogo() {
+    const productos = ultimosResultadosCatalogo;
+    if (!productos.length) return;
+
+    const confirmado = await mostrarDialogoConfirmacion({
+        titulo: 'Agregar todos los productos',
+        mensaje: `¿Agregar los ${productos.length} productos listados al conteo? Vas a tener que completar cantidad y/o peso de cada uno.`,
+    });
+    if (!confirmado) return;
+
+    productos.forEach(p => agregarProductoManual(p, { enfocar: false }));
+
+    ocultarResultadosCatalogo();
+    if (topbarSearchInput) topbarSearchInput.value = '';
+    scheduleAutosave();
+}
+
 function renderizarResultadosCatalogo(productos) {
     if (!topbarSearchCatalogoPanel || !topbarSearchCatalogoLista) return;
 
     if (!productos.length) {
         ocultarResultadosCatalogo();
         return;
+    }
+
+    ultimosResultadosCatalogo = productos;
+    if (btnAgregarTodosCatalogo) {
+        btnAgregarTodosCatalogo.textContent = `Agregar todos (${productos.length})`;
+        btnAgregarTodosCatalogo.classList.remove('hidden');
     }
 
     topbarSearchCatalogoLista.innerHTML = '';

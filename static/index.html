@@ -732,14 +732,22 @@
                 <div id="topbar-search-container" class="hidden flex-1 min-w-0">
                     <div class="relative w-full">
                         <span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-outline-variant" style="font-size:1rem;">search</span>
-                        <input type="text" id="topbar-search-input" placeholder="Buscar..." class="w-full bg-surface border border-outline-variant rounded-md pl-10 pr-[5.5rem] py-xs text-sm text-on-surface placeholder-outline/40 focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-body-base">
+                        <input type="text" id="topbar-search-input" placeholder="Buscar..." class="w-full bg-surface border border-outline-variant rounded-md pl-10 pr-[7rem] py-xs text-sm text-on-surface placeholder-outline/40 focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-body-base">
                         <span id="topbar-search-contador" class="hidden absolute right-sm top-1/2 -translate-y-1/2 text-[10px] font-label-mono text-on-surface-variant whitespace-nowrap"></span>
+                        <button type="button" id="btn-ver-catalogo-completo" class="hidden topbar-icon-btn absolute right-8 top-1/2 -translate-y-1/2" title="Ver catálogo completo (paloteo completo)" aria-label="Ver catálogo completo">
+                            <span class="material-symbols-outlined" style="font-size:1.1rem;">inventory_2</span>
+                        </button>
                     </div>
-                    <!-- Resultados del catalogo completo: aparece solo cuando la busqueda local
-                         (productos con movimiento) no encuentra nada. Permite agregar al conteo
-                         un producto que no tuvo movimiento esta operativa. Ver app.js. -->
+                    <!-- Resultados del catalogo completo: aparece cuando la busqueda local
+                         (productos con movimiento) no encuentra nada, o cuando se pide ver
+                         el catalogo completo con btn-ver-catalogo-completo. Permite agregar al
+                         conteo productos que no tuvieron movimiento esta operativa, uno por uno
+                         o todos los listados de una vez (paloteo completo). Ver app.js. -->
                     <div id="topbar-search-catalogo-resultados" class="hidden absolute left-0 right-0 top-full mt-1 bg-surface-container border border-outline-variant rounded-md shadow-lg z-30 max-h-64 overflow-y-auto">
-                        <div class="px-sm py-xs text-[10px] font-label-mono uppercase tracking-widest text-on-surface-variant border-b border-outline-variant">Sin movimiento esta operativa — agregar al conteo</div>
+                        <div class="flex items-center justify-between gap-sm px-sm py-xs border-b border-outline-variant">
+                            <span class="text-[10px] font-label-mono uppercase tracking-widest text-on-surface-variant">Sin movimiento esta operativa — agregar al conteo</span>
+                            <button type="button" id="btn-agregar-todos-catalogo" class="hidden shrink-0 text-[11px] font-label-mono uppercase tracking-widest text-primary-fixed hover:underline whitespace-nowrap"></button>
+                        </div>
                         <div id="topbar-search-catalogo-lista"></div>
                     </div>
                 </div>
@@ -1268,7 +1276,7 @@
         </div>
     </div>
 
-    <script src="/assets/app.js?v=10.44"></script>
+    <script src="/assets/app.js?v=10.45"></script>
 
     <script>
         (function () {
@@ -1313,7 +1321,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/assets/sw.js?v=10.44')
+                navigator.serviceWorker.register('/assets/sw.js?v=10.45')
                     .then(reg => console.log('[PWA] Service Worker registrado:', reg.scope))
                     .catch(err => console.error('[PWA] Error al registrar SW:', err));
             });
