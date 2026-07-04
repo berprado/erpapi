@@ -40,6 +40,11 @@
 - [ ] **Bloquear la busqueda-en-catalogo (agregar producto sin movimiento) en modo solo-lectura**
   - Motivacion: el flujo de "agregar producto sin movimiento" (v10.37) no verifica `operativaPermitePaloteo` antes de mostrar resultados del catalogo y permitir agregarlos. La card/fila resultante sí queda con sus inputs deshabilitados (igual que el resto en modo solo-lectura), asi que no hay impacto funcional ni de seguridad, pero la busqueda deja agregar una card "muerta" que no se puede llenar. Evaluar ocultar el resultado de catalogo (o el boton "+ Agregar") cuando `!operativaPermitePaloteo`.
 
+- [ ] **`vista_inventario_barra_con_filtro` y `vista_inventario_barra` tienen `bi.id_barra = 1` hardcodeado**
+  - Motivacion: ambas vistas (que alimentan `/api/inventario/pendientes` y `/api/inventario/catalogo/buscar`) tienen `WHERE ... AND bi.id_barra = 1` fijo en su definicion SQL, a pesar de que el nombre ("con_filtro") sugiere que deberian parametrizarse por barra. La relacion real producto↔barra vive en `bar_inventario` (id_producto + id_barra: 295 filas para barra 1, 44 para barra 2, 0 para barra 3) — `alm_producto.id_barra` es vestigial (solo 2/503 filas lo tienen seteado, sin relacion con el flujo real) y no debe usarse para esto.
+  - Hoy no rompe nada porque la config activa (`PALOTEO_SELECTOR_ENABLED=false`, `PALOTEO_ALLOWED_BARRAS=1`) solo opera barra 1. Si en el futuro se habilita el selector para barra 2 o 3, el catalogo/pendientes seguiria devolviendo el stock de barra 1 sin importar la barra operativa resuelta (`X-Barra-Id`), de forma silenciosa (sin error, solo datos incorrectos).
+  - Antes de habilitar `PALOTEO_SELECTOR_ENABLED` para mas de una barra: parametrizar ambas vistas (o reemplazar por una consulta directa a `bar_inventario` con `id_barra` como bind param) y verificar que no haya otros consumidores de estas vistas que dependan del hardcodeo actual.
+
 ## 🟢 Baja Prioridad / Mejoras Futuras
 
 - [ ] **Separar los endpoints en routers por módulo (FastAPI `APIRouter`)**
