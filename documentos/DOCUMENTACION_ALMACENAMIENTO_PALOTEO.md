@@ -1,9 +1,9 @@
 # 📋 Documentación: Proceso de Almacenamiento de Paloteo
 
-**Versión:** 1.2  
-**Fecha:** 30 de junio de 2026  
+**Versión:** 1.3  
+**Fecha:** 05 de julio de 2026  
 **Proyecto:** BackStage | Live Dashboard - Sistema de Inventario POS  
-**Rama:** experiment/glitch-no-glow
+**Rama:** main
 
 ---
 
@@ -62,6 +62,9 @@ El propósito es mantener control riguroso del inventario y detectar discrepanci
 │       sin movimiento via busqueda en catalogo completo, y       │
 │       quitarlo despues si se agrego por error (v10.38+, ver     │
 │       P12/P13 en FAQ)                                           │
+│    └─ (v10.45+) "Ver catalogo completo" + "Agregar todos" para  │
+│       paloteo completo (recontar todo, no solo lo que tuvo      │
+│       movimiento) sin cargar producto por producto              │
 └─────────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────────┐
@@ -1162,13 +1165,14 @@ Si expira:
 **R:** Desde v10.37, PALOTEO 1/2/3 permiten agregarlo manualmente al conteo activo.
 
 1. Caso típico: un producto se dio de baja por error en un cierre previo (ej. una botella que en realidad sí estaba en barra pero quedó oculta detrás de otras), y como no tuvo movimiento en la operativa siguiente, `GET /api/inventario/pendientes` nunca lo carga.
-2. La misma barra de búsqueda única de PALOTEO 1/2/3 — al no encontrar coincidencias entre los productos ya cargados — ofrece resultados del catálogo completo de la barra vía `GET /api/inventario/catalogo/buscar?busqueda=` (mismo shape que `/pendientes`, sin el filtro de movimiento).
-3. Al agregarlo, se crea su tarjeta/fila en las tres vistas (PALOTEO 1, 2 y 3), distinguible con un borde/realce propio, y se captura igual que cualquier otro producto — entra al mismo pipeline de `POST/PUT /api/inventario/paloteo`, sin tratamiento especial en backend.
+2. La misma barra de búsqueda única de PALOTEO 1/2/3 — al no encontrar coincidencias entre los productos ya cargados — ofrece resultados del catálogo completo de la barra vía `GET /api/inventario/catalogo/buscar` (mismo shape que `/pendientes`, sin el filtro de movimiento). Desde v10.45, `busqueda` es opcional (vacía = catálogo completo) y admite `limite` (hasta 500).
+3. Al agregarlo, se crea su tarjeta/fila en las tres vistas (PALOTEO 1, 2 y 3), distinguible con un borde/realce propio y un badge "Sin movimiento", y se captura igual que cualquier otro producto — entra al mismo pipeline de `POST/PUT /api/inventario/paloteo`, sin tratamiento especial en backend. Desde v10.46, esa marca visual se decide en cada render (no solo al agregarlo), por lo que sobrevive a que PALOTEO 3 se reconstruya en cada tecla escrita en PALOTEO 1 o a que PALOTEO 2 reconstruya la tarjeta en cada navegación.
 4. Se persiste en el autosave local igual que el resto del borrador (sobrevive un refresh de página).
+5. **Paloteo completo (v10.45)**: para recontar todo el catálogo de la barra (no solo lo que tuvo movimiento), el botón "Ver catálogo completo" trae de una vez todo el catálogo, y "Agregar todos (N)" vuelca en bloque lo listado (completo o de una búsqueda puntual, ej. una categoría) al conteo activo, con confirmación previa por el volumen que puede implicar. Cada producto agregado así sigue el mismo camino del punto 3 (misma tarjeta, misma marca visual, mismo pipeline de envío).
 
 ### P13: ¿Se puede deshacer un producto agregado por error?
 
-**R:** Sí, desde v10.38. Cada producto agregado manualmente (no los que tuvieron movimiento real) muestra un botón "×" que pide confirmación antes de quitarlo.
+**R:** Sí, desde v10.38, y disponible en las tres vistas desde v10.46 (antes solo estaba en PALOTEO 1 y 3; PALOTEO 2 no tenía el botón). Cada producto agregado manualmente (no los que tuvieron movimiento real) muestra un botón "×" que pide confirmación antes de quitarlo.
 
 - Si el paloteo todavía no se había guardado, quitar el producto es una operación puramente local (UI + borrador), no toca el backend.
 - Si el paloteo ya se había guardado, además se llama a `DELETE /api/inventario/paloteo/{id_inventario_pos}/producto/{id_producto}`, que da de baja (`estado='DES'`) solo esa fila de `bar_detalle_fisico`. A diferencia de `PUT` (que es upsert-only y nunca borra una fila omitida del payload), este endpoint sí elimina una fila puntual.

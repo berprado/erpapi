@@ -4,6 +4,55 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.47
+- Rediseña PESAJE: grid responsivo de tarjetas resumen (categoria, nombre,
+  ID/codigo, medida+unidad, cantidad_detalle+unidad_detalle, badge de
+  comanda y cantidad de modelos si tiene mas de uno) en vez de una lista de
+  una sola columna con edicion inline. Al hacer click se abre un modal
+  (mismo patron que CONVERSOR) con el contenido que antes vivia en la
+  tarjeta: peso bruto/tara/g-oz/barcode por perfil, Guardar/Eliminar y
+  Agregar modelo.
+- Nueva pestaña INCOMPLETOS junto a PESABLES/NO PESABLES: pide el mismo
+  `GET /api/pesaje/config?pesable=1` que PESABLES y separa en cliente los
+  productos con algun perfil sin `peso_bruto`/`tara`. Al completarse el
+  ultimo perfil incompleto, el producto pasa solo a PESABLES en el
+  siguiente refresco (si el modal esta abierto, se refresca en el lugar en
+  vez de cerrarse).
+- Backend: `GET /api/pesaje/config` suma, via `LEFT JOIN` a
+  `vw_alm_producto_con_nombres`, los campos `medida`, `nombre_unidad_medida`,
+  `nombre_unidad_medida_detalle` y `nombre_ind_permite_comandar` (no
+  `nombre_barra`: el peso/tara/codigo de barras no depende de la barra donde
+  este el producto).
+- Corrige 2 bugs de z-index expuestos por el modal nuevo: `#resultado-dialog`
+  y `#modelo-botella-dialog` quedaban detras de `#pesaje-modal` (mismo
+  `z-50` o menor), bloqueando sus botones cuando se abrian desde adentro.
+
+## 10.46
+- Los productos agregados sin movimiento (individual o via "Agregar todos")
+  ahora se distinguen visualmente en PALOTEO 1, 2 y 3: borde/glow
+  (`card-agregado-manual`) + badge "Sin movimiento" junto a ID/Codigo. Antes
+  la marca se aplicaba una sola vez al agregar el producto y se perdia en
+  cualquier re-render (PALOTEO 3 se reconstruye en cada tecla escrita en
+  PALOTEO 1 via `refrescarPaloteo3DesdeInventario()`; PALOTEO 2 reconstruye
+  la tarjeta en cada navegacion via `renderTarjetaCaptura()`). Ahora se
+  decide en runtime dentro de `crearTarjetaProductoElement`/
+  `crearFilaPaloteo3` a partir de `producto._agregadoManual`, asi sobrevive
+  a cualquier re-render.
+- El boton "x" para quitar un producto agregado sin movimiento, que ya
+  existia en PALOTEO 1 y 3, ahora tambien esta disponible en PALOTEO 2
+  (variante inline, para no chocar con el header Prev/Sigt de la captura).
+
+## 10.45
+- Paloteo completo: agrega la posibilidad de recontar todo el catalogo de la
+  barra (no solo lo que tuvo movimiento) sin cargar producto por producto.
+  Boton "Ver catalogo completo" trae de una vez el catalogo entero, y
+  "Agregar todos (N)" vuelca en bloque el listado (completo o de una
+  busqueda puntual, ej. una categoria) al conteo activo, con confirmacion
+  previa por el volumen que puede implicar.
+- Backend: `GET /api/inventario/catalogo/buscar` admite busqueda vacia
+  (antes exigia minimo 2 caracteres) y un parametro `limite` (1-500, antes
+  fijo en 15), para poder traer el catalogo completo en una sola llamada.
+
 ## 10.44
 - Rediseña el PDF de AJUSTES (Paloteo 3) para consistencia visual y mas
   contexto por producto:
