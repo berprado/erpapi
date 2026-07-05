@@ -1,10 +1,12 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import field_validator
 import logging
 
 logger = logging.getLogger(__name__)
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env")
+
     APP_ENV: str = "test"
     SECRET_KEY: str  # Clave para firma de tokens JWT
     PALOTEO_DEFAULT_BARRA_ID: int = 1
@@ -85,8 +87,5 @@ class Settings(BaseSettings):
         if not self.TEST_DB_PASS:
             return f"mysql+pymysql://{self.TEST_DB_USER}@{self.TEST_DB_HOST}:{self.TEST_DB_PORT}/{self.TEST_DB_NAME}"
         return f"mysql+pymysql://{self.TEST_DB_USER}:{self.TEST_DB_PASS}@{self.TEST_DB_HOST}:{self.TEST_DB_PORT}/{self.TEST_DB_NAME}"
-
-    class Config:
-        env_file = ".env"
 
 settings = Settings()

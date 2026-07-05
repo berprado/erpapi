@@ -4,6 +4,11 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.48
+- Migra `config.py` del estilo `class Config` (Pydantic v1, deprecado) a
+  `model_config = SettingsConfigDict(...)` (Pydantic v2). Sin cambio de
+  comportamiento; verificado con el test suite y una carga real de `.env`.
+
 ## 10.47
 - Rediseña PESAJE: grid responsivo de tarjetas resumen (categoria, nombre,
   ID/codigo, medida+unidad, cantidad_detalle+unidad_detalle, badge de
