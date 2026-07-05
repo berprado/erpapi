@@ -878,28 +878,31 @@ def listar_pesaje_config(
     current_user: models.Usuario = Depends(get_usuario_administrador)
 ):
     """Listado de perfiles de pesaje (tabla app_producto_pesaje_config_api vía v9_pesaje_config_api), para el módulo PESAJE."""
-    condiciones = ["(id_categoria IS NULL OR id_categoria NOT IN :excluidas)"]
+    condiciones = ["(pc.id_categoria IS NULL OR pc.id_categoria NOT IN :excluidas)"]
     parametros = {"excluidas": CATEGORIAS_EXCLUIDAS_PESAJE}
 
     if nombre:
-        condiciones.append("nombre_producto LIKE :nombre")
+        condiciones.append("pc.nombre_producto LIKE :nombre")
         parametros["nombre"] = f"%{nombre}%"
     if id_categoria is not None:
-        condiciones.append("id_categoria = :id_categoria")
+        condiciones.append("pc.id_categoria = :id_categoria")
         parametros["id_categoria"] = id_categoria
     if pesable is not None:
-        condiciones.append("pesable = :pesable")
+        condiciones.append("pc.pesable = :pesable")
         parametros["pesable"] = pesable
 
     where_sql = f"WHERE {' AND '.join(condiciones)}"
 
     query = text(f"""
-        SELECT id_pesaje_config, id_producto, nombre_producto, codigo_producto,
-               id_categoria, nombre_categoria, cantidad_detalle, peso_bruto, tara,
-               gramos_por_oz, pesable, barcode, nombre_perfil
-        FROM v9_pesaje_config_api
+        SELECT pc.id_pesaje_config, pc.id_producto, pc.nombre_producto, pc.codigo_producto,
+               pc.id_categoria, pc.nombre_categoria, pc.cantidad_detalle, pc.peso_bruto, pc.tara,
+               pc.gramos_por_oz, pc.pesable, pc.barcode, pc.nombre_perfil,
+               vw.medida, vw.nombre_unidad_medida, vw.nombre_unidad_medida_detalle,
+               vw.nombre_ind_permite_comandar
+        FROM v9_pesaje_config_api pc
+        LEFT JOIN vw_alm_producto_con_nombres vw ON vw.id = pc.id_producto
         {where_sql}
-        ORDER BY nombre_producto ASC, nombre_perfil ASC
+        ORDER BY pc.nombre_producto ASC, pc.nombre_perfil ASC
     """).bindparams(bindparam("excluidas", expanding=True))
 
     rows = db.execute(query, parametros).mappings().all()
@@ -918,6 +921,10 @@ def listar_pesaje_config(
             pesable=row["pesable"],
             barcode=row["barcode"],
             nombre_perfil=row["nombre_perfil"],
+            medida=float(row["medida"]) if row["medida"] is not None else None,
+            nombre_unidad_medida=row["nombre_unidad_medida"],
+            nombre_unidad_medida_detalle=row["nombre_unidad_medida_detalle"],
+            nombre_ind_permite_comandar=row["nombre_ind_permite_comandar"],
         )
         for row in rows
     ]

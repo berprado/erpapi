@@ -1010,7 +1010,7 @@
 
 
         <!-- ========== PANEL PESAJE ========== -->
-        <div id="panel-pesaje" class="tab-panel hidden p-md max-w-2xl mx-auto w-full">
+        <div id="panel-pesaje" class="tab-panel hidden p-md max-w-6xl mx-auto w-full">
             <div class="flex items-start justify-between mb-sm">
                 <div>
                     <h2 class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase flex items-center gap-xs leading-none">
@@ -1029,14 +1029,15 @@
                 </select>
             </div>
 
-            <!-- Tabs Pesables / No pesables -->
+            <!-- Tabs Pesables / Incompletos / No pesables -->
             <div class="mb-sm flex flex-wrap gap-xs">
                 <button id="pesaje-filtro-pesables" type="button" class="pesaje-filtro-btn bg-primary-container text-black border border-primary-fixed-dim px-sm py-[6px] rounded-sharp text-[10px] font-label-mono uppercase tracking-widest">Pesables</button>
+                <button id="pesaje-filtro-incompletos" type="button" class="pesaje-filtro-btn bg-surface border border-outline-variant text-on-surface px-sm py-[6px] rounded-sharp text-[10px] font-label-mono uppercase tracking-widest">Incompletos</button>
                 <button id="pesaje-filtro-no-pesables" type="button" class="pesaje-filtro-btn bg-surface border border-outline-variant text-on-surface px-sm py-[6px] rounded-sharp text-[10px] font-label-mono uppercase tracking-widest">No pesables</button>
             </div>
 
-            <!-- Listado -->
-            <div id="pesaje-list" class="space-y-sm"></div>
+            <!-- Listado: grid responsivo, la cantidad de columnas se adapta al ancho disponible -->
+            <div id="pesaje-list" class="grid gap-sm" style="grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));"></div>
 
             <!-- Estado vacío -->
             <div id="pesaje-empty-state" class="hidden text-center text-on-surface-variant py-md font-body-base text-sm">
@@ -1105,7 +1106,7 @@
         </div>
 
         <!-- Modal: Crear Modelo de Botella -->
-        <div id="modelo-botella-dialog" class="fixed inset-0 hidden z-40">
+        <div id="modelo-botella-dialog" class="fixed inset-0 hidden z-[55]">
             <div id="modelo-botella-overlay" class="absolute inset-0 bg-black/70"></div>
             <div class="relative z-10 min-h-screen flex items-center justify-center p-md">
                 <div class="w-full max-w-lg bg-surface-container border border-outline-variant rounded-md p-md shadow-lg">
@@ -1169,7 +1170,7 @@
         </div>
 
         <!-- Modal: Resultado / Confirmación genérico -->
-        <div id="resultado-dialog" class="fixed inset-0 hidden z-50">
+        <div id="resultado-dialog" class="fixed inset-0 hidden z-[60]">
             <div id="resultado-overlay" class="absolute inset-0 bg-black/70"></div>
             <div class="relative z-10 min-h-screen flex items-center justify-center p-md">
                 <div class="w-full max-w-lg bg-surface-container border border-outline-variant rounded-md p-md shadow-lg">
@@ -1239,6 +1240,29 @@
         </div>
 
         <!-- Modal: captura de botellas del Conversor -->
+        <!-- Modal de edicion de perfiles de pesaje: se abre al hacer click en una tarjeta
+             resumen del modulo PESAJE. Mismo patron que #conversor-modal. -->
+        <div id="pesaje-modal" class="hidden fixed inset-0 z-50" aria-hidden="true">
+            <div id="pesaje-modal-overlay" class="absolute inset-0 bg-black/70 backdrop-blur-[2px]"></div>
+            <div class="relative z-10 h-full flex items-center justify-center p-md">
+                <div class="w-full max-w-lg bg-surface-container border border-outline-variant rounded-md shadow-2xl max-h-[85vh] flex flex-col">
+                    <div class="px-md py-sm border-b border-outline-variant flex items-center justify-between shrink-0">
+                        <div class="min-w-0">
+                            <p id="pesaje-modal-categoria" class="text-[10px] font-label-mono uppercase tracking-widest text-on-surface-variant truncate"></p>
+                            <h3 id="pesaje-modal-nombre" class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase truncate"></h3>
+                            <p id="pesaje-modal-codigo" class="text-[11px] text-on-surface-variant font-data-tabular"></p>
+                        </div>
+                        <button id="btn-close-pesaje-modal" type="button" class="topbar-icon-btn shrink-0" aria-label="Cerrar pesaje">
+                            <span class="material-symbols-outlined text-base">close</span>
+                        </button>
+                    </div>
+                    <div class="px-md py-md overflow-y-auto flex-1">
+                        <div id="pesaje-modal-perfiles" class="space-y-sm"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div id="conversor-modal" class="hidden fixed inset-0 z-50" aria-hidden="true">
             <div id="conversor-modal-overlay" class="absolute inset-0 bg-black/70 backdrop-blur-[2px]"></div>
             <div class="relative z-10 h-full flex items-center justify-center p-md">
@@ -1276,7 +1300,7 @@
         </div>
     </div>
 
-    <script src="/assets/app.js?v=10.46"></script>
+    <script src="/assets/app.js?v=10.47"></script>
 
     <script>
         (function () {
@@ -1321,7 +1345,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/assets/sw.js?v=10.46')
+                navigator.serviceWorker.register('/assets/sw.js?v=10.47')
                     .then(reg => console.log('[PWA] Service Worker registrado:', reg.scope))
                     .catch(err => console.error('[PWA] Error al registrar SW:', err));
             });

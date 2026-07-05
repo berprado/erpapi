@@ -773,16 +773,22 @@ function abrirModalModelo(nombreProducto, perfilBase, volumenOz) {
 // MÓDULO PESAJE (CRUD app_producto_pesaje_config_api)
 // ==========================================
 
+// pesajeEstado.filtro: 'pesables' (completos) | 'incompletos' (pesables con
+// algun perfil sin peso_bruto/tara) | 'no_pesables'. Las dos primeras piden
+// el mismo pesable=1 al backend y se separan en el cliente (ver
+// pesajeProductoTieneIncompleto); "incompletos" no es un concepto que
+// aplique a no pesables, que no tienen peso_bruto/tara.
 const pesajeEstado = {
-    pesable: 1,
+    filtro: 'pesables',
     nombre: '',
     idCategoria: '',
     datos: [],
 };
 
-const pesajeCategoriaSel        = document.getElementById('pesaje-categoria');
-const pesajeFiltroPesablesBtn   = document.getElementById('pesaje-filtro-pesables');
-const pesajeFiltroNoPesablesBtn = document.getElementById('pesaje-filtro-no-pesables');
+const pesajeCategoriaSel         = document.getElementById('pesaje-categoria');
+const pesajeFiltroPesablesBtn    = document.getElementById('pesaje-filtro-pesables');
+const pesajeFiltroIncompletosBtn = document.getElementById('pesaje-filtro-incompletos');
+const pesajeFiltroNoPesablesBtn  = document.getElementById('pesaje-filtro-no-pesables');
 const pesajeList                = document.getElementById('pesaje-list');
 const pesajeEmptyState          = document.getElementById('pesaje-empty-state');
 
@@ -810,8 +816,9 @@ async function cargarCategoriasPesaje() {
 
 function actualizarUIFiltrosPesaje() {
     const estilos = [
-        { btn: pesajeFiltroPesablesBtn, activo: pesajeEstado.pesable === 1 },
-        { btn: pesajeFiltroNoPesablesBtn, activo: pesajeEstado.pesable === 0 },
+        { btn: pesajeFiltroPesablesBtn, activo: pesajeEstado.filtro === 'pesables' },
+        { btn: pesajeFiltroIncompletosBtn, activo: pesajeEstado.filtro === 'incompletos' },
+        { btn: pesajeFiltroNoPesablesBtn, activo: pesajeEstado.filtro === 'no_pesables' },
     ];
     estilos.forEach(({ btn, activo }) => {
         if (!btn) return;
@@ -830,7 +837,8 @@ async function cargarPesaje() {
     actualizarUIFiltrosPesaje();
 
     const params = new URLSearchParams();
-    params.set('pesable', String(pesajeEstado.pesable));
+    // 'pesables' e 'incompletos' piden el mismo pesable=1; se separan al renderizar.
+    params.set('pesable', pesajeEstado.filtro === 'no_pesables' ? '0' : '1');
     if (pesajeEstado.nombre) params.set('nombre', pesajeEstado.nombre);
     if (pesajeEstado.idCategoria) params.set('id_categoria', pesajeEstado.idCategoria);
 
@@ -853,6 +861,14 @@ async function cargarPesaje() {
     renderizarPesaje();
 }
 
+/** Un producto pesable "esta incompleto" si algun perfil no tiene peso_bruto
+ * o tara cargados. No aplica a no pesables (no tienen esos campos). */
+function pesajeProductoTieneIncompleto(producto) {
+    return producto.pesable === 1 && producto.perfiles.some(
+        (p) => p.peso_bruto === null || p.tara === null
+    );
+}
+
 function renderizarPesaje() {
     pesajeList.innerHTML = '';
 
@@ -866,46 +882,146 @@ function renderizarPesaje() {
                 nombre_categoria: item.nombre_categoria,
                 pesable: item.pesable,
                 volumen_oz: item.volumen_oz,
+                medida: item.medida,
+                nombre_unidad_medida: item.nombre_unidad_medida,
+                nombre_unidad_medida_detalle: item.nombre_unidad_medida_detalle,
+                nombre_ind_permite_comandar: item.nombre_ind_permite_comandar,
                 perfiles: [],
             });
         }
         productos.get(item.id_producto).perfiles.push(item);
     });
 
-    pesajeEmptyState.textContent = 'No se encontraron productos con estos filtros.';
-    pesajeEmptyState.classList.toggle('hidden', productos.size > 0);
+    // 'pesables' e 'incompletos' llegan con el mismo fetch (pesable=1) y se
+    // separan aca; 'no_pesables' se muestra entero (no aplica el concepto).
+    let listaProductos = Array.from(productos.values());
+    if (pesajeEstado.filtro === 'pesables') {
+        listaProductos = listaProductos.filter((p) => !pesajeProductoTieneIncompleto(p));
+    } else if (pesajeEstado.filtro === 'incompletos') {
+        listaProductos = listaProductos.filter((p) => pesajeProductoTieneIncompleto(p));
+    }
 
-    productos.forEach((producto) => {
-        pesajeList.appendChild(crearTarjetaPesaje(producto));
+    pesajeEmptyState.textContent = pesajeEstado.filtro === 'incompletos'
+        ? 'No hay productos pesables con configuración incompleta.'
+        : 'No se encontraron productos con estos filtros.';
+    pesajeEmptyState.classList.toggle('hidden', listaProductos.length > 0);
+
+    listaProductos.forEach((producto) => {
+        pesajeList.appendChild(crearTarjetaResumenPesaje(producto));
     });
+
+    // Si el modal de edicion esta abierto (ej. se acaba de completar el
+    // ultimo perfil de un producto), refrescar su contenido con los datos
+    // nuevos en vez de dejarlo desactualizado. Se busca en el mapa sin
+    // filtrar: el producto puede haber cambiado de pestaña.
+    if (pesajeModalProductoActualId != null) {
+        const actualizado = productos.get(pesajeModalProductoActualId);
+        if (actualizado) {
+            renderizarModalPesaje(actualizado);
+        } else {
+            cerrarModalPesaje();
+        }
+    }
 }
 
-function crearTarjetaPesaje(producto) {
+/** Formatea "medida + unidad" o "cantidad_detalle + unidad_detalle" para la
+ * tarjeta resumen, sin decimales innecesarios (750 en vez de 750.00). */
+function formatearMedidaPesaje(valor, unidad) {
+    if (valor === null || valor === undefined || !unidad) return null;
+    const numero = Number(valor);
+    const texto = Number.isInteger(numero) ? String(numero) : numero.toFixed(2);
+    return `${texto} ${unidad}`;
+}
+
+function crearTarjetaResumenPesaje(producto) {
     const div = document.createElement('div');
-    div.className = 'bg-surface-container border border-outline-variant rounded-md p-md shadow-lg space-y-sm';
+    div.className = 'bg-surface-container border border-outline-variant rounded-md p-md shadow-lg cursor-pointer hover:border-primary-fixed-dim transition-colors flex flex-col gap-xs';
+    div.setAttribute('role', 'button');
+    div.setAttribute('tabindex', '0');
 
-    const header = document.createElement('div');
-    header.innerHTML = `
-        <p class="text-sm font-semibold text-on-surface">${producto.nombre_producto}</p>
-        <p class="text-[11px] text-on-surface-variant">COD ${producto.codigo_producto}${producto.nombre_categoria ? ' · ' + producto.nombre_categoria : ''}</p>
+    const medidaTxt = formatearMedidaPesaje(producto.medida, producto.nombre_unidad_medida);
+    const detalleTxt = formatearMedidaPesaje(producto.volumen_oz, producto.nombre_unidad_medida_detalle);
+
+    div.innerHTML = `
+        ${producto.nombre_categoria ? `<span class="text-[10px] font-label-mono uppercase tracking-widest text-on-surface-variant">${escapeHtml(producto.nombre_categoria)}</span>` : ''}
+        <p class="text-sm font-semibold text-on-surface leading-tight">${escapeHtml(producto.nombre_producto)}</p>
+        <p class="text-[11px] text-on-surface-variant font-data-tabular">ID: ${producto.id_producto} · COD ${escapeHtml(producto.codigo_producto)}</p>
+        <div class="flex flex-wrap gap-xs text-[10px] font-label-mono text-on-surface-variant">
+            ${medidaTxt ? `<span class="bg-surface-container-low px-xs py-[1px] rounded">${escapeHtml(medidaTxt)}</span>` : ''}
+            ${detalleTxt ? `<span class="bg-surface-container-low px-xs py-[1px] rounded">${escapeHtml(detalleTxt)}</span>` : ''}
+        </div>
+        <div class="flex flex-wrap items-center gap-xs mt-auto pt-xs">
+            ${producto.nombre_ind_permite_comandar ? `<span class="badge-info text-[9px] font-label-mono px-xs py-[1px] rounded uppercase tracking-widest">Comanda: ${escapeHtml(producto.nombre_ind_permite_comandar)}</span>` : ''}
+            ${producto.perfiles.length > 1 ? `<span class="badge-info text-[9px] font-label-mono px-xs py-[1px] rounded uppercase tracking-widest">${producto.perfiles.length} modelos</span>` : ''}
+        </div>
     `;
-    div.appendChild(header);
 
+    const abrir = () => abrirModalPesaje(producto);
+    div.addEventListener('click', abrir);
+    div.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            abrir();
+        }
+    });
+
+    return div;
+}
+
+// ==========================================
+// MODAL DE EDICION DE PESAJE: se abre al hacer click en una tarjeta resumen.
+// Reutiliza crearFilaPerfilPesaje tal cual (mismos inputs/Guardar/Eliminar);
+// solo cambia donde se monta (modal en vez de tarjeta inline).
+// ==========================================
+const pesajeModal          = document.getElementById('pesaje-modal');
+const pesajeModalOverlay    = document.getElementById('pesaje-modal-overlay');
+const btnClosePesajeModal   = document.getElementById('btn-close-pesaje-modal');
+const pesajeModalCategoria  = document.getElementById('pesaje-modal-categoria');
+const pesajeModalNombre     = document.getElementById('pesaje-modal-nombre');
+const pesajeModalCodigo     = document.getElementById('pesaje-modal-codigo');
+const pesajeModalPerfiles   = document.getElementById('pesaje-modal-perfiles');
+
+let pesajeModalProductoActualId = null;
+
+function renderizarModalPesaje(producto) {
+    if (!pesajeModalPerfiles) return;
+
+    pesajeModalCategoria.textContent = producto.nombre_categoria || '';
+    pesajeModalNombre.textContent = producto.nombre_producto;
+    pesajeModalCodigo.textContent = `COD ${producto.codigo_producto}`;
+
+    pesajeModalPerfiles.innerHTML = '';
     producto.perfiles.forEach((perfil) => {
-        div.appendChild(crearFilaPerfilPesaje(producto, perfil));
+        pesajeModalPerfiles.appendChild(crearFilaPerfilPesaje(producto, perfil));
     });
 
     if (producto.pesable === 1) {
         const btnAgregar = document.createElement('button');
         btnAgregar.type = 'button';
-        btnAgregar.className = 'w-full bg-surface text-on-surface border border-outline-variant py-sm px-md rounded-sharp uppercase tracking-widest text-label-mono hover:border-primary-fixed-dim transition-colors flex items-center justify-center gap-xs';
+        btnAgregar.className = 'w-full bg-surface text-on-surface border border-outline-variant py-sm px-md rounded-sharp uppercase tracking-widest text-label-mono hover:border-primary-fixed-dim transition-colors flex items-center justify-center gap-xs mt-sm';
         btnAgregar.innerHTML = '<span class="material-symbols-outlined text-sm">add</span> Agregar modelo';
         btnAgregar.addEventListener('click', () => agregarModeloPesaje(producto));
-        div.appendChild(btnAgregar);
+        pesajeModalPerfiles.appendChild(btnAgregar);
     }
-
-    return div;
 }
+
+function abrirModalPesaje(producto) {
+    if (!pesajeModal) return;
+    pesajeModalProductoActualId = producto.id_producto;
+    renderizarModalPesaje(producto);
+    pesajeModal.classList.remove('hidden');
+    pesajeModal.setAttribute('aria-hidden', 'false');
+}
+
+function cerrarModalPesaje() {
+    if (!pesajeModal) return;
+    pesajeModalProductoActualId = null;
+    pesajeModal.classList.add('hidden');
+    pesajeModal.setAttribute('aria-hidden', 'true');
+}
+
+if (btnClosePesajeModal) btnClosePesajeModal.addEventListener('click', cerrarModalPesaje);
+if (pesajeModalOverlay) pesajeModalOverlay.addEventListener('click', cerrarModalPesaje);
 
 function crearFilaPerfilPesaje(producto, perfil) {
     const row = document.createElement('div');
@@ -1119,14 +1235,21 @@ if (pesajeCategoriaSel) {
 
 if (pesajeFiltroPesablesBtn) {
     pesajeFiltroPesablesBtn.addEventListener('click', () => {
-        pesajeEstado.pesable = 1;
+        pesajeEstado.filtro = 'pesables';
+        cargarPesaje();
+    });
+}
+
+if (pesajeFiltroIncompletosBtn) {
+    pesajeFiltroIncompletosBtn.addEventListener('click', () => {
+        pesajeEstado.filtro = 'incompletos';
         cargarPesaje();
     });
 }
 
 if (pesajeFiltroNoPesablesBtn) {
     pesajeFiltroNoPesablesBtn.addEventListener('click', () => {
-        pesajeEstado.pesable = 0;
+        pesajeEstado.filtro = 'no_pesables';
         cargarPesaje();
     });
 }

@@ -87,6 +87,10 @@ class PesajeConfigItem(BaseModel):
     pesable: int
     barcode: Optional[str] = None
     nombre_perfil: str
+    medida: Optional[float] = None
+    nombre_unidad_medida: Optional[str] = None
+    nombre_unidad_medida_detalle: Optional[str] = None
+    nombre_ind_permite_comandar: Optional[str] = None
 
 class ActualizarPesajeConfigRequest(BaseModel):
     peso_bruto: Optional[float] = Field(None, gt=0)

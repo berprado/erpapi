@@ -172,7 +172,7 @@ Reglas de barra operativa:
 |---|---|---|
 | `POST` | `/api/pesaje/perfiles` | Crea (o reactiva si existe uno eliminado con el mismo nombre) un modelo de botella para producto pesable. Calcula `gramos_por_oz` en el backend a partir del volumen estandar del producto |
 | `GET` | `/api/pesaje/categorias` | Lista de categorias habilitadas, para el filtro del modulo PESAJE |
-| `GET` | `/api/pesaje/config` | Lista perfiles de pesaje (tabla `app_producto_pesaje_config_api`), con filtros opcionales `nombre`, `id_categoria`, `pesable`. Excluye siempre las categorias 15, 18, 19 y 20 |
+| `GET` | `/api/pesaje/config` | Lista perfiles de pesaje (tabla `app_producto_pesaje_config_api`), con filtros opcionales `nombre`, `id_categoria`, `pesable`. Excluye siempre las categorias 15, 18, 19 y 20. Ademas de los campos propios del perfil, hace `LEFT JOIN` a `vw_alm_producto_con_nombres` (por `id_producto`) para sumar `medida`, `nombre_unidad_medida`, `nombre_unidad_medida_detalle` y `nombre_ind_permite_comandar` — datos del producto que no dependen de la barra (a diferencia de existencias/cantidades, el peso bruto/tara/codigo de barras es el mismo sin importar donde este el producto), por eso no se usa `nombre_barra` de esa vista |
 | `PUT` | `/api/pesaje/config/{id}` | Edita `peso_bruto`/`tara`/`barcode` de un perfil existente. En productos no pesables solo se permite editar `barcode` |
 | `DELETE` | `/api/pesaje/config/{id}` | Elimina (soft-delete, `estado='DES'`) un perfil. Rechaza la eliminacion si es el ultimo perfil activo del producto |
 
@@ -385,8 +385,10 @@ sincronizada entre ambos modulos porque comparten el mismo origen de datos.
 
 ### Modulo PESAJE: detalles de UI
 
-- Cada perfil pesable muestra `peso_bruto`, `tara`, `g/oz` (solo lectura, recalculado en vivo al editar peso/tara) y `barcode`.
-- Los perfiles pesables con `peso_bruto` o `tara` nulos se marcan visualmente (borde de advertencia + icono + texto "Datos incompletos").
+- **Grid responsivo de tarjetas resumen** (`#pesaje-list`, `grid-template-columns: repeat(auto-fill, minmax(240px, 1fr))`): la cantidad de tarjetas por fila se adapta sola al ancho del dispositivo, sin breakpoints manuales. Cada tarjeta muestra categoria, nombre, ID/codigo, `medida`+`nombre_unidad_medida` (ej. "750 ML"), `cantidad_detalle`+`nombre_unidad_medida_detalle` (ej. "25 Oz." — la unidad varia por producto, no siempre es onzas), badge "Comanda: Si/No" y, si tiene mas de un perfil, un badge con la cantidad de modelos.
+- **Tres pestañas de filtro**: PESABLES, INCOMPLETOS y NO PESABLES. Las dos primeras piden el mismo `GET /api/pesaje/config?pesable=1` y se separan en cliente (`pesajeProductoTieneIncompleto()`: algun perfil sin `peso_bruto`/`tara`); NO PESABLES no tiene concepto de "incompleto" (no tiene esos campos) y pide `pesable=0`. Un producto que completa su ultimo perfil incompleto pasa solo de INCOMPLETOS a PESABLES en el siguiente refresco, sin accion manual.
+- **Modal de edicion** (`#pesaje-modal`, mismo patron que `#conversor-modal`): se abre al hacer click/Enter en una tarjeta y muestra exactamente lo que antes se veia inline por perfil (`peso_bruto`, `tara`, `g/oz` recalculado en vivo, `barcode`, botones Guardar/Eliminar) mas el boton "Agregar modelo". Los perfiles pesables con `peso_bruto` o `tara` nulos se siguen marcando con borde de advertencia + icono "Datos incompletos" dentro del modal (por perfil, relevante si un producto tiene varios modelos y solo uno esta incompleto).
+- Si el modal esta abierto cuando se guarda/agrega/elimina un perfil, su contenido se refresca en el lugar con los datos nuevos (`renderizarModalPesaje()`) en vez de cerrarse — incluso si el producto "cambio de pestaña" (ej. paso de INCOMPLETOS a PESABLES al completarse). Se cierra solo si el producto deja de existir en la respuesta.
 - Excluye productos de las categorias 15, 18, 19 y 20 (tanto en el listado como en el filtro de categorias).
 
 ### Modulo CONVERSOR: detalles de UI
