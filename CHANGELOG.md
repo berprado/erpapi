@@ -4,6 +4,20 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.51
+- Reordena el encabezado de la tarjeta de producto (PALOTEO 1 y 2): categoria,
+  ID y codigo pasan a mostrarse en una fila arriba del nombre del producto
+  (antes iban debajo). De paso, "Cod:" pasa a "COD:" para alinear con el
+  encabezado de la tabla de REPORTE.
+
+## 10.50
+- Boton "+ Botella" (PALOTEO 1 y 2): quita el icono `add_circle` duplicado
+  que mostraba un segundo signo "+" junto al de texto; ahora solo queda un
+  simbolo "+" junto a la palabra Botella.
+- Contador de navegacion de PALOTEO 2 (entre PREV y SIGT): quita la palabra
+  "Prod" y agrega el porcentaje de avance junto a la posicion actual,
+  pasando de "PROD X/Y" a "X/Y (Z%)".
+
 ## 10.49
 - Unifica el boton de registro de PALOTEO 1/2/3: mismo texto ("Registrar
   Paloteo"), mismo icono (`done_all`) y mismo estilo. PALOTEO 1 tenia texto

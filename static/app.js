@@ -1934,13 +1934,12 @@ function crearTarjetaProductoElement(p, scope = 'inv') {
     div.dataset.onzasMax = parseFloat(p.onzas_por_botella_llena) || 0;
 
     let html = `
-        ${p.categoria_nombre ? `<span class="text-label-mono font-label-mono tracking-widest uppercase text-on-surface-variant mb-xs block">${escapeHtml(p.categoria_nombre)}</span>` : ''}
-        <h4 class="text-primary-fixed font-headline-md text-lg mb-xs neon-text-primary">${escapeHtml(p.nombre)}</h4>
-        <div class="id-codigo-row text-data-tabular text-on-surface-variant mb-md flex items-center flex-wrap gap-md">
-            <span>ID: ${p.id_producto}</span>
-            <span class="border-l border-outline-variant pl-sm">Cód: ${escapeHtml(p.codigo)}</span>
+        <div class="id-codigo-row text-data-tabular text-on-surface-variant mb-xs flex items-center flex-wrap gap-md">
+            ${p.categoria_nombre ? `<span class="font-label-mono uppercase tracking-widest">${escapeHtml(p.categoria_nombre)}</span><span class="border-l border-outline-variant pl-sm">ID: ${p.id_producto}</span>` : `<span>ID: ${p.id_producto}</span>`}
+            <span class="border-l border-outline-variant pl-sm">COD: ${escapeHtml(p.codigo)}</span>
             ${p._agregadoManual ? `<span class="badge-info text-[9px] font-label-mono uppercase tracking-widest px-xs py-[1px] rounded ml-auto">Sin movimiento</span>` : ''}
         </div>
+        <h4 class="text-primary-fixed font-headline-md text-lg mb-md neon-text-primary">${escapeHtml(p.nombre)}</h4>
 
         <div class="space-y-sm mb-lg text-data-tabular font-semibold">
             <div class="flex items-center card-row-system border px-sm py-sm rounded-md gap-sm">
@@ -2009,7 +2008,7 @@ function crearTarjetaProductoElement(p, scope = 'inv') {
                 </div>
                 <div class="mt-sm flex flex-wrap gap-sm">
                     <button type="button" data-id-producto="${p.id_producto}" class="${btnAddPesoClass} btn-action w-full sm:w-auto text-label-mono font-semibold flex items-center justify-center sm:justify-start gap-xs transition-colors uppercase tracking-widest rounded-sharp border px-sm py-xs"${!operativaPermitePaloteo ? ' disabled' : ''}>
-                        <span class="material-symbols-outlined text-sm">add_circle</span> + Botella
+                        + Botella
                     </button>
                 </div>
             </div>` : ''}
@@ -3798,9 +3797,11 @@ function renderTarjetaCaptura(indice) {
         }
     }
 
+    const pctAvance = total > 0 ? Math.round(((indice + 1) / total) * 100) : 0;
+
     const contador = document.createElement('div');
     contador.className = 'justify-self-center flex items-center justify-center gap-1 text-center leading-none min-w-max';
-    contador.innerHTML = `<span class="text-[9px] sm:text-[10px] font-label-mono text-on-surface-variant uppercase tracking-[0.12em]">Prod</span><span id="captura-indice-actual" class="text-[12px] sm:text-sm font-semibold text-primary-fixed tabular-nums">${indice + 1}</span><span class="text-[9px] sm:text-[10px] font-label-mono text-on-surface-variant uppercase tracking-[0.12em]">/</span><span id="captura-indice-total" class="text-[12px] sm:text-sm font-semibold text-primary-fixed tabular-nums">${total}</span>`;
+    contador.innerHTML = `<span id="captura-indice-actual" class="text-[12px] sm:text-sm font-semibold text-primary-fixed tabular-nums">${indice + 1}</span><span class="text-[9px] sm:text-[10px] font-label-mono text-on-surface-variant uppercase tracking-[0.12em]">/</span><span id="captura-indice-total" class="text-[12px] sm:text-sm font-semibold text-primary-fixed tabular-nums">${total}</span><span id="captura-indice-pct" class="text-[9px] sm:text-[10px] font-label-mono text-on-surface-variant tabular-nums">&nbsp;(${pctAvance}%)</span>`;
 
     headerCaptura.appendChild(botonAnterior);
     headerCaptura.appendChild(contador);
