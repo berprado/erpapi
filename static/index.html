@@ -873,9 +873,9 @@
             </div>
 
             <!-- Botón de envío de Paloteo 1 -->
-            <button id="btn-guardar-inventario" type="button" disabled class="mt-md w-full bg-primary-container text-black h-10 px-sm rounded-sharp flex items-center justify-center gap-xs hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest text-[11px] font-label-mono font-semibold cursor-not-allowed disabled:opacity-50">
-                <span class="material-symbols-outlined text-sm">send</span>
-                Enviar Paloteo 1
+            <button id="btn-guardar-inventario" type="button" disabled class="mt-md w-full bg-primary-container text-black h-10 px-sm rounded-sharp flex items-center justify-center gap-xs hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest text-[11px] font-label-mono font-semibold disabled:opacity-50 disabled:cursor-not-allowed">
+                <span class="material-symbols-outlined text-sm">done_all</span>
+                Registrar Paloteo
             </button>
 
             <!-- FAB: volver al inicio de la página -->
@@ -920,8 +920,8 @@
 
             <div class="mt-sm">
                 <button id="stock-btn-guardar" type="button" class="w-full bg-primary-container text-black h-10 px-sm rounded-sharp flex items-center justify-center gap-xs hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest text-[11px] font-label-mono font-semibold disabled:opacity-50 disabled:cursor-not-allowed">
-                    <span class="material-symbols-outlined text-sm">save</span>
-                    Guardar Paloteo 3
+                    <span class="material-symbols-outlined text-sm">done_all</span>
+                    Registrar Paloteo
                 </button>
             </div>
 
@@ -997,14 +997,14 @@
 
         <!-- ========== PANEL LOGS: MODO CAPTURA 1x1 ========== -->
         <div id="panel-logs" class="tab-panel hidden p-md max-w-2xl mx-auto w-full">
-            <div class="mb-md flex justify-center">
+            <div id="captura-card-container" class="space-y-4"></div>
+
+            <div class="mt-md flex justify-center">
                 <button id="captura-btn-finalizar" type="button" class="w-full h-10 bg-primary-container text-black px-sm rounded-sharp flex items-center justify-center gap-xs hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest text-[11px] font-label-mono font-semibold disabled:opacity-50 disabled:cursor-not-allowed">
                     <span class="material-symbols-outlined text-sm">done_all</span>
                     Registrar Paloteo
                 </button>
             </div>
-
-            <div id="captura-card-container" class="space-y-4"></div>
 
         </div><!-- /panel-logs -->
 
@@ -1300,7 +1300,7 @@
         </div>
     </div>
 
-    <script src="/assets/app.js?v=10.48"></script>
+    <script src="/assets/app.js?v=10.49"></script>
 
     <script>
         (function () {
@@ -1345,7 +1345,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/assets/sw.js?v=10.48')
+                navigator.serviceWorker.register('/assets/sw.js?v=10.49')
                     .then(reg => console.log('[PWA] Service Worker registrado:', reg.scope))
                     .catch(err => console.error('[PWA] Error al registrar SW:', err));
             });

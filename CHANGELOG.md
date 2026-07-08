@@ -4,6 +4,22 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.49
+- Unifica el boton de registro de PALOTEO 1/2/3: mismo texto ("Registrar
+  Paloteo"), mismo icono (`done_all`) y mismo estilo. PALOTEO 1 tenia texto
+  ("Enviar Paloteo 1") e icono (`send`) distintos, y ademas un set de clases
+  propio en JS (`_habilitarBtnEnvio`/`_deshabilitarBtnEnvio`) que le
+  cambiaba el color de texto al habilitarse/deshabilitarse — los otros dos
+  botones solo alternan `disabled` y dependen de las clases base
+  (`disabled:opacity-50`/`disabled:cursor-not-allowed`), por eso se veian
+  distintos. Se quito ese tratamiento especial de PALOTEO 1 para que los
+  tres se comporten igual.
+- Corrige tambien un `cursor-not-allowed` incondicional en el boton de
+  PALOTEO 1 (mostraba cursor de "no permitido" incluso habilitado).
+- Mueve el boton de PALOTEO 2 (captura 1x1) de arriba de la tarjeta a abajo,
+  para que quede consistente con PALOTEO 1 y 3 (boton siempre al final del
+  contenido, no antes).
+
 ## 10.48
 - Migra `config.py` del estilo `class Config` (Pydantic v1, deprecado) a
   `model_config = SettingsConfigDict(...)` (Pydantic v2). Sin cambio de

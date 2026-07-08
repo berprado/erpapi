@@ -1761,6 +1761,12 @@ function ocultarResumenProductos() {
     document.getElementById('estado-resumen').classList.add('hidden');
 }
 
+// Los tres botones de registro (PALOTEO 1/2/3) se habilitan/deshabilitan de
+// forma identica, solo con el atributo disabled (el estilo de disabled/
+// habilitado vive en las clases base disabled:opacity-50/disabled:cursor-not-allowed
+// del HTML, compartidas por los tres). Antes btnGuardar recibia ademas un
+// set de clases propio (text-primary-fixed/glow-cyan-intense) que lo hacia
+// verse distinto a stockBtnGuardar/capturaBtnFinalizar.
 function _habilitarBtnEnvio() {
     if (!operativaPermitePaloteo) {
         _deshabilitarBtnEnvio();
@@ -1768,8 +1774,6 @@ function _habilitarBtnEnvio() {
     }
 
     btnGuardar.disabled = false;
-    btnGuardar.classList.remove('opacity-40', 'cursor-not-allowed', 'text-on-surface-variant');
-    btnGuardar.classList.add('text-primary-fixed', 'hover:text-primary-fixed-dim', 'border-primary-fixed-dim', 'glow-cyan-intense');
     if (btnEnviarInventario) btnEnviarInventario.disabled = false;
     if (stockBtnGuardar) stockBtnGuardar.disabled = false;
     if (capturaBtnFinalizar) capturaBtnFinalizar.disabled = false;
@@ -1777,8 +1781,6 @@ function _habilitarBtnEnvio() {
 
 function _deshabilitarBtnEnvio() {
     btnGuardar.disabled = true;
-    btnGuardar.classList.remove('text-primary-fixed', 'hover:text-primary-fixed-dim', 'border-primary-fixed-dim', 'glow-cyan-intense');
-    btnGuardar.classList.add('opacity-40', 'cursor-not-allowed', 'text-on-surface-variant');
     if (btnEnviarInventario) btnEnviarInventario.disabled = true;
     if (stockBtnGuardar) stockBtnGuardar.disabled = true;
     if (capturaBtnFinalizar) capturaBtnFinalizar.disabled = true;
