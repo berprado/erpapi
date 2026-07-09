@@ -264,6 +264,12 @@ function flushAutosave(modo = 'manual') {
 function scheduleAutosave() {
     if (!operativaPermitePaloteo || !currentOperacionId) return;
 
+    const snapshot = _snapshotAutosaveActual();
+    if (!snapshot) return;
+
+    const hash = _hashAutosave(snapshot);
+    if (hash === autosaveLastHash) return;
+
     _actualizarEstadoAutosave('pending', 'Guardando borrador...');
 
     if (autosaveDebounceTimer) {
@@ -298,6 +304,15 @@ function stopAutosaveInterval() {
 function clearAutosaveDraft() {
     const key = _obtenerClaveAutosave();
     if (!key) return;
+
+    if (autosaveDebounceTimer) {
+        clearTimeout(autosaveDebounceTimer);
+        autosaveDebounceTimer = null;
+    }
+    if (autosaveIntervalId) {
+        clearInterval(autosaveIntervalId);
+        autosaveIntervalId = null;
+    }
 
     localStorage.removeItem(key);
     autosaveLastHash = '';
