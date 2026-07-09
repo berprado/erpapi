@@ -3978,6 +3978,7 @@ if (stockList) {
             syncFilaPaloteo3ConInventario(row);
             renderizarReportePaloteo3();
             actualizarResumenProgresoPaloteo3();
+            scheduleAutosave();
         }
     });
 
@@ -3986,6 +3987,7 @@ if (stockList) {
             const row = e.target.closest('.stock-row');
             syncFilaPaloteo3ConInventario(row);
             renderizarReportePaloteo3();
+            scheduleAutosave();
         }
     });
 
@@ -4031,6 +4033,7 @@ if (stockList) {
             syncFilaPaloteo3ConInventario(row);
             renderizarReportePaloteo3();
             actualizarResumenProgresoPaloteo3();
+            scheduleAutosave();
             return;
         }
     });
@@ -4106,48 +4109,6 @@ if (stockBtnGuardar) {
         if (!valido) return;
 
         abrirDialogoObservaciones('inventario');
-    });
-}
-
-const stockList = document.getElementById('stock-list');
-if (stockList) {
-    stockList.addEventListener('input', (e) => {
-        if (e.target.classList.contains('stock-input-unidades') || e.target.classList.contains('input-peso')) {
-            syncTodasFilasPaloteo3ConInventario();
-            actualizarResumenProgressoStock();
-            scheduleAutosave();
-        }
-    });
-
-    stockList.addEventListener('change', (e) => {
-        if (e.target.classList.contains('select-perfil')) {
-            syncTodasFilasPaloteo3ConInventario();
-            actualizarResumenProgressoStock();
-            scheduleAutosave();
-        }
-    });
-
-    stockList.addEventListener('click', async (e) => {
-        if (e.target.classList.contains('stock-btn-dec-unid') || e.target.classList.contains('stock-btn-inc-unid') ||
-            e.target.classList.contains('stock-btn-dec-peso') || e.target.classList.contains('stock-btn-inc-peso')) {
-            const row = e.target.closest('.stock-row');
-            if (row) {
-                setTimeout(() => {
-                    syncTodasFilasPaloteo3ConInventario();
-                    actualizarResumenProgressoStock();
-                    scheduleAutosave();
-                }, 50);
-            }
-        } else if (e.target.classList.contains('btn-remove-peso')) {
-            const row = e.target.closest('.stock-row');
-            if (row) {
-                setTimeout(() => {
-                    syncTodasFilasPaloteo3ConInventario();
-                    actualizarResumenProgressoStock();
-                    scheduleAutosave();
-                }, 50);
-            }
-        }
     });
 }
 
