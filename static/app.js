@@ -4109,6 +4109,48 @@ if (stockBtnGuardar) {
     });
 }
 
+const stockList = document.getElementById('stock-list');
+if (stockList) {
+    stockList.addEventListener('input', (e) => {
+        if (e.target.classList.contains('stock-input-unidades') || e.target.classList.contains('input-peso')) {
+            syncTodasFilasPaloteo3ConInventario();
+            actualizarResumenProgressoStock();
+            scheduleAutosave();
+        }
+    });
+
+    stockList.addEventListener('change', (e) => {
+        if (e.target.classList.contains('select-perfil')) {
+            syncTodasFilasPaloteo3ConInventario();
+            actualizarResumenProgressoStock();
+            scheduleAutosave();
+        }
+    });
+
+    stockList.addEventListener('click', async (e) => {
+        if (e.target.classList.contains('stock-btn-dec-unid') || e.target.classList.contains('stock-btn-inc-unid') ||
+            e.target.classList.contains('stock-btn-dec-peso') || e.target.classList.contains('stock-btn-inc-peso')) {
+            const row = e.target.closest('.stock-row');
+            if (row) {
+                setTimeout(() => {
+                    syncTodasFilasPaloteo3ConInventario();
+                    actualizarResumenProgressoStock();
+                    scheduleAutosave();
+                }, 50);
+            }
+        } else if (e.target.classList.contains('btn-remove-peso')) {
+            const row = e.target.closest('.stock-row');
+            if (row) {
+                setTimeout(() => {
+                    syncTodasFilasPaloteo3ConInventario();
+                    actualizarResumenProgressoStock();
+                    scheduleAutosave();
+                }, 50);
+            }
+        }
+    });
+}
+
 if (capturaBtnAnterior) {
     capturaBtnAnterior.addEventListener('click', () => navegarCaptura(-1));
 }
