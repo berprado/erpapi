@@ -1949,9 +1949,9 @@ function crearTarjetaProductoElement(p, scope = 'inv') {
     div.dataset.onzasMax = parseFloat(p.onzas_por_botella_llena) || 0;
 
     let html = `
-        <div class="id-codigo-row text-data-tabular text-on-surface-variant mb-xs flex items-center flex-wrap gap-md">
-            ${p.categoria_nombre ? `<span class="font-label-mono uppercase tracking-widest">${escapeHtml(p.categoria_nombre)}</span><span class="border-l border-outline-variant pl-sm">ID: ${p.id_producto}</span>` : `<span>ID: ${p.id_producto}</span>`}
-            <span class="border-l border-outline-variant pl-sm">COD: ${escapeHtml(p.codigo)}</span>
+        <div class="id-codigo-row text-[11px] text-outline mb-xs flex items-center flex-wrap gap-xs">
+            ${p.categoria_nombre ? `<span class="font-label-mono uppercase tracking-[0.08em] text-outline">${escapeHtml(p.categoria_nombre)}</span><span class="border-l border-outline-variant pl-xs">ID: ${p.id_producto}</span>` : `<span>ID: ${p.id_producto}</span>`}
+            <span class="border-l border-outline-variant pl-xs">COD: ${escapeHtml(p.codigo)}</span>
             ${p._agregadoManual ? `<span class="badge-info text-[9px] font-label-mono uppercase tracking-widest px-xs py-[1px] rounded ml-auto">Sin movimiento</span>` : ''}
         </div>
         <h4 class="text-primary-fixed font-headline-md text-lg mb-md neon-text-primary">${escapeHtml(p.nombre)}</h4>
