@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     @field_validator('APP_ENV')
     @classmethod
     def validar_app_env(cls, v: str) -> str:
-        permitidos = {"test", "production"}
+        permitidos = {"test", "test_pos", "production"}
         valor = (v or "").strip().lower()
         if valor not in permitidos:
             raise ValueError(f"APP_ENV debe ser uno de: {', '.join(sorted(permitidos))}")
@@ -60,13 +60,20 @@ class Settings(BaseSettings):
             valores_unicos.insert(0, self.PALOTEO_DEFAULT_BARRA_ID)
         return valores_unicos
     
-    # Variables de prueba
+    # Variables de prueba (WAMP local)
     TEST_DB_HOST: str
     TEST_DB_USER: str
     TEST_DB_PASS: str
     TEST_DB_NAME: str
     TEST_DB_PORT: str
-    
+
+    # Variables de prueba con POS (remoto)
+    TEST_POS_DB_HOST: str = ""
+    TEST_POS_DB_USER: str = ""
+    TEST_POS_DB_PASS: str = ""
+    TEST_POS_DB_NAME: str = ""
+    TEST_POS_DB_PORT: str = ""
+
     # Variables de producción
     PROD_DB_HOST: str
     PROD_DB_USER: str
@@ -78,12 +85,16 @@ class Settings(BaseSettings):
     def database_url(self) -> str:
         """Genera la URL de conexión de SQLAlchemy dinámicamente."""
         if self.APP_ENV == "production":
-            # Fix #20: usar logging en lugar de print()
             logger.info("Conectando a BASE DE DATOS DE PRODUCCIÓN")
             return f"mysql+pymysql://{self.PROD_DB_USER}:{self.PROD_DB_PASS}@{self.PROD_DB_HOST}:{self.PROD_DB_PORT}/{self.PROD_DB_NAME}"
-        
+
+        if self.APP_ENV == "test_pos":
+            logger.info("Conectando a BASE DE DATOS DE PRUEBAS CON POS (Remoto)")
+            if not self.TEST_POS_DB_PASS:
+                return f"mysql+pymysql://{self.TEST_POS_DB_USER}@{self.TEST_POS_DB_HOST}:{self.TEST_POS_DB_PORT}/{self.TEST_POS_DB_NAME}"
+            return f"mysql+pymysql://{self.TEST_POS_DB_USER}:{self.TEST_POS_DB_PASS}@{self.TEST_POS_DB_HOST}:{self.TEST_POS_DB_PORT}/{self.TEST_POS_DB_NAME}"
+
         logger.info("Conectando a BASE DE DATOS DE PRUEBAS (WAMP Local)")
-        # Si no hay password local, formateamos la URL sin los dos puntos
         if not self.TEST_DB_PASS:
             return f"mysql+pymysql://{self.TEST_DB_USER}@{self.TEST_DB_HOST}:{self.TEST_DB_PORT}/{self.TEST_DB_NAME}"
         return f"mysql+pymysql://{self.TEST_DB_USER}:{self.TEST_DB_PASS}@{self.TEST_DB_HOST}:{self.TEST_DB_PORT}/{self.TEST_DB_NAME}"
