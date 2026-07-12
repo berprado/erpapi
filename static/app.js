@@ -948,6 +948,10 @@ function formatearMedidaPesaje(valor, unidad) {
     return `${texto} ${unidad}`;
 }
 
+// Estilo unificado de botones de accion en PESAJE (tarjetas y ambos modales),
+// tomado del boton EDITAR. Los callers agregan el ancho (flex-1 / w-full).
+const PESAJE_BTN_CLASS = 'bg-surface border border-outline-variant text-on-surface py-sm px-md rounded-sharp text-[10px] font-label-mono uppercase tracking-widest hover:border-primary-fixed-dim hover:text-primary-fixed transition-colors flex items-center justify-center gap-xs';
+
 function crearTarjetaResumenPesaje(producto) {
     const div = document.createElement('div');
     div.className = 'bg-surface-container border border-outline-variant rounded-md p-md shadow-lg transition-colors flex flex-col gap-xs';
@@ -983,11 +987,11 @@ function crearTarjetaResumenPesaje(producto) {
             ${producto.perfiles.length > 1 ? `<span class="badge-info text-[9px] font-label-mono px-xs py-[1px] rounded uppercase tracking-widest">${producto.perfiles.length} modelos</span>` : ''}
         </div>
         <div class="flex gap-xs mt-auto pt-xs border-t border-outline-variant">
-            <button type="button" class="pesaje-btn-editar flex-1 bg-surface border border-outline-variant text-on-surface py-sm px-md rounded-sharp text-[10px] font-label-mono uppercase tracking-widest hover:border-primary-fixed-dim hover:text-primary-fixed transition-colors flex items-center justify-center gap-xs">
+            <button type="button" class="pesaje-btn-editar flex-1 ${PESAJE_BTN_CLASS}">
                 <span class="material-symbols-outlined text-sm">edit</span>Editar
             </button>
             ${puedeCalcular ? `
-            <button type="button" class="pesaje-btn-calcular flex-1 bg-primary-container text-black py-sm px-md rounded-sharp text-[10px] font-label-mono uppercase tracking-widest hover:brightness-110 transition-all flex items-center justify-center gap-xs">
+            <button type="button" class="pesaje-btn-calcular flex-1 ${PESAJE_BTN_CLASS}">
                 <span class="material-symbols-outlined text-sm">calculate</span>Calcular
             </button>` : ''}
         </div>
@@ -1040,7 +1044,7 @@ function renderizarModalPesaje(producto) {
     if (producto.pesable === 1) {
         const btnAgregar = document.createElement('button');
         btnAgregar.type = 'button';
-        btnAgregar.className = 'w-full bg-surface text-on-surface border border-outline-variant py-sm px-md rounded-sharp uppercase tracking-widest text-label-mono hover:border-primary-fixed-dim transition-colors flex items-center justify-center gap-xs mt-sm';
+        btnAgregar.className = `w-full mt-sm ${PESAJE_BTN_CLASS}`;
         btnAgregar.innerHTML = '<span class="material-symbols-outlined text-sm">add</span> Agregar modelo';
         btnAgregar.addEventListener('click', () => agregarModeloPesaje(producto));
         pesajeModalPerfiles.appendChild(btnAgregar);
@@ -1114,10 +1118,10 @@ function crearFilaPerfilPesaje(producto, perfil) {
         </div>
         <p class="pesaje-error hidden text-xs text-error"></p>
         <div class="flex gap-xs justify-end pt-xs">
-            <button type="button" class="pesaje-btn-guardar bg-primary-container text-black px-md py-sm rounded-sharp text-[10px] font-label-mono uppercase tracking-widest hover:brightness-110 transition-all">
-                <span class="material-symbols-outlined text-sm align-middle mr-1">save</span>Guardar
+            <button type="button" class="pesaje-btn-guardar ${PESAJE_BTN_CLASS}">
+                <span class="material-symbols-outlined text-sm">save</span>Guardar
             </button>
-            ${puedeEliminar ? '<button type="button" class="pesaje-btn-eliminar bg-surface border border-outline-variant text-on-surface px-md py-sm rounded-sharp text-[10px] font-label-mono uppercase tracking-widest hover:border-primary-fixed-dim transition-colors">Eliminar</button>' : ''}
+            ${puedeEliminar ? `<button type="button" class="pesaje-btn-eliminar ${PESAJE_BTN_CLASS}"><span class="material-symbols-outlined text-sm">delete</span>Eliminar</button>` : ''}
         </div>
     `;
 

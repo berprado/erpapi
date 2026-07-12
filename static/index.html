@@ -1255,8 +1255,8 @@
                     <div class="px-md py-md overflow-y-auto flex-1">
                         <div id="conversor-botellas-container" class="space-y-sm"></div>
 
-                        <button type="button" id="conversor-btn-agregar" class="mt-sm w-full border border-dashed border-outline-variant rounded-md py-sm text-[11px] font-label-mono uppercase tracking-widest text-on-surface-variant hover:border-primary-fixed-dim hover:text-primary-fixed transition-colors flex items-center justify-center gap-xs">
-                            <span class="material-symbols-outlined" style="font-size:1rem;">add</span>
+                        <button type="button" id="conversor-btn-agregar" class="mt-sm w-full bg-surface border border-outline-variant text-on-surface py-sm px-md rounded-sharp text-[10px] font-label-mono uppercase tracking-widest hover:border-primary-fixed-dim hover:text-primary-fixed transition-colors flex items-center justify-center gap-xs">
+                            <span class="material-symbols-outlined text-sm">add</span>
                             Agregar botella
                         </button>
 
@@ -1276,7 +1276,7 @@
         </div>
     </div>
 
-    <script src="/assets/app.js?v=10.59"></script>
+    <script src="/assets/app.js?v=10.60"></script>
 
     <script>
         (function () {
@@ -1321,7 +1321,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/assets/sw.js?v=10.59')
+                navigator.serviceWorker.register('/assets/sw.js?v=10.60')
                     .then(reg => console.log('[PWA] Service Worker registrado:', reg.scope))
                     .catch(err => console.error('[PWA] Error al registrar SW:', err));
             });
