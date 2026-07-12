@@ -777,10 +777,6 @@
                             <span class="material-symbols-outlined">inventory_2</span>
                             Paloteo 1
                         </button>
-                        <button type="button" class="floating-menu-item" data-tab="conversor" role="menuitem">
-                            <span class="material-symbols-outlined">scale</span>
-                            Conversor
-                        </button>
                         <button id="menu-item-pesaje" type="button" class="floating-menu-item hidden" data-tab="pesaje" role="menuitem">
                             <span class="material-symbols-outlined">monitor_weight</span>
                             Pesaje
@@ -1051,31 +1047,6 @@
             </button>
         </div><!-- /panel-pesaje -->
 
-        <!-- ========== PANEL CONVERSOR ========== -->
-        <div id="panel-conversor" class="tab-panel hidden p-md max-w-2xl mx-auto w-full">
-            <div class="flex items-start justify-between mb-sm">
-                <div>
-                    <h2 class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase flex items-center gap-xs leading-none">
-                        <span class="material-symbols-outlined text-primary-fixed" style="font-size:1rem;">scale</span>
-                        Conversor
-                    </h2>
-                    <p class="text-[11px] text-on-surface-variant mt-[2px] leading-tight">Equivalencia de peso a onzas, sin registrar nada</p>
-                </div>
-            </div>
-
-
-            <!-- Resultados de búsqueda -->
-            <div id="conversor-resultados" class="space-y-xs mb-md"></div>
-            <div id="conversor-empty-state" class="hidden text-center text-on-surface-variant py-md font-body-base text-sm">
-                No se encontraron productos pesables con ese criterio.
-            </div>
-
-            <!-- FAB: volver al inicio de la página -->
-            <button id="conversor-fab-scroll-top" type="button" aria-label="Volver al inicio" class="fab-scroll-top hidden bg-primary-container text-on-primary-fixed shadow-cyan-glow hover:brightness-110 active:scale-95 transition-all">
-                <span class="material-symbols-outlined">arrow_upward</span>
-            </button>
-        </div><!-- /panel-conversor -->
-
 
         </main>
 
@@ -1305,7 +1276,7 @@
         </div>
     </div>
 
-    <script src="/assets/app.js?v=10.58"></script>
+    <script src="/assets/app.js?v=10.59"></script>
 
     <script>
         (function () {
@@ -1350,7 +1321,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/assets/sw.js?v=10.58')
+                navigator.serviceWorker.register('/assets/sw.js?v=10.59')
                     .then(reg => console.log('[PWA] Service Worker registrado:', reg.scope))
                     .catch(err => console.error('[PWA] Error al registrar SW:', err));
             });

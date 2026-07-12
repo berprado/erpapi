@@ -178,14 +178,6 @@ Reglas de barra operativa:
 
 Todos los endpoints de Pesaje requieren ademas que el usuario tenga el rol `ROLE_ADMINISTRADOR` (verificado contra `seg_permiso`/`seg_rol`), devolviendo `403` si no lo tiene.
 
-### Conversor (requiere JWT)
-
-| Metodo | Ruta | Descripcion |
-|---|---|---|
-| `GET` | `/api/conversor/productos` | Catalogo completo de productos pesables (`pesable=1`, excluye categorias 15, 18, 19 y 20), agrupados con sus perfiles. No filtra por operativa, barra ni movimiento reciente |
-
-A diferencia de `/api/inventario/pendientes`, este endpoint no requiere rol administrador (cualquier usuario autenticado puede usarlo) y no depende del estado de la operativa: alimenta el modulo CONVERSOR, una calculadora de peso a onzas sin persistencia (ver seccion "Modulo CONVERSOR" mas abajo).
-
 ### Reporte Paloteo 3 (requiere JWT)
 
 | Metodo | Ruta | Descripcion |
@@ -315,8 +307,7 @@ Flujo actual de navegacion:
 - PALOTEO 2
 - PALOTEO 3 (captura ciega)
 - AJUSTES (diferencias, exportacion PDF y, solo administradores, aplicar el ajuste definitivo contra `bar_inventario`)
-- PESAJE (CRUD de modelos de botella y codigos de barra; solo visible/accesible para usuarios con rol `ROLE_ADMINISTRADOR`)
-- CONVERSOR (calculadora de peso a onzas, siempre disponible sin importar el estado de la operativa)
+- PESAJE (CRUD de modelos de botella y codigos de barra; solo visible/accesible para usuarios con rol `ROLE_ADMINISTRADOR`). Cada tarjeta de producto pesable ofrece dos acciones: EDITAR (modal de modelos/codigos de barra) y CALCULAR (calculadora de peso a onzas integrada; ex-modulo CONVERSOR). CALCULAR solo aparece en productos pesables con todos sus perfiles completos.
 
 Sincronizacion entre modulos:
 
@@ -387,21 +378,22 @@ sincronizada entre ambos modulos porque comparten el mismo origen de datos.
 
 - **Grid responsivo de tarjetas resumen** (`#pesaje-list`, `grid-template-columns: repeat(auto-fill, minmax(240px, 1fr))`): la cantidad de tarjetas por fila se adapta sola al ancho del dispositivo, sin breakpoints manuales. Cada tarjeta muestra categoria, nombre, ID/codigo, `medida`+`nombre_unidad_medida` (ej. "750 ML"), `cantidad_detalle`+`nombre_unidad_medida_detalle` (ej. "25 Oz." — la unidad varia por producto, no siempre es onzas), badge "Comanda: Si/No" y, si tiene mas de un perfil, un badge con la cantidad de modelos.
 - **Tres pestañas de filtro**: PESABLES, INCOMPLETOS y NO PESABLES. Las dos primeras piden el mismo `GET /api/pesaje/config?pesable=1` y se separan en cliente (`pesajeProductoTieneIncompleto()`: algun perfil sin `peso_bruto`/`tara`); NO PESABLES no tiene concepto de "incompleto" (no tiene esos campos) y pide `pesable=0`. Un producto que completa su ultimo perfil incompleto pasa solo de INCOMPLETOS a PESABLES en el siguiente refresco, sin accion manual.
-- **Modal de edicion** (`#pesaje-modal`, mismo patron que `#conversor-modal`): se abre al hacer click/Enter en una tarjeta y muestra exactamente lo que antes se veia inline por perfil (`peso_bruto`, `tara`, `g/oz` recalculado en vivo, `barcode`, botones Guardar/Eliminar) mas el boton "Agregar modelo". Los perfiles pesables con `peso_bruto` o `tara` nulos se siguen marcando con borde de advertencia + icono "Datos incompletos" dentro del modal (por perfil, relevante si un producto tiene varios modelos y solo uno esta incompleto).
+- **Dos acciones por tarjeta**: cada tarjeta tiene en su parte inferior los botones EDITAR y, solo en pesables completos, CALCULAR. EDITAR abre el modal de edicion (`#pesaje-modal`); CALCULAR abre la calculadora (`#conversor-modal`, ver "Calculadora peso -> onzas") reutilizando los perfiles ya cargados del producto (sin fetch adicional). En NO PESABLES e INCOMPLETOS la tarjeta solo muestra EDITAR.
+- **Modal de edicion** (`#pesaje-modal`, mismo patron que `#conversor-modal`): se abre con EDITAR y muestra exactamente lo que antes se veia inline por perfil (`peso_bruto`, `tara`, `g/oz` recalculado en vivo, `barcode`, botones Guardar/Eliminar) mas el boton "Agregar modelo". En productos no pesables solo muestra el codigo de barras (sin datos de modelo de botella). Los perfiles pesables con `peso_bruto` o `tara` nulos se siguen marcando con borde de advertencia + icono "Incompleto" dentro del modal (por perfil, relevante si un producto tiene varios modelos y solo uno esta incompleto).
 - Si el modal esta abierto cuando se guarda/agrega/elimina un perfil, su contenido se refresca en el lugar con los datos nuevos (`renderizarModalPesaje()`) en vez de cerrarse — incluso si el producto "cambio de pestaña" (ej. paso de INCOMPLETOS a PESABLES al completarse). Se cierra solo si el producto deja de existir en la respuesta.
 - Excluye productos de las categorias 15, 18, 19 y 20 (tanto en el listado como en el filtro de categorias).
 
-### Modulo CONVERSOR: detalles de UI
+### Calculadora peso -> onzas (integrada en PESAJE, ex-modulo CONVERSOR)
 
-- Calculadora de peso a onzas para cualquier producto pesable, sin escribir nada en BD y sin las restricciones de los demas modulos: siempre visible en el menu, no depende del estado de la operativa (`24`) ni de `is_admin`.
-- Catalogo (`GET /api/conversor/productos`) se carga una sola vez por sesion (`conversorProductosCache` en `app.js`) y la busqueda/filtro corre en cliente; no hay roundtrip por cada tecla ni por cada peso ingresado.
-- Al seleccionar un producto en los resultados se abre una ventana modal (`#conversor-modal`) con el mismo patron visual y de cierre (overlay, boton X, tecla Esc) que los modales "Guia Operativa" y "Boletin" (`#dummy-content-dialog`).
+- Antes era un modulo independiente con su propio tab y endpoint (`/api/conversor/productos`); se consolido dentro de PESAJE como el boton CALCULAR de cada tarjeta de producto pesable completo. Al ser parte de PESAJE, hereda su acceso solo-administrador. El tab y el endpoint fueron eliminados.
+- No escribe nada en BD ni depende del estado de la operativa. `abrirCalculadoraDesdePesaje()` adapta el producto ya cargado en la tarjeta (perfiles con `tara`/`gramos_por_oz`, descartando incompletos) a la forma que espera la modal, sin fetch adicional.
+- Abre una ventana modal (`#conversor-modal`) con el mismo patron visual y de cierre (overlay, boton X, tecla Esc) que los modales "Guia Operativa" y "Boletin" (`#dummy-content-dialog`).
 - Dentro de la modal se pueden agregar varias "botellas" (una fila por cada una), cada una con su propio selector de modelo si el producto tiene mas de un perfil (`resolverPerfilSeleccionado()`, reutilizado de PALOTEO). El calculo (`peso_liquido = max(0, peso - tara)`, `onzas = peso_liquido / gramos_por_oz`, redondeo HALF_UP con `redondearOnzasOperativas()`) se ejecuta en cliente y muestra tanto el total exacto como el redondeado POS.
-- Cerrar la modal reinicia el estado (no hay boton "Limpiar" separado), ya que el modulo no persiste nada entre aperturas.
+- Cerrar la modal reinicia el estado (no hay boton "Limpiar" separado), ya que no persiste nada entre aperturas.
 
 ### FAB "volver al inicio"
 
-Boton flotante reutilizable (clase `fab-scroll-top` + funcion `inicializarFabScrollTop(fabId, panelId)` en `app.js`) presente en PALOTEO 1, PALOTEO 3, AJUSTES, PESAJE y CONVERSOR. Aparece al hacer scroll mas alla de un umbral y solo si su panel esta activo; al hacer click hace scroll suave al inicio de la pagina. Para agregarlo a un nuevo modulo: insertar un boton con esa clase dentro del panel y llamar a la funcion con sus ids.
+Boton flotante reutilizable (clase `fab-scroll-top` + funcion `inicializarFabScrollTop(fabId, panelId)` en `app.js`) presente en PALOTEO 1, PALOTEO 3, AJUSTES y PESAJE. Aparece al hacer scroll mas alla de un umbral y solo si su panel esta activo; al hacer click hace scroll suave al inicio de la pagina. Para agregarlo a un nuevo modulo: insertar un boton con esa clase dentro del panel y llamar a la funcion con sus ids.
 
 Service Worker:
 

@@ -1188,67 +1188,6 @@ def buscar_productos_catalogo(
     return _agrupar_filas_producto_pesaje(rows)
 
 
-# CATALOGO PARA EL MODULO CONVERSOR (calculadora de peso -> onzas, sin estado de operativa)
-
-@app.get("/api/conversor/productos", response_model=List[schemas.ProductoConversorItem])
-def obtener_productos_conversor(
-    db: Session = Depends(get_db),
-    current_user: models.Usuario = Depends(get_usuario_actual)
-):
-    """
-    Catálogo completo de productos pesables, sin filtrar por movimiento en la
-    operación activa ni por barra. Alimenta el módulo CONVERSOR, disponible
-    siempre sin importar el estado de la operativa.
-    """
-    query = text("""
-        SELECT id_pesaje_config, id_producto, nombre_producto, codigo_producto,
-               id_categoria, nombre_categoria, peso_bruto, tara,
-               gramos_por_oz, pesable, barcode, nombre_perfil
-        FROM v9_pesaje_config_api
-        WHERE pesable = 1
-        AND (id_categoria IS NULL OR id_categoria NOT IN :excluidas)
-        ORDER BY nombre_producto ASC, nombre_perfil ASC
-    """).bindparams(bindparam("excluidas", expanding=True))
-
-    rows = db.execute(query, {"excluidas": CATEGORIAS_EXCLUIDAS_PESAJE}).mappings().all()
-
-    productos_dict = {}
-    for row in rows:
-        prod_id = row["id_producto"]
-        if prod_id not in productos_dict:
-            productos_dict[prod_id] = {
-                "id_producto": prod_id,
-                "codigo": row["codigo_producto"],
-                "nombre": row["nombre_producto"],
-                "id_categoria": row["id_categoria"],
-                "nombre_categoria": row["nombre_categoria"],
-                "perfiles": []
-            }
-
-        if any(
-            row[campo] is None
-            for campo in ("peso_bruto", "tara", "gramos_por_oz")
-        ):
-            logger.warning(
-                "Perfil de pesaje incompleto omitido en conversor. producto=%s perfil_id=%s",
-                prod_id,
-                row["id_pesaje_config"],
-            )
-            continue
-
-        productos_dict[prod_id]["perfiles"].append({
-            "id": row["id_pesaje_config"],
-            "nombre_perfil": row["nombre_perfil"],
-            "peso_bruto": float(row["peso_bruto"]),
-            "tara": float(row["tara"]),
-            "gramos_por_oz": float(row["gramos_por_oz"]),
-            "tolerancia_oz": _obtener_tolerancia_operativa_oz(row["pesable"]),
-            "barcode": row["barcode"]
-        })
-
-    return [p for p in productos_dict.values() if p["perfiles"]]
-
-
 def _calcular_diferencias_paloteo(db: Session, id_barra: int, id_inventario_fisico: int) -> list[dict]:
     """Calcula delta_paq/delta_det por producto entre el físico (paloteo) y el ideal (POS).
 

@@ -950,9 +950,7 @@ function formatearMedidaPesaje(valor, unidad) {
 
 function crearTarjetaResumenPesaje(producto) {
     const div = document.createElement('div');
-    div.className = 'bg-surface-container border border-outline-variant rounded-md p-md shadow-lg cursor-pointer hover:border-primary-fixed-dim transition-colors flex flex-col gap-xs';
-    div.setAttribute('role', 'button');
-    div.setAttribute('tabindex', '0');
+    div.className = 'bg-surface-container border border-outline-variant rounded-md p-md shadow-lg transition-colors flex flex-col gap-xs';
 
     const medidaTxt = formatearMedidaPesaje(producto.medida, producto.nombre_unidad_medida);
     const detalleTxt = formatearMedidaPesaje(producto.volumen_oz, producto.nombre_unidad_medida_detalle);
@@ -963,6 +961,11 @@ function crearTarjetaResumenPesaje(producto) {
     const comandarRaw = (producto.nombre_ind_permite_comandar || '').trim().toLowerCase();
     const permiteComandar = comandarRaw === 'si' || comandarRaw === 'sí';
     const estadoComandable = permiteComandar ? 'Sí' : 'No';
+
+    // CALCULAR (calculadora peso→onzas, ex-módulo CONVERSOR) solo aplica a
+    // productos pesables con todos sus perfiles completos. En no pesables o
+    // incompletos, la tarjeta muestra únicamente EDITAR.
+    const puedeCalcular = producto.pesable === 1 && !pesajeProductoTieneIncompleto(producto);
 
     div.innerHTML = `
         <div class="text-[11px] text-on-surface-variant font-label-mono uppercase tracking-wider mb-xs flex items-center flex-wrap gap-xs">
@@ -975,20 +978,26 @@ function crearTarjetaResumenPesaje(producto) {
             ${medidaTxt ? `<span class="bg-surface-container-low px-xs py-[1px] rounded">${escapeHtml(medidaTxt)}</span>` : ''}
             ${detalleTxt ? `<span class="bg-surface-container-low px-xs py-[1px] rounded">${escapeHtml(detalleTxt)}</span>` : ''}
         </div>
-        <div class="flex flex-wrap gap-xs items-center">
+        <div class="flex flex-wrap gap-xs items-center mb-sm">
             <span class="badge-info text-[9px] font-label-mono px-xs py-[1px] rounded uppercase tracking-widest">Comandable: ${estadoComandable}</span>
             ${producto.perfiles.length > 1 ? `<span class="badge-info text-[9px] font-label-mono px-xs py-[1px] rounded uppercase tracking-widest">${producto.perfiles.length} modelos</span>` : ''}
         </div>
+        <div class="flex gap-xs mt-auto pt-xs border-t border-outline-variant">
+            <button type="button" class="pesaje-btn-editar flex-1 bg-surface border border-outline-variant text-on-surface py-sm px-md rounded-sharp text-[10px] font-label-mono uppercase tracking-widest hover:border-primary-fixed-dim hover:text-primary-fixed transition-colors flex items-center justify-center gap-xs">
+                <span class="material-symbols-outlined text-sm">edit</span>Editar
+            </button>
+            ${puedeCalcular ? `
+            <button type="button" class="pesaje-btn-calcular flex-1 bg-primary-container text-black py-sm px-md rounded-sharp text-[10px] font-label-mono uppercase tracking-widest hover:brightness-110 transition-all flex items-center justify-center gap-xs">
+                <span class="material-symbols-outlined text-sm">calculate</span>Calcular
+            </button>` : ''}
+        </div>
     `;
 
-    const abrir = () => abrirModalPesaje(producto);
-    div.addEventListener('click', abrir);
-    div.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            abrir();
-        }
-    });
+    const btnEditar = div.querySelector('.pesaje-btn-editar');
+    if (btnEditar) btnEditar.addEventListener('click', () => abrirModalPesaje(producto));
+
+    const btnCalcular = div.querySelector('.pesaje-btn-calcular');
+    if (btnCalcular) btnCalcular.addEventListener('click', () => abrirCalculadoraDesdePesaje(producto));
 
     return div;
 }
@@ -1293,13 +1302,13 @@ if (pesajeFiltroNoPesablesBtn) {
 }
 
 // ==========================================
-// MODULO CONVERSOR: calculadora de peso -> onzas, sin estado de operativa
-// y sin persistencia. Carga el catálogo una sola vez y calcula todo en
-// cliente reutilizando redondearOnzasOperativas() y resolverPerfilSeleccionado().
+// CALCULADORA PESO -> ONZAS (ex-módulo CONVERSOR, ahora integrada en las
+// tarjetas de PESAJE vía el botón CALCULAR). Sin estado de operativa ni
+// persistencia; calcula todo en cliente reutilizando redondearOnzasOperativas()
+// y resolverPerfilSeleccionado(). El listado/tab independiente se eliminó: los
+// datos vienen del producto ya cargado en la tarjeta de PESAJE.
 // ==========================================
 
-const conversorResultados       = document.getElementById('conversor-resultados');
-const conversorEmptyState       = document.getElementById('conversor-empty-state');
 const conversorModal            = document.getElementById('conversor-modal');
 const conversorModalOverlay     = document.getElementById('conversor-modal-overlay');
 const btnCloseConversorModal    = document.getElementById('btn-close-conversor-modal');
@@ -1310,62 +1319,31 @@ const conversorBtnAgregar       = document.getElementById('conversor-btn-agregar
 const conversorTotalExacto      = document.getElementById('conversor-total-exacto');
 const conversorTotalRedondeado  = document.getElementById('conversor-total-redondeado');
 
-let conversorProductosCache = null;
 let conversorProductoActual = null;
-let conversorQueryActual = '';
 
-let conversorBusquedaTimeout = null;
-function filtrarConversor(query) {
-    conversorQueryActual = query;
-    clearTimeout(conversorBusquedaTimeout);
-    conversorBusquedaTimeout = setTimeout(renderizarResultadosConversor, 200);
-}
+/** Abre la calculadora desde una tarjeta de PESAJE. Adapta la forma del
+ * producto de pesaje (nombre_producto/codigo_producto + perfiles con
+ * peso_bruto/tara/gramos_por_oz) a la que espera el modal de la calculadora,
+ * descartando perfiles incompletos (sin tara o sin gr/oz no se puede convertir). */
+function abrirCalculadoraDesdePesaje(producto) {
+    const perfilesCompletos = (producto.perfiles || []).filter(
+        (pf) => pf.tara !== null && pf.tara !== undefined &&
+                pf.gramos_por_oz !== null && pf.gramos_por_oz !== undefined
+    );
+    if (perfilesCompletos.length === 0) return;
 
-async function cargarProductosConversor() {
-    if (conversorProductosCache !== null) {
-        renderizarResultadosConversor();
-        return;
-    }
-    try {
-        const response = await fetch(`${API_BASE}/conversor/productos`, {
-            headers: { 'Authorization': `Bearer ${currentToken}` }
-        });
-        if (response.status === 401) return btnLogout.click();
-        if (!response.ok) return;
-        conversorProductosCache = await response.json();
-        renderizarResultadosConversor();
-    } catch (error) {
-        conversorProductosCache = [];
-    }
-}
-
-function renderizarResultadosConversor() {
-    if (!conversorResultados || !conversorProductosCache) return;
-
-    const query = conversorQueryActual.trim().toLowerCase();
-    const productos = query
-        ? conversorProductosCache.filter((p) =>
-            String(p.codigo || '').toLowerCase().includes(query) ||
-            String(p.nombre || '').toLowerCase().includes(query))
-        : conversorProductosCache;
-
-    conversorResultados.innerHTML = productos.map((p) => `
-        <button type="button" class="conversor-resultado-item w-full flex items-center justify-between gap-sm bg-surface-container border border-outline-variant rounded-md px-md py-sm text-left hover:border-primary-fixed-dim transition-colors" data-id-producto="${p.id_producto}">
-            <span class="min-w-0 truncate text-sm text-on-surface">${escapeHtml(p.nombre)}</span>
-            <span class="text-[11px] text-on-surface-variant font-data-tabular shrink-0">${escapeHtml(p.codigo)}</span>
-        </button>
-    `).join('');
-
-    conversorResultados.querySelectorAll('.conversor-resultado-item').forEach((btn) => {
-        btn.addEventListener('click', () => {
-            const producto = conversorProductosCache.find(
-                (p) => String(p.id_producto) === btn.dataset.idProducto
-            );
-            if (producto) seleccionarProductoConversor(producto);
-        });
+    seleccionarProductoConversor({
+        id_producto: producto.id_producto,
+        nombre: producto.nombre_producto,
+        codigo: producto.codigo_producto,
+        perfiles: perfilesCompletos.map((pf) => ({
+            id: pf.id,
+            nombre_perfil: pf.nombre_perfil,
+            peso_bruto: pf.peso_bruto,
+            tara: pf.tara,
+            gramos_por_oz: pf.gramos_por_oz,
+        })),
     });
-
-    conversorEmptyState.classList.toggle('hidden', productos.length > 0);
 }
 
 function seleccionarProductoConversor(producto) {
@@ -1489,7 +1467,6 @@ document.addEventListener('DOMContentLoaded', () => {
     inicializarFabScrollTop('inventario-fab-scroll-top', 'panel-inventario');
     inicializarFabScrollTop('stock-fab-scroll-top', 'panel-stock');
     inicializarFabScrollTop('scan-fab-scroll-top', 'panel-scan');
-    inicializarFabScrollTop('conversor-fab-scroll-top', 'panel-conversor');
 
     // Configurar Password Toggle (El ojito)
     const togglePassword = document.getElementById('toggle-password');
@@ -3073,7 +3050,6 @@ const TAB_PANEL_MAP = {
     scan:       'panel-scan',
     logs:       'panel-logs',
     pesaje:     'panel-pesaje',
-    conversor:  'panel-conversor',
 };
 
 // ==========================================
@@ -3100,7 +3076,6 @@ const BUSQUEDA_POR_TAB = {
     logs:       { placeholder: 'Buscar producto para saltar a su tarjeta...', handler: buscarYNavegarCaptura, permiteAgregarCatalogo: true },
     stock:      { placeholder: 'Buscar por ID, código o nombre...', handler: filtrarStockPaloteo3, permiteAgregarCatalogo: true },
     pesaje:     { placeholder: 'Buscar por nombre de producto...', handler: filtrarPesaje },
-    conversor:  { placeholder: 'Buscar producto por código o nombre...', handler: filtrarConversor },
 };
 
 let busquedaTopbarAbierta = false;
@@ -3563,10 +3538,6 @@ function navegarATab(tabName) {
 
     if (tabName === 'pesaje') {
         cargarPesaje();
-    }
-
-    if (tabName === 'conversor') {
-        cargarProductosConversor();
     }
 
     // Actualizar estado visual de tabs (excepto btn-guardar que tiene su propio estado)
