@@ -53,6 +53,18 @@
   - Requiere antes un setup minimo de pytest + fixtures de BD de test (hoy no existe ningun test en el repo).
   - Una vez exista el setup, ampliar tambien a login correcto/fallido y paloteo valido/con operacion invalida.
 
+- [ ] **Modulo de reportes historicos de paloteos ya registrados (operativas cerradas)**
+  - Motivacion: hoy el PDF de diferencias (REPORTE, `/api/paloteo3/exportar-pdf`) solo puede generarse durante la sesion viva del paloteo, porque las filas se arman en el navegador desde las tarjetas de PALOTEO 1/2. Una vez cerrada la operativa (o cerrado el navegador) ya no se puede regenerar el reporte.
+  - Los datos necesarios ya se persisten; el reporte historico se arma cruzando dos fuentes por `(id_operacion, id_barra, id_producto)`:
+    - `bar_paloteo_cierre` (escrita por el POS al cerrar cada operativa, una fila por producto del catalogo y por barra): `actual_paq`/`actual_detalle` = inventario ideal congelado al iniciar el cierre (PAQ POS/DET POS), `fisico_paq`/`fisico_detalle` = fisico registrado (PAQ BAR/DET BAR, ya redondeado a 0.5 oz), `diferencia_paq`/`diferencia_detalle` = fisico − actual sin banda de tolerancia (NULL si no hubo fisico). Verificado en `adminerp_copy` con operativa 1248 (producto 12, barra 1).
+    - `app_paloteo_registro_crudo` (append-only): ultima fila por producto gana (misma regla que `_obtener_pesos_crudos_por_producto`). De ahi salen PESO (suma del JSON `pesos_abiertas`) y DIF REAL exacta (`onzas_calculadas − actual_detalle`).
+  - Cuidados de implementacion:
+    - Usar `onzas_calculadas` tal como quedo guardada; NUNCA reconvertir peso con el perfil vigente (los `gramos_por_oz` cambiaron con la actualizacion de precision ML→OZ y los perfiles son mutables).
+    - Cruzar contra `bar_detalle_fisico` con `estado='HAB'` para excluir productos eliminados del paloteo despues de registrarse (el crudo conserva sus filas por ser log de auditoria).
+    - Para reproducir el DIF OP mostrado esa noche, aplicar la banda de tolerancia operativa (0.5 oz pesables) sobre `diferencia_detalle`; decidir si el reporte historico muestra ademas la diferencia cruda.
+    - Solo aplica a operativas cerradas: la operativa en curso no tiene filas en `bar_paloteo_cierre`.
+  - Alcance sugerido: endpoint backend que arme las filas desde BD (a diferencia del actual, que las recibe del frontend) reutilizando el renderer PDF existente de `exportar_pdf_paloteo3`, mas un selector de operativas cerradas en la PWA.
+
 - [ ] **Bloquear la busqueda-en-catalogo (agregar producto sin movimiento) en modo solo-lectura**
   - Motivacion: el flujo de "agregar producto sin movimiento" (v10.37) no verifica `operativaPermitePaloteo` antes de mostrar resultados del catalogo y permitir agregarlos. La card/fila resultante sí queda con sus inputs deshabilitados (igual que el resto en modo solo-lectura), asi que no hay impacto funcional ni de seguridad, pero la busqueda deja agregar una card "muerta" que no se puede llenar. Evaluar ocultar el resultado de catalogo (o el boton "+ Agregar") cuando `!operativaPermitePaloteo`.
 
