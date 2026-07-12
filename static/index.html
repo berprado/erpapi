@@ -1129,10 +1129,10 @@
                     <p id="mb-error" class="hidden text-xs text-error mb-sm font-semibold"></p>
 
                     <div class="flex flex-col sm:flex-row gap-sm">
-                        <button id="btn-cancelar-modelo" class="w-full sm:w-auto bg-surface text-on-surface border border-outline-variant py-sm px-md rounded-sharp uppercase tracking-widest text-label-mono hover:border-primary-fixed-dim transition-colors">
+                        <button id="btn-cancelar-modelo" class="w-full sm:w-auto bg-surface border border-outline-variant text-on-surface py-sm px-md rounded-sharp text-[10px] font-label-mono uppercase tracking-widest hover:border-primary-fixed-dim hover:text-primary-fixed transition-colors flex items-center justify-center gap-xs">
                             Cancelar
                         </button>
-                        <button id="btn-confirmar-modelo" class="w-full bg-primary-container text-on-primary-fixed font-headline-md text-body-base py-sm px-md rounded-sharp flex items-center justify-center gap-sm hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest">
+                        <button id="btn-confirmar-modelo" class="w-full bg-surface border border-outline-variant text-on-surface py-sm px-md rounded-sharp text-[10px] font-label-mono uppercase tracking-widest hover:border-primary-fixed-dim hover:text-primary-fixed transition-colors flex items-center justify-center gap-xs">
                             <span class="material-symbols-outlined text-sm">save</span>
                             Guardar modelo
                         </button>
@@ -1276,7 +1276,7 @@
         </div>
     </div>
 
-    <script src="/assets/app.js?v=10.60"></script>
+    <script src="/assets/app.js?v=10.61"></script>
 
     <script>
         (function () {
@@ -1321,7 +1321,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/assets/sw.js?v=10.60')
+                navigator.serviceWorker.register('/assets/sw.js?v=10.61')
                     .then(reg => console.log('[PWA] Service Worker registrado:', reg.scope))
                     .catch(err => console.error('[PWA] Error al registrar SW:', err));
             });
