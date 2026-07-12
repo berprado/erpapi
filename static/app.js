@@ -957,8 +957,12 @@ function crearTarjetaResumenPesaje(producto) {
     const medidaTxt = formatearMedidaPesaje(producto.medida, producto.nombre_unidad_medida);
     const detalleTxt = formatearMedidaPesaje(producto.volumen_oz, producto.nombre_unidad_medida_detalle);
 
-    // Estado comandable: Sí/No
-    const estadoComandable = producto.nombre_ind_permite_comandar === 'Sí' ? 'Sí' : 'No';
+    // Estado comandable: Sí/No. La BD guarda 'Si' (sin tilde) en
+    // parameter_table (id_master=20); normalizamos a minúsculas y sin tilde
+    // para no depender de la ortografía exacta del dato.
+    const comandarRaw = (producto.nombre_ind_permite_comandar || '').trim().toLowerCase();
+    const permiteComandar = comandarRaw === 'si' || comandarRaw === 'sí';
+    const estadoComandable = permiteComandar ? 'Sí' : 'No';
 
     div.innerHTML = `
         <div class="text-[11px] text-on-surface-variant font-label-mono uppercase tracking-wider mb-xs flex items-center flex-wrap gap-xs">
