@@ -846,8 +846,22 @@ function actualizarUIFiltrosPesaje() {
     });
 }
 
+/** Indicador de carga del listado de PESAJE: mismo spinner (flechas girando)
+ * que se usa al registrar un paloteo / generar PDF. Ocupa todo el ancho de la
+ * grilla y se reemplaza al renderizar las tarjetas. */
+function mostrarCargandoPesaje() {
+    if (pesajeEmptyState) pesajeEmptyState.classList.add('hidden');
+    if (!pesajeList) return;
+    pesajeList.innerHTML = `
+        <div class="col-span-full flex items-center justify-center gap-sm py-lg text-on-surface-variant font-label-mono uppercase tracking-widest text-[11px]" aria-live="polite" style="grid-column: 1 / -1;">
+            ${renderCriticalIcon('refresh', 'ui-icon animate-spin-ccw')}
+            Cargando...
+        </div>`;
+}
+
 async function cargarPesaje() {
     if (!pesajeList) return;
+    mostrarCargandoPesaje();
     await cargarCategoriasPesaje();
     actualizarUIFiltrosPesaje();
 
@@ -1160,6 +1174,11 @@ function crearFilaPerfilPesaje(producto, perfil) {
             }
         }
 
+        const textoOriginalGuardar = btnGuardar.innerHTML;
+        btnGuardar.disabled = true;
+        btnGuardar.setAttribute('aria-busy', 'true');
+        btnGuardar.innerHTML = `${renderCriticalIcon('refresh', 'ui-icon animate-spin-ccw')} Guardando...`;
+
         try {
             const response = await fetch(`${API_BASE}/pesaje/config/${perfil.id}`, {
                 method: 'PUT',
@@ -1195,6 +1214,13 @@ function crearFilaPerfilPesaje(producto, perfil) {
                 titulo: 'Error de red',
                 mensaje: 'No se pudo conectar con el servidor para guardar los cambios.',
             });
+        } finally {
+            // Si el guardado fue exitoso, cargarPesaje() ya recreó esta fila
+            // (btnGuardar quedó desprendido); restaurar aquí es inocuo. En los
+            // caminos de error, restaura el botón para permitir reintentar.
+            btnGuardar.disabled = false;
+            btnGuardar.removeAttribute('aria-busy');
+            btnGuardar.innerHTML = textoOriginalGuardar;
         }
     });
 
