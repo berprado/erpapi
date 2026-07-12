@@ -1067,6 +1067,7 @@ function crearFilaPerfilPesaje(producto, perfil) {
     }
 
     row.innerHTML = `
+        ${esPesable ? `
         <p class="text-[11px] font-label-mono uppercase tracking-widest text-on-surface-variant flex items-center gap-xs">
             Modelo de Botella
         </p>
@@ -1079,6 +1080,7 @@ function crearFilaPerfilPesaje(producto, perfil) {
             </span>
             ` : ''}
         </h4>
+        ` : ''}
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-sm ${esPesable ? '' : 'hidden'}">
             <div>
                 <label class="text-[10px] font-label-mono uppercase tracking-widest text-on-surface-variant block mb-xs">Peso bruto (g)</label>
