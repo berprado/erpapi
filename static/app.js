@@ -966,15 +966,15 @@ function crearTarjetaResumenPesaje(producto) {
             ${producto.nombre_categoria ? `<span class="border-l border-outline-variant pl-xs">ID: ${producto.id_producto}</span>` : `<span>ID: ${producto.id_producto}</span>`}
             <span class="border-l border-outline-variant pl-xs">COD ${escapeHtml(producto.codigo_producto)}</span>
         </div>
-        <div class="flex items-center justify-between gap-xs mb-xs">
-            <p class="text-sm font-semibold text-on-surface leading-tight truncate">${escapeHtml(producto.nombre_producto)}</p>
-            <span class="badge-info text-[9px] font-label-mono px-xs py-[1px] rounded uppercase tracking-widest flex-shrink-0">Comandable: ${estadoComandable}</span>
-        </div>
-        <div class="flex flex-wrap gap-xs text-[10px] font-label-mono text-on-surface-variant">
+        <p class="text-sm font-semibold text-on-surface leading-tight mb-xs">${escapeHtml(producto.nombre_producto)}</p>
+        <div class="flex flex-wrap gap-xs text-[10px] font-label-mono text-on-surface-variant mb-xs">
             ${medidaTxt ? `<span class="bg-surface-container-low px-xs py-[1px] rounded">${escapeHtml(medidaTxt)}</span>` : ''}
             ${detalleTxt ? `<span class="bg-surface-container-low px-xs py-[1px] rounded">${escapeHtml(detalleTxt)}</span>` : ''}
         </div>
-        ${producto.perfiles.length > 1 ? `<div class="pt-xs"><span class="badge-info text-[9px] font-label-mono px-xs py-[1px] rounded uppercase tracking-widest">${producto.perfiles.length} modelos</span></div>` : ''}
+        <div class="flex flex-wrap gap-xs items-center">
+            <span class="badge-info text-[9px] font-label-mono px-xs py-[1px] rounded uppercase tracking-widest">Comandable: ${estadoComandable}</span>
+            ${producto.perfiles.length > 1 ? `<span class="badge-info text-[9px] font-label-mono px-xs py-[1px] rounded uppercase tracking-widest">${producto.perfiles.length} modelos</span>` : ''}
+        </div>
     `;
 
     const abrir = () => abrirModalPesaje(producto);
