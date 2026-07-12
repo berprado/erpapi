@@ -2,6 +2,22 @@
 
 ## 🔴 Alta Prioridad
 
+- [ ] **Implementar actualización de precisión ML→OZ en PRODUCCIÓN (cuando test_pos sea estable)**
+  - **Status:** ✓ COMPLETADO EN test_pos, PENDIENTE PRODUCCIÓN
+  - **Cambios:** 306 productos con redondeo HALF_UP a 0.5 oz + 149 perfiles de pesaje recalculados
+  - **Ambientes:**
+    - ✓ test_pos (remoto POS real): ACTUALIZADO Y VALIDADO (operativa 1249 completó ciclo completo)
+    - ⏳ Producción (localhost): SIN CAMBIOS, en standby
+  - **Próximos pasos cuando test_pos sea confirmado estable:**
+    1. Backup completo de BD producción
+    2. Ejecutar `TEST_POS_UPDATE_1_alm_producto.sql` (306 updates)
+    3. Ejecutar `TEST_POS_UPDATE_2_gramos_por_oz.sql` (149 updates)
+    4. Validar integridad post-actualización
+    5. Monitorear primera operativa de producción
+    6. Comunicar cambios a equipo operativo
+  - **Documentación:** Ver `scratchpad/TRABAJO_FINALIZADO_PRECISION_ML_OZ.md`
+  - **Validación en test_pos:** Paloteos precisos a 0.5 oz, falsos positivos eliminados, diferencias reales visibles ✓
+
 - [ ] **Reemplazar SECRET_KEY en `.env` por una clave real y aleatoria antes de pasar a producción**
   - `.env` sigue usando el placeholder `cambia_esto_por_una_clave_larga_y_aleatoria_en_produccion` (pasa la validación de longitud ≥32, pero no es aleatorio).
   - Generar con: `python -c "import secrets; print(secrets.token_hex(32))"`
