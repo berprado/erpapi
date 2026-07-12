@@ -1688,6 +1688,19 @@ def _fmt_diff_paq(valor):
 def _fmt_diff_oz(valor):
     return "" if valor is None else f"{'+' if valor > 0 else ''}{valor:.2f} oz"
 
+
+class _ReportePDF(FPDF):
+    """FPDF con footer discreto de numero de pagina ("PÁGINA n / N") en cada
+    hoja. fpdf2 invoca footer() automaticamente al cerrar cada pagina; el
+    placeholder {nb} se reemplaza con el total de paginas al renderizar."""
+
+    def footer(self):
+        self.set_y(-12)
+        self.set_font(_FONT_FAMILY, "", 7)
+        self.set_text_color(150, 150, 150)
+        self.cell(0, 8, f"PÁGINA {self.page_no()} / {{nb}}", align="C")
+
+
 @app.post("/api/paloteo3/exportar-pdf")
 def exportar_pdf_paloteo3(
     payload: schemas.ExportarPdfRequest,
@@ -1714,8 +1727,9 @@ def exportar_pdf_paloteo3(
 
     # Horizontal: 10 columnas (se agregaron PAQ POS/BAR y DET POS/BAR) no entran
     # con un ancho legible en A4 vertical (170mm utiles).
-    pdf = FPDF(orientation="L", unit="mm", format="A4")
+    pdf = _ReportePDF(orientation="L", unit="mm", format="A4")
     pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.alias_nb_pages()  # habilita el placeholder {nb} (total de paginas)
     pdf.add_font(_FONT_FAMILY, "", _FONT_REGULAR_PATH)
     pdf.add_font(_FONT_FAMILY, "B", _FONT_BOLD_PATH)
     pdf.add_page()
