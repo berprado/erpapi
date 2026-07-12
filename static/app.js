@@ -957,18 +957,24 @@ function crearTarjetaResumenPesaje(producto) {
     const medidaTxt = formatearMedidaPesaje(producto.medida, producto.nombre_unidad_medida);
     const detalleTxt = formatearMedidaPesaje(producto.volumen_oz, producto.nombre_unidad_medida_detalle);
 
+    // Estado comandable: Sí/No
+    const estadoComandable = producto.nombre_ind_permite_comandar === 'Sí' ? 'Sí' : 'No';
+
     div.innerHTML = `
-        ${producto.nombre_categoria ? `<span class="text-[10px] font-label-mono uppercase tracking-widest text-on-surface-variant">${escapeHtml(producto.nombre_categoria)}</span>` : ''}
-        <p class="text-sm font-semibold text-on-surface leading-tight">${escapeHtml(producto.nombre_producto)}</p>
-        <p class="text-[11px] text-on-surface-variant font-data-tabular">ID: ${producto.id_producto} · COD ${escapeHtml(producto.codigo_producto)}</p>
+        <div class="text-[11px] text-on-surface-variant font-label-mono uppercase tracking-wider mb-xs flex items-center flex-wrap gap-xs">
+            ${producto.nombre_categoria ? `<span>${escapeHtml(producto.nombre_categoria)}</span>` : ''}
+            ${producto.nombre_categoria ? `<span class="border-l border-outline-variant pl-xs">ID: ${producto.id_producto}</span>` : `<span>ID: ${producto.id_producto}</span>`}
+            <span class="border-l border-outline-variant pl-xs">COD ${escapeHtml(producto.codigo_producto)}</span>
+        </div>
+        <div class="flex items-center justify-between gap-xs mb-xs">
+            <p class="text-sm font-semibold text-on-surface leading-tight truncate">${escapeHtml(producto.nombre_producto)}</p>
+            <span class="badge-info text-[9px] font-label-mono px-xs py-[1px] rounded uppercase tracking-widest flex-shrink-0">Comandable: ${estadoComandable}</span>
+        </div>
         <div class="flex flex-wrap gap-xs text-[10px] font-label-mono text-on-surface-variant">
             ${medidaTxt ? `<span class="bg-surface-container-low px-xs py-[1px] rounded">${escapeHtml(medidaTxt)}</span>` : ''}
             ${detalleTxt ? `<span class="bg-surface-container-low px-xs py-[1px] rounded">${escapeHtml(detalleTxt)}</span>` : ''}
         </div>
-        <div class="flex flex-wrap items-center gap-xs mt-auto pt-xs">
-            ${producto.nombre_ind_permite_comandar ? `<span class="badge-info text-[9px] font-label-mono px-xs py-[1px] rounded uppercase tracking-widest">Comanda: ${escapeHtml(producto.nombre_ind_permite_comandar)}</span>` : ''}
-            ${producto.perfiles.length > 1 ? `<span class="badge-info text-[9px] font-label-mono px-xs py-[1px] rounded uppercase tracking-widest">${producto.perfiles.length} modelos</span>` : ''}
-        </div>
+        ${producto.perfiles.length > 1 ? `<div class="pt-xs"><span class="badge-info text-[9px] font-label-mono px-xs py-[1px] rounded uppercase tracking-widest">${producto.perfiles.length} modelos</span></div>` : ''}
     `;
 
     const abrir = () => abrirModalPesaje(producto);
@@ -992,8 +998,10 @@ const pesajeModal          = document.getElementById('pesaje-modal');
 const pesajeModalOverlay    = document.getElementById('pesaje-modal-overlay');
 const btnClosePesajeModal   = document.getElementById('btn-close-pesaje-modal');
 const pesajeModalCategoria  = document.getElementById('pesaje-modal-categoria');
-const pesajeModalNombre     = document.getElementById('pesaje-modal-nombre');
+const pesajeModalId         = document.getElementById('pesaje-modal-id');
 const pesajeModalCodigo     = document.getElementById('pesaje-modal-codigo');
+const pesajeModalNombre     = document.getElementById('pesaje-modal-nombre');
+const pesajeModalMedidas    = document.getElementById('pesaje-modal-medidas');
 const pesajeModalPerfiles   = document.getElementById('pesaje-modal-perfiles');
 
 let pesajeModalProductoActualId = null;
@@ -1001,9 +1009,15 @@ let pesajeModalProductoActualId = null;
 function renderizarModalPesaje(producto) {
     if (!pesajeModalPerfiles) return;
 
+    const medidaTxt = formatearMedidaPesaje(producto.medida, producto.nombre_unidad_medida);
+    const detalleTxt = formatearMedidaPesaje(producto.volumen_oz, producto.nombre_unidad_medida_detalle);
+    const medidasCompletas = [medidaTxt, detalleTxt].filter(Boolean).join(' | ');
+
     pesajeModalCategoria.textContent = producto.nombre_categoria || '';
-    pesajeModalNombre.textContent = producto.nombre_producto;
+    if (pesajeModalId) pesajeModalId.textContent = `ID: ${producto.id_producto}`;
     pesajeModalCodigo.textContent = `COD ${producto.codigo_producto}`;
+    pesajeModalNombre.textContent = producto.nombre_producto;
+    if (pesajeModalMedidas) pesajeModalMedidas.textContent = medidasCompletas;
 
     pesajeModalPerfiles.innerHTML = '';
     producto.perfiles.forEach((perfil) => {
@@ -1053,39 +1067,42 @@ function crearFilaPerfilPesaje(producto, perfil) {
     }
 
     row.innerHTML = `
-        <p class="text-[11px] text-on-surface-variant uppercase tracking-widest flex items-center gap-xs">
+        <p class="text-[11px] font-label-mono uppercase tracking-widest text-on-surface-variant flex items-center gap-xs">
+            Modelo de Botella
+        </p>
+        <h4 class="text-sm font-semibold text-on-surface">
             ${perfil.nombre_perfil}
             ${esIncompleto ? `
-            <span class="inline-flex items-center gap-[2px] normal-case tracking-normal" style="color: var(--semantic-warning);">
+            <span class="inline-flex items-center gap-[2px] normal-case tracking-normal text-xs ml-2" style="color: var(--semantic-warning);">
                 <span class="material-symbols-outlined" style="font-size: 13px;">warning</span>
-                Datos incompletos
+                Incompleto
             </span>
             ` : ''}
-        </p>
-        <div class="grid ${esPesable ? 'grid-cols-4' : 'grid-cols-1'} gap-xs">
-            ${esPesable ? `
+        </h4>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-sm ${esPesable ? '' : 'hidden'}">
             <div>
-                <label class="text-[10px] text-on-surface-variant block">Peso bruto (g)</label>
-                <input type="number" min="0" step="0.01" class="pesaje-input-peso-bruto w-full bg-surface border border-outline-variant rounded-md px-sm py-xs text-sm text-on-surface font-data-tabular" value="${perfil.peso_bruto ?? ''}">
+                <label class="text-[10px] font-label-mono uppercase tracking-widest text-on-surface-variant block mb-xs">Peso bruto (g)</label>
+                <input type="number" min="0" step="0.01" class="pesaje-input-peso-bruto w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface font-data-tabular" value="${perfil.peso_bruto ?? ''}">
             </div>
             <div>
-                <label class="text-[10px] text-on-surface-variant block">Tara (g)</label>
-                <input type="number" min="0" step="0.01" class="pesaje-input-tara w-full bg-surface border border-outline-variant rounded-md px-sm py-xs text-sm text-on-surface font-data-tabular" value="${perfil.tara ?? ''}">
+                <label class="text-[10px] font-label-mono uppercase tracking-widest text-on-surface-variant block mb-xs">Tara (g)</label>
+                <input type="number" min="0" step="0.01" class="pesaje-input-tara w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface font-data-tabular" value="${perfil.tara ?? ''}">
             </div>
             <div>
-                <label class="text-[10px] text-on-surface-variant block">g / oz</label>
-                <input type="text" readonly class="pesaje-input-gramos-oz w-full bg-surface-container border border-outline-variant rounded-md px-sm py-xs text-sm text-on-surface-variant font-data-tabular cursor-not-allowed" value="${perfil.gramos_por_oz ?? ''}">
-            </div>
-            ` : ''}
-            <div>
-                <label class="text-[10px] text-on-surface-variant block">Código de barras</label>
-                <input type="text" class="pesaje-input-barcode w-full bg-surface border border-outline-variant rounded-md px-sm py-xs text-sm text-on-surface font-data-tabular" value="${perfil.barcode || ''}">
+                <label class="text-[10px] font-label-mono uppercase tracking-widest text-on-surface-variant block mb-xs">gr/oz</label>
+                <input type="text" readonly class="pesaje-input-gramos-oz w-full bg-surface-container border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface-variant font-data-tabular cursor-not-allowed" value="${perfil.gramos_por_oz ?? ''}">
             </div>
         </div>
+        <div>
+            <label class="text-[10px] font-label-mono uppercase tracking-widest text-on-surface-variant block mb-xs">Código de barras</label>
+            <input type="text" class="pesaje-input-barcode w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface font-data-tabular" value="${perfil.barcode || ''}">
+        </div>
         <p class="pesaje-error hidden text-xs text-error"></p>
-        <div class="flex gap-xs">
-            <button type="button" class="pesaje-btn-guardar flex-1 bg-primary-container text-black py-xs px-sm rounded-sharp text-[10px] font-label-mono uppercase tracking-widest">Guardar</button>
-            ${puedeEliminar ? '<button type="button" class="pesaje-btn-eliminar bg-surface border border-outline-variant text-on-surface py-xs px-sm rounded-sharp text-[10px] font-label-mono uppercase tracking-widest">Eliminar</button>' : ''}
+        <div class="flex gap-xs justify-end pt-xs">
+            <button type="button" class="pesaje-btn-guardar bg-primary-container text-black px-md py-sm rounded-sharp text-[10px] font-label-mono uppercase tracking-widest hover:brightness-110 transition-all">
+                <span class="material-symbols-outlined text-sm align-middle mr-1">save</span>Guardar
+            </button>
+            ${puedeEliminar ? '<button type="button" class="pesaje-btn-eliminar bg-surface border border-outline-variant text-on-surface px-md py-sm rounded-sharp text-[10px] font-label-mono uppercase tracking-widest hover:border-primary-fixed-dim transition-colors">Eliminar</button>' : ''}
         </div>
     `;
 

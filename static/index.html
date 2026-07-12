@@ -1247,18 +1247,22 @@
             <div id="pesaje-modal-overlay" class="absolute inset-0 bg-black/70 backdrop-blur-[2px]"></div>
             <div class="relative z-10 h-full flex items-center justify-center p-md">
                 <div class="w-full max-w-lg bg-surface-container border border-outline-variant rounded-md shadow-2xl max-h-[85vh] flex flex-col">
-                    <div class="px-md py-sm border-b border-outline-variant flex items-center justify-between shrink-0">
-                        <div class="min-w-0">
-                            <p id="pesaje-modal-categoria" class="text-[10px] font-label-mono uppercase tracking-widest text-on-surface-variant truncate"></p>
-                            <h3 id="pesaje-modal-nombre" class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase truncate"></h3>
-                            <p id="pesaje-modal-codigo" class="text-[11px] text-on-surface-variant font-data-tabular"></p>
+                    <div class="px-md py-sm border-b border-outline-variant flex items-start justify-between shrink-0 gap-md">
+                        <div class="min-w-0 flex-1">
+                            <div id="pesaje-modal-header-info" class="text-[11px] font-label-mono uppercase tracking-wider text-on-surface-variant mb-xs flex items-center flex-wrap gap-xs">
+                                <p id="pesaje-modal-categoria" class="truncate"></p>
+                                <p id="pesaje-modal-id" class="border-l border-outline-variant pl-xs truncate"></p>
+                                <p id="pesaje-modal-codigo" class="border-l border-outline-variant pl-xs truncate"></p>
+                            </div>
+                            <h3 id="pesaje-modal-nombre" class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase truncate mb-xs"></h3>
+                            <p id="pesaje-modal-medidas" class="text-[10px] font-label-mono text-on-surface-variant truncate"></p>
                         </div>
                         <button id="btn-close-pesaje-modal" type="button" class="topbar-icon-btn shrink-0" aria-label="Cerrar pesaje">
                             <span class="material-symbols-outlined text-base">close</span>
                         </button>
                     </div>
                     <div class="px-md py-md overflow-y-auto flex-1">
-                        <div id="pesaje-modal-perfiles" class="space-y-sm"></div>
+                        <div id="pesaje-modal-perfiles" class="space-y-md"></div>
                     </div>
                 </div>
             </div>
@@ -1301,7 +1305,7 @@
         </div>
     </div>
 
-    <script src="/assets/app.js?v=10.55"></script>
+    <script src="/assets/app.js?v=10.56"></script>
 
     <script>
         (function () {
@@ -1346,7 +1350,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/assets/sw.js?v=10.55')
+                navigator.serviceWorker.register('/assets/sw.js?v=10.56')
                     .then(reg => console.log('[PWA] Service Worker registrado:', reg.scope))
                     .catch(err => console.error('[PWA] Error al registrar SW:', err));
             });
