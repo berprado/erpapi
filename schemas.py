@@ -154,6 +154,7 @@ class FilaDiferenciaPdf(BaseModel):
     paqPos: Optional[float] = None
     paqBar: Optional[float] = None
     detPos: Optional[float] = None
+    pesoGramos: Optional[float] = None
     detBar: Optional[float] = None
     difUnidades: Optional[float] = None
     difOnzas: Optional[float] = None

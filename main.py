@@ -1682,6 +1682,12 @@ def _fmt_cantidad_paq(valor):
 def _fmt_cantidad_oz(valor):
     return "" if valor is None else f"{valor:.2f} oz"
 
+def _fmt_peso_gramos(valor):
+    if valor is None:
+        return ""
+    texto = f"{valor:.1f}".rstrip("0").rstrip(".")
+    return f"{texto} g"
+
 def _fmt_diff_paq(valor):
     return "" if valor is None else f"{'+' if valor > 0 else ''}{round(valor)}"
 
@@ -1774,13 +1780,13 @@ def exportar_pdf_paloteo3(
     pdf.ln(6)
 
     # — Tabla —
-    # ID | COD | Producto | Paq.Pos | Paq.Bar | Det.Pos | Det.Bar | Dif.Paq | Dif.Real | Dif.Op
-    col_widths = [10, 16, 75, 20, 20, 24, 24, 20, 24, 24]  # suma = 257mm = ancho_util
-    headers    = ["ID", "COD", "PRODUCTO", "PAQ POS", "PAQ BAR", "DET POS", "DET BAR", "DIF. PAQ.", "DIF REAL", "DIF OP"]
-    aligns     = ["R", "L", "L", "R", "R", "R", "R", "R", "R", "R"]
+    # ID | COD | Producto | Paq.Pos | Paq.Bar | Det.Pos | Peso | Det.Bar | Dif.Paq | Dif.Real | Dif.Op
+    col_widths = [10, 16, 62, 18, 18, 22, 23, 22, 18, 24, 24]  # suma = 257mm = ancho_util
+    headers    = ["ID", "COD", "PRODUCTO", "PAQ POS", "PAQ BAR", "DET POS", "PESO", "DET BAR", "DIF. PAQ.", "DIF REAL", "DIF OP"]
+    aligns     = ["R", "L", "L", "R", "R", "R", "R", "R", "R", "R", "R"]
     # Jerarquía visual: ID/COD con menor peso, PRODUCTO en negrita, cantidades
-    # absolutas (paq/det) en texto neutro, diferencias con color semántico.
-    jerarquias = ["muted", "muted", "primary", "neutral", "neutral", "neutral", "neutral", "diff", "diff", "diff"]
+    # absolutas (paq/det/peso) en texto neutro, diferencias con color semántico.
+    jerarquias = ["muted", "muted", "primary", "neutral", "neutral", "neutral", "neutral", "neutral", "diff", "diff", "diff"]
     row_h = 7
 
     # cabecera de tabla (definida como helper para redibujarla en cada pagina
@@ -1818,6 +1824,7 @@ def exportar_pdf_paloteo3(
             _fmt_cantidad_paq(fila.paqPos),
             _fmt_cantidad_paq(fila.paqBar),
             _fmt_cantidad_oz(fila.detPos),
+            _fmt_peso_gramos(fila.pesoGramos),
             _fmt_cantidad_oz(fila.detBar),
             _fmt_diff_paq(fila.difUnidades),
             _fmt_diff_oz(dif_oz_exacta),
@@ -1825,7 +1832,7 @@ def exportar_pdf_paloteo3(
         ]
         colores = [
             None, None, None,
-            None, None, None, None,
+            None, None, None, None, None,
             _color_diferencia(fila.difUnidades) if fila.difUnidades is not None else None,
             _color_diferencia(dif_oz_exacta) if dif_oz_exacta is not None else None,
             _color_diferencia(dif_oz_pos) if dif_oz_pos is not None else None,

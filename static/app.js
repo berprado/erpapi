@@ -2242,6 +2242,7 @@ function obtenerFilasReportePaloteo3() {
         // botella seleccionado por input y suma todas las botellas pesadas.
         let detPos = null;
         let detBar = null;
+        let pesoGramos = null;
         const cardInventario = document.querySelector(`#lista-productos .product-card[data-id="${idProducto}"]`);
         if (cardInventario && cardInventario.dataset.pesable === '1') {
             const valorDetSist = parseFloat(cardInventario.dataset.detsist);
@@ -2257,6 +2258,10 @@ function obtenerFilasReportePaloteo3() {
             if (detPos !== null && difOnzas !== null) {
                 detBar = detPos + difOnzas;
             }
+            if (cardInventario.dataset.pesoTotalGramos) {
+                const valorPeso = parseFloat(cardInventario.dataset.pesoTotalGramos);
+                pesoGramos = Number.isNaN(valorPeso) ? null : valorPeso;
+            }
         }
 
         filas.push({
@@ -2267,6 +2272,7 @@ function obtenerFilasReportePaloteo3() {
             paqPos: idealUnidades,
             paqBar: unidadesReales,
             detPos,
+            pesoGramos,
             detBar,
             difUnidades: unidadesReales - idealUnidades,
             difOnzas,
@@ -2502,6 +2508,7 @@ async function exportarReportePaloteo3Pdf() {
                 paqPos: f.paqPos,
                 paqBar: f.paqBar,
                 detPos: f.detPos,
+                pesoGramos: f.pesoGramos,
                 detBar: f.detBar,
                 difUnidades: f.difUnidades,
                 difOnzas: f.difOnzas,
@@ -4302,6 +4309,8 @@ function recalcularTarjeta(card) {
         const difDetSpan = card.querySelector(`#dif-det-${scope}`) || document.getElementById(`dif-det-${scope}`);
 
         let detBarra = 0;
+        let pesoTotalGramos = 0;
+        let hayPesosValidos = false;
         const margenError = 10.0;
 
         inputsPeso.forEach(inp => {
@@ -4320,6 +4329,8 @@ function recalcularTarjeta(card) {
             if (pesoMedido >= (tara - margenError)) {
                 const pesoLiquido = Math.max(0, pesoMedido - tara);
                 detBarra += (pesoLiquido / groz);
+                pesoTotalGramos += pesoMedido;
+                hayPesosValidos = true;
             }
         });
 
@@ -4335,6 +4346,9 @@ function recalcularTarjeta(card) {
         // seleccionado por input y suma todas las botellas pesadas.
         card.dataset.difDetExacta = String(difDetExacta);
         card.dataset.difDetOperativoBase = String(difDetOperativoBase);
+        // Peso bruto total introducido (columna PESO del PDF). Vacío cuando no
+        // hay pesos válidos, para distinguir "no se pesó" de "pesó 0 g".
+        card.dataset.pesoTotalGramos = hayPesosValidos ? String(pesoTotalGramos) : '';
 
         if (spanDet) spanDet.textContent = detBarraOperativo.toFixed(2);
         if (difDetSpan) difDetSpan.innerHTML = formatearDiferencia(difDetOperativoBase, true, tolerancia);
