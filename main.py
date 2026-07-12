@@ -1769,17 +1769,28 @@ def exportar_pdf_paloteo3(
     jerarquias = ["muted", "muted", "primary", "neutral", "neutral", "neutral", "neutral", "diff", "diff", "diff"]
     row_h = 7
 
-    # cabecera de tabla
-    pdf.set_fill_color(242, 242, 242)
-    pdf.set_draw_color(204, 204, 204)
-    pdf.set_text_color(17, 17, 17)
-    pdf.set_font(_FONT_FAMILY, "B", 7.5)
-    for w, h, a in zip(col_widths, headers, aligns):
-        pdf.cell(w, row_h, h, border=1, align=a, fill=True)
-    pdf.ln()
+    # cabecera de tabla (definida como helper para redibujarla en cada pagina
+    # nueva: fpdf2 hace el salto de pagina automatico pero no repite el encabezado).
+    def dibujar_cabecera_tabla():
+        pdf.set_fill_color(242, 242, 242)
+        pdf.set_draw_color(204, 204, 204)
+        pdf.set_text_color(17, 17, 17)
+        pdf.set_font(_FONT_FAMILY, "B", 7.5)
+        for w, h, a in zip(col_widths, headers, aligns):
+            pdf.cell(w, row_h, h, border=1, align=a, fill=True)
+        pdf.ln()
+
+    dibujar_cabecera_tabla()
 
     # filas de datos
     for idx, fila in enumerate(payload.filas):
+        # Si la proxima fila no entra en la pagina, saltar manualmente y repetir
+        # la cabecera arriba (nos adelantamos al auto page break de fpdf2, que
+        # crearia la pagina sin encabezado de tabla).
+        if pdf.get_y() + row_h > pdf.page_break_trigger:
+            pdf.add_page()
+            dibujar_cabecera_tabla()
+
         dif_oz_exacta = fila.difOnzasExactas if fila.difOnzasExactas is not None else fila.difOnzas
         dif_oz_pos = fila.difOnzasPos
         if dif_oz_pos is None and dif_oz_exacta is not None:
