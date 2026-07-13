@@ -688,8 +688,6 @@
                     </button>
                 </div>
                 
-                <!-- Caja de Errores -->
-                <div id="login-error" class="text-error text-sm text-center font-semibold hidden mt-md bg-error-container/40 border border-error rounded-sharp py-sm px-md shadow-lg"></div>
             </form>
         </div>
     </div>
@@ -1123,37 +1121,6 @@
             </div>
         </div>
 
-        <!-- Modal: Resultado / Confirmación genérico -->
-        <div id="resultado-dialog" class="fixed inset-0 hidden z-[60]">
-            <div id="resultado-overlay" class="absolute inset-0 bg-black/70"></div>
-            <div class="relative z-10 min-h-screen flex items-center justify-center p-md">
-                <div class="w-full max-w-lg bg-surface-container border border-outline-variant rounded-md p-md shadow-lg">
-                    <h3 id="resultado-titulo" class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase mb-sm flex items-center gap-sm">
-                        <span id="resultado-icono" class="material-symbols-outlined text-sm">info</span>
-                        <span id="resultado-titulo-texto">Resultado</span>
-                    </h3>
-                    <p id="resultado-mensaje" class="text-sm text-on-surface-variant mb-md whitespace-pre-line"></p>
-                    <!-- Botones para modo resultado (1 botón) -->
-                    <div id="resultado-btns-ok" class="flex justify-end">
-                        <button id="btn-resultado-ok" class="bg-primary-container text-on-primary-fixed font-headline-md text-body-base py-sm px-md rounded-sharp flex items-center justify-center gap-sm hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest">
-                            <span class="material-symbols-outlined text-sm">check</span>
-                            Aceptar
-                        </button>
-                    </div>
-                    <!-- Botones para modo confirmación (2 botones) -->
-                    <div id="resultado-btns-confirm" class="hidden flex flex-col sm:flex-row gap-sm">
-                        <button id="btn-resultado-cancelar" class="w-full sm:w-auto bg-surface text-on-surface border border-outline-variant py-sm px-md rounded-sharp uppercase tracking-widest text-label-mono hover:border-primary-fixed-dim transition-colors">
-                            Cancelar
-                        </button>
-                        <button id="btn-resultado-confirmar" class="w-full bg-primary-container text-on-primary-fixed font-headline-md text-body-base py-sm px-md rounded-sharp flex items-center justify-center gap-sm hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest">
-                            <span class="material-symbols-outlined text-sm">check</span>
-                            Sí, estoy seguro
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <!-- Bottom Navigation -->
         <nav class="fixed bottom-0 left-0 w-full bg-surface-container border-t border-outline-variant z-30">
             <div id="submit-section" class="h-[4.25rem] flex justify-around items-stretch">
@@ -1258,7 +1225,39 @@
         </div>
     </div>
 
-    <script src="/assets/app.js?v=10.69"></script>
+    <!-- Modal: Resultado / Confirmación genérico. Vive a nivel de body (fuera de
+         app-screen) para poder mostrarse también sobre la pantalla de login. -->
+    <div id="resultado-dialog" class="fixed inset-0 hidden z-[60]">
+        <div id="resultado-overlay" class="absolute inset-0 bg-black/70"></div>
+        <div class="relative z-10 min-h-screen flex items-center justify-center p-md">
+            <div class="w-full max-w-lg bg-surface-container border border-outline-variant rounded-md p-md shadow-lg">
+                <h3 id="resultado-titulo" class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase mb-sm flex items-center gap-sm">
+                    <span id="resultado-icono" class="material-symbols-outlined text-sm">info</span>
+                    <span id="resultado-titulo-texto">Resultado</span>
+                </h3>
+                <p id="resultado-mensaje" class="text-sm text-on-surface-variant mb-md whitespace-pre-line"></p>
+                <!-- Botones para modo resultado (1 botón) -->
+                <div id="resultado-btns-ok" class="flex justify-end">
+                    <button id="btn-resultado-ok" class="bg-primary-container text-on-primary-fixed font-headline-md text-body-base py-sm px-md rounded-sharp flex items-center justify-center gap-sm hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest">
+                        <span class="material-symbols-outlined text-sm">check</span>
+                        Aceptar
+                    </button>
+                </div>
+                <!-- Botones para modo confirmación (2 botones) -->
+                <div id="resultado-btns-confirm" class="hidden flex flex-col sm:flex-row gap-sm">
+                    <button id="btn-resultado-cancelar" class="w-full sm:w-auto bg-surface text-on-surface border border-outline-variant py-sm px-md rounded-sharp uppercase tracking-widest text-label-mono hover:border-primary-fixed-dim transition-colors">
+                        Cancelar
+                    </button>
+                    <button id="btn-resultado-confirmar" class="w-full bg-primary-container text-on-primary-fixed font-headline-md text-body-base py-sm px-md rounded-sharp flex items-center justify-center gap-sm hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest">
+                        <span class="material-symbols-outlined text-sm">check</span>
+                        Sí, estoy seguro
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/assets/app.js?v=10.70"></script>
 
     <script>
         (function () {
@@ -1303,7 +1302,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/assets/sw.js?v=10.69')
+                navigator.serviceWorker.register('/assets/sw.js?v=10.70')
                     .then(reg => console.log('[PWA] Service Worker registrado:', reg.scope))
                     .catch(err => console.error('[PWA] Error al registrar SW:', err));
             });

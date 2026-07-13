@@ -1616,12 +1616,9 @@ loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const usuario = document.getElementById('username').value.trim();
     const contrasena = document.getElementById('password').value;
-    const errorBox = document.getElementById('login-error');
     const btnLogin = document.getElementById('btn-login');
 
-    // Limpiar error de intentos previos y mostrar estado de carga (mismo
-    // spinner de flechas girando que usa PESAJE) mientras se valida.
-    errorBox.classList.add('hidden');
+    // Estado de carga: mismo spinner de flechas girando que usa PESAJE.
     const textoOriginalLogin = btnLogin.innerHTML;
     btnLogin.disabled = true;
     btnLogin.setAttribute('aria-busy', 'true');
@@ -1643,12 +1640,17 @@ loginForm.addEventListener('submit', async (e) => {
             localStorage.setItem('is_admin', data.is_admin ? '1' : '0');
             mostrarPantallaApp();
         } else {
-            errorBox.textContent = data.detail || "Error al iniciar sesión";
-            errorBox.classList.remove('hidden');
+            // Mismo modal de resultado que usa el resto de la PWA. Sin await:
+            // el finally restaura el botón mientras el modal sigue visible.
+            const detalle = typeof data.detail === 'string' ? data.detail : 'Error al iniciar sesión.';
+            mostrarDialogoResultado({ tipo: 'error', titulo: 'No se pudo iniciar sesión', mensaje: detalle });
         }
     } catch (error) {
-        errorBox.textContent = "Error de conexión con el servidor.";
-        errorBox.classList.remove('hidden');
+        mostrarDialogoResultado({
+            tipo: 'error',
+            titulo: 'Error de red',
+            mensaje: 'No se pudo conectar con el servidor. Revisa tu conexión e intenta de nuevo.'
+        });
     } finally {
         btnLogin.disabled = false;
         btnLogin.removeAttribute('aria-busy');
