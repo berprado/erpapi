@@ -42,7 +42,7 @@ There is no test suite or linter configured in this repo (no pytest, no `require
 - **Barra operativa resolution**: if `PALOTEO_SELECTOR_ENABLED=false`, the barra is fixed to `PALOTEO_DEFAULT_BARRA_ID`; if true, frontend may pass `X-Barra-Id` restricted to `PALOTEO_ALLOWED_BARRAS`. Any payload's `id_barra` must match the resolved barra.
 - **Weight conversion** (`_redondear_media_onza_half_up` and surrounding helpers in `main.py`): grams → ounces using each product's `gramos_por_oz` from its weighing profile (`app_producto_pesaje_config_api`), with `peso_liquido = max(0, peso_medido - tara)`. Exact ounces are kept in raw audit (`app_paloteo_registro_crudo`); POS values are rounded to the nearest 0.5 oz using HALF_UP rounding (`Decimal`, not float rounding) to keep backend/frontend in sync.
 - **Tolerance bands**: `_obtener_tolerancia_operativa_oz` defines a dead-band per product category before a weight delta counts as a real adjustment.
-- **Roles**: admin-only endpoints (Pesaje module) are gated by `_es_usuario_administrador`, checking `seg_permiso`/`seg_rol` for `ROLE_ADMINISTRADOR`. Login response includes `is_admin` so the frontend can hide the Pesaje menu entry.
+- **Roles**: admin-only endpoints (Pesaje module) are gated by `_es_usuario_administrador`, checking `seg_permiso`/`seg_rol` for `ROLE_ADMIN`. Login response includes `is_admin` so the frontend can hide the Pesaje menu entry.
 - **Soft deletes**: most tables use `estado` (`'HAB'`/`'DES'`) rather than hard deletes; pesaje profile deletion is blocked if it's the last active profile for a product.
 
 ## Mandatory rule: PWA cache busting

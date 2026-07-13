@@ -142,6 +142,17 @@ def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode('utf-8')).hexdigest()
 
 
+def _formatear_nombre_usuario(usuario: models.Usuario) -> str:
+    """Arma 'Paterno Materno, Nombres' omitiendo apellidos NULL o vacíos del POS."""
+    apellidos = " ".join(
+        parte.strip() for parte in [usuario.paterno, usuario.materno] if parte and parte.strip()
+    )
+    nombres = (usuario.nombres or "").strip()
+    if apellidos and nombres:
+        return f"{apellidos}, {nombres}"
+    return apellidos or nombres or usuario.usuario
+
+
 def _validar_operacion_inicio_cierre(db: Session, id_operacion: int) -> models.Operacion:
     operacion = db.query(models.Operacion).filter(models.Operacion.id == id_operacion).first()
     if not operacion or operacion.estado_operacion != 24:
@@ -380,28 +391,24 @@ def obtener_configuracion_publica():
 
 @app.post("/api/auth/login", response_model=schemas.Token)
 def login(login_data: schemas.UsuarioLogin, request: Request, db: Session = Depends(get_db)):
-    # 1. Buscar al usuario en la base de datos
+    # 1. Buscar al usuario y verificar credenciales (hash SHA-256).
+    # La contraseña se valida ANTES que el estado de la cuenta para que un
+    # tercero sin credenciales no pueda descubrir si un usuario existe o está
+    # deshabilitado (misma respuesta 401 genérica en ambos casos).
     usuario_db = db.query(models.Usuario).filter(models.Usuario.usuario == login_data.usuario).first()
-    
-    if not usuario_db:
+    hash_calculado = hash_password(login_data.contrasena)
+
+    if not usuario_db or usuario_db.contrasena != hash_calculado:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, 
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Usuario o contraseña incorrectos"
-        )
-        
-    # 2. Validar que el usuario esté activo y habilitado
-    if usuario_db.estado != 'HAB' or usuario_db.habilitado != '1':
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, 
-            detail="El usuario no está activo o habilitado en el sistema"
         )
 
-    # 3. Verificar contraseña comparando los Hashes SHA-256
-    hash_calculado = hash_password(login_data.contrasena)
-    if usuario_db.contrasena != hash_calculado:
+    # 2. Con credenciales válidas, validar que el usuario esté activo y habilitado
+    if usuario_db.estado != 'HAB' or usuario_db.habilitado != '1':
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, 
-            detail="Usuario o contraseña incorrectos"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="El usuario no está activo o habilitado en el sistema"
         )
 
     # 4. Registrar el acceso en la tabla de auditoría (seg_acceso)
@@ -428,7 +435,7 @@ def login(login_data: schemas.UsuarioLogin, request: Request, db: Session = Depe
         "access_token": token_real,
         "token_type": "Bearer",
         "usuario_id": usuario_db.id,
-        "nombres": f"{usuario_db.paterno} {usuario_db.materno}, {usuario_db.nombres}",
+        "nombres": _formatear_nombre_usuario(usuario_db),
         "is_admin": _es_usuario_administrador(db, usuario_db.id)
     }
     
@@ -522,7 +529,7 @@ def procesar_paloteo(
 ):
     # Extraemos los datos del usuario autenticado directamente del token validado
     username_actual = current_user.usuario
-    nombre_formateado = f"{current_user.paterno} {current_user.materno}, {current_user.nombres}".upper()
+    nombre_formateado = _formatear_nombre_usuario(current_user).upper()
     fecha_actual = datetime.now(timezone.utc)
 
     # --- NUEVO: Lógica de Observaciones ---
@@ -637,7 +644,7 @@ def corregir_paloteo(
     current_user: models.Usuario = Depends(get_usuario_actual)
 ):
     username_actual = current_user.usuario
-    nombre_formateado = f"{current_user.paterno} {current_user.materno}, {current_user.nombres}".upper()
+    nombre_formateado = _formatear_nombre_usuario(current_user).upper()
     fecha_actual = datetime.now(timezone.utc)
 
     inventario = db.query(models.InventarioFisicoPOS).filter(

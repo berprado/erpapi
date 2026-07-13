@@ -176,7 +176,7 @@ Reglas de barra operativa:
 | `PUT` | `/api/pesaje/config/{id}` | Edita `peso_bruto`/`tara`/`barcode` de un perfil existente. En productos no pesables solo se permite editar `barcode` |
 | `DELETE` | `/api/pesaje/config/{id}` | Elimina (soft-delete, `estado='DES'`) un perfil. Rechaza la eliminacion si es el ultimo perfil activo del producto |
 
-Todos los endpoints de Pesaje requieren ademas que el usuario tenga el rol `ROLE_ADMINISTRADOR` (verificado contra `seg_permiso`/`seg_rol`), devolviendo `403` si no lo tiene.
+Todos los endpoints de Pesaje requieren ademas que el usuario tenga el rol `ROLE_ADMIN` (verificado contra `seg_permiso`/`seg_rol`), devolviendo `403` si no lo tiene.
 
 ### Reporte Paloteo 3 (requiere JWT)
 
@@ -283,7 +283,7 @@ Para cada botella abierta:
 |---|---|
 | `seg_usuario` | Usuarios |
 | `seg_acceso` | Auditoria de accesos |
-| `seg_rol` | Catalogo de roles (ej. `ROLE_ADMINISTRADOR`) |
+| `seg_rol` | Catalogo de roles (ej. `ROLE_ADMIN`) |
 | `seg_permiso` | Asignacion de roles por usuario (tabla puente N:M) |
 | `ope_operacion` | Operativas |
 | `app_producto_pesaje_config_api` | Configuracion/perfiles de pesaje (incluye `estado` para soft-delete y `barcode`) |
@@ -307,7 +307,7 @@ Flujo actual de navegacion:
 - PALOTEO 2
 - PALOTEO 3 (captura ciega)
 - AJUSTES (diferencias, exportacion PDF y, solo administradores, aplicar el ajuste definitivo contra `bar_inventario`)
-- PESAJE (CRUD de modelos de botella y codigos de barra; solo visible/accesible para usuarios con rol `ROLE_ADMINISTRADOR`). Cada tarjeta de producto pesable ofrece dos acciones: EDITAR (modal de modelos/codigos de barra) y CALCULAR (calculadora de peso a onzas integrada; ex-modulo CONVERSOR). CALCULAR solo aparece en productos pesables con todos sus perfiles completos.
+- PESAJE (CRUD de modelos de botella y codigos de barra; solo visible/accesible para usuarios con rol `ROLE_ADMIN`). Cada tarjeta de producto pesable ofrece dos acciones: EDITAR (modal de modelos/codigos de barra) y CALCULAR (calculadora de peso a onzas integrada; ex-modulo CONVERSOR). CALCULAR solo aparece en productos pesables con todos sus perfiles completos.
 
 Sincronizacion entre modulos:
 
@@ -407,7 +407,7 @@ Service Worker:
 - Verificacion de contrasena con SHA-256 (compatibilidad POS).
 - JWT con expiracion de 10 horas.
 - Endpoints de negocio protegidos con HTTPBearer.
-- Control de acceso por rol (`ROLE_ADMINISTRADOR` via `seg_permiso`/`seg_rol`) para el modulo PESAJE y para `POST /api/inventario/ajustes/aplicar`. La respuesta de login incluye `is_admin` para que el frontend oculte la opcion de menu/boton a usuarios sin ese rol.
+- Control de acceso por rol (`ROLE_ADMIN` via `seg_permiso`/`seg_rol`) para el modulo PESAJE y para `POST /api/inventario/ajustes/aplicar`. La respuesta de login incluye `is_admin` para que el frontend oculte la opcion de menu/boton a usuarios sin ese rol.
 - Validacion de longitud minima de `SECRET_KEY` en configuracion.
 - CORS habilitado para clientes web.
 

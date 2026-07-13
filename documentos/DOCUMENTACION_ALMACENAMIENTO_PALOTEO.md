@@ -198,7 +198,7 @@ El propósito es mantener control riguroso del inventario y detectar discrepanci
         └──────────────────────────────────────────┘
 ```
 
-**Gestión (CRUD):** este módulo se administra desde el panel **PESAJE** de la PWA, accesible solo para usuarios con rol `ROLE_ADMINISTRADOR` (ver tabla `seg_rol`/`seg_permiso`). Ya no se crean modelos de botella desde los paneles de paloteo.
+**Gestión (CRUD):** este módulo se administra desde el panel **PESAJE** de la PWA, accesible solo para usuarios con rol `ROLE_ADMIN` (ver tabla `seg_rol`/`seg_permiso`). Ya no se crean modelos de botella desde los paneles de paloteo.
 
 ---
 
@@ -461,7 +461,7 @@ Ejemplo:
 
 **Indicador de datos incompletos (frontend):** en la UI del módulo PESAJE, un perfil pesable (`pesable=1`) con `peso_bruto` o `tara` en `NULL` se marca visualmente (borde de advertencia, ícono y texto "Datos incompletos") para que el administrador identifique rápidamente qué modelos requieren completarse.
 
-**Control de acceso:** todas las operaciones de escritura sobre esta tabla (crear, editar, eliminar) requieren que el usuario autenticado tenga el rol `ROLE_ADMINISTRADOR` (verificado contra `seg_permiso`/`seg_rol`). Un usuario sin ese rol recibe `403 Forbidden`.
+**Control de acceso:** todas las operaciones de escritura sobre esta tabla (crear, editar, eliminar) requieren que el usuario autenticado tenga el rol `ROLE_ADMIN` (verificado contra `seg_permiso`/`seg_rol`). Un usuario sin ese rol recibe `403 Forbidden`.
 
 **Reglas de edición (`PUT /api/pesaje/config/{id}`):**
 - Si `pesable = 1`: se exigen `peso_bruto` y `tara`, se valida `tara < peso_bruto`, y `gramos_por_oz` se recalcula con la misma fórmula del alta.
@@ -938,7 +938,7 @@ Respuesta:
   "detail": "Aún hay ventas activas. Cambie el estado de la operativa a INICIO CIERRE..."
 }
 
-Causa 2: Usuario sin rol ROLE_ADMINISTRADOR intenta acceder a los endpoints de /api/pesaje/*
+Causa 2: Usuario sin rol ROLE_ADMIN intenta acceder a los endpoints de /api/pesaje/*
 Respuesta:
 {
   "detail": "Acceso restringido a administradores."
