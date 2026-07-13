@@ -812,9 +812,7 @@ let categoriasPesajeCargadas = false;
 async function cargarCategoriasPesaje() {
     if (categoriasPesajeCargadas || !pesajeCategoriaSel) return;
     try {
-        const response = await fetch(`${API_BASE}/pesaje/categorias`, {
-            headers: { 'Authorization': `Bearer ${currentToken}` }
-        });
+        const response = await fetchAutenticado(`${API_BASE}/pesaje/categorias`);
         if (!response.ok) return;
         const categorias = await response.json();
         categorias.forEach((cat) => {
@@ -872,10 +870,7 @@ async function cargarPesaje() {
     if (pesajeEstado.idCategoria) params.set('id_categoria', pesajeEstado.idCategoria);
 
     try {
-        const response = await fetch(`${API_BASE}/pesaje/config?${params.toString()}`, {
-            headers: { 'Authorization': `Bearer ${currentToken}` }
-        });
-        if (response.status === 401) return btnLogout.click();
+        const response = await fetchAutenticado(`${API_BASE}/pesaje/config?${params.toString()}`);
         if (response.status === 403) {
             pesajeList.innerHTML = '';
             pesajeEmptyState.textContent = 'No tienes permisos para acceder a este módulo.';
@@ -884,6 +879,7 @@ async function cargarPesaje() {
         }
         pesajeEstado.datos = response.ok ? await response.json() : [];
     } catch (error) {
+        if (error instanceof SesionExpiradaError) return;
         pesajeEstado.datos = [];
     }
 
@@ -1180,15 +1176,11 @@ function crearFilaPerfilPesaje(producto, perfil) {
         btnGuardar.innerHTML = `${renderCriticalIcon('refresh', 'ui-icon animate-spin-ccw')} Guardando...`;
 
         try {
-            const response = await fetch(`${API_BASE}/pesaje/config/${perfil.id}`, {
+            const response = await fetchAutenticado(`${API_BASE}/pesaje/config/${perfil.id}`, {
                 method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${currentToken}`
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body)
             });
-            if (response.status === 401) return btnLogout.click();
             const data = await response.json();
             if (!response.ok) {
                 errorEl.textContent = data.detail || 'No se pudo guardar.';
@@ -1207,6 +1199,7 @@ function crearFilaPerfilPesaje(producto, perfil) {
                 mensaje: `Se guardaron los cambios de "${perfil.nombre_perfil}" correctamente.`,
             });
         } catch (error) {
+            if (error instanceof SesionExpiradaError) return;
             errorEl.textContent = 'Error de red al guardar.';
             errorEl.classList.remove('hidden');
             await mostrarDialogoResultado({
@@ -1233,11 +1226,9 @@ function crearFilaPerfilPesaje(producto, perfil) {
             if (!confirmado) return;
 
             try {
-                const response = await fetch(`${API_BASE}/pesaje/config/${perfil.id}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${currentToken}` }
+                const response = await fetchAutenticado(`${API_BASE}/pesaje/config/${perfil.id}`, {
+                    method: 'DELETE'
                 });
-                if (response.status === 401) return btnLogout.click();
                 const data = await response.json();
                 if (!response.ok) {
                     errorEl.textContent = data.detail || 'No se pudo eliminar.';
@@ -1246,6 +1237,7 @@ function crearFilaPerfilPesaje(producto, perfil) {
                 }
                 await cargarPesaje();
             } catch (error) {
+                if (error instanceof SesionExpiradaError) return;
                 errorEl.textContent = 'Error de red al eliminar.';
                 errorEl.classList.remove('hidden');
             }
@@ -1261,12 +1253,9 @@ async function agregarModeloPesaje(producto) {
     if (!datos) return; // usuario canceló
 
     try {
-        const response = await fetch(`${API_BASE}/pesaje/perfiles`, {
+        const response = await fetchAutenticado(`${API_BASE}/pesaje/perfiles`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${currentToken}`
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 id_producto: producto.id_producto,
                 nombre_perfil: datos.nombre,
@@ -1275,8 +1264,6 @@ async function agregarModeloPesaje(producto) {
                 barcode: datos.barcode
             })
         });
-
-        if (response.status === 401) return btnLogout.click();
 
         const data = await response.json();
         if (!response.ok) {
@@ -1288,6 +1275,7 @@ async function agregarModeloPesaje(producto) {
 
         await cargarPesaje();
     } catch (error) {
+        if (error instanceof SesionExpiradaError) return;
         mbError.textContent = 'Error de red al crear el modelo de botella.';
         mbError.classList.remove('hidden');
         modeloBotellaDialog.classList.remove('hidden');
@@ -1487,7 +1475,10 @@ if (btnCloseConversorModal) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    if (currentToken) {
+    if (currentToken && tokenExpirado(currentToken)) {
+        // Token vencido de una sesión anterior: directo al login, sin flash de app.
+        cerrarSesion();
+    } else if (currentToken) {
         mostrarPantallaApp();
     } else {
         mostrarPantallaLogin();
@@ -1572,6 +1563,55 @@ document.addEventListener('DOMContentLoaded', () => {
 // ==========================================
 // AUTENTICACIÓN Y NAVEGACIÓN
 // ==========================================
+
+/** La sesión ya se cerró (token vencido o 401): los catch deben abortar en silencio. */
+class SesionExpiradaError extends Error {
+    constructor() {
+        super('Sesión expirada');
+        this.name = 'SesionExpiradaError';
+    }
+}
+
+/** Lee el claim exp del JWT sin validar firma (solo para UX de expiración;
+ * la validación real siempre la hace el backend). */
+function tokenExpirado(token) {
+    try {
+        const payloadB64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+        const payload = JSON.parse(atob(payloadB64));
+        if (!payload.exp) return false;
+        // Margen de 30s para no disparar requests con un token a punto de vencer.
+        return payload.exp * 1000 <= Date.now() + 30000;
+    } catch (error) {
+        return true; // Token ilegible: tratarlo como vencido.
+    }
+}
+
+/** fetch con Authorization y manejo centralizado de sesión expirada.
+ * Si no hay token vigente o el backend responde 401, cierra la sesión y lanza
+ * SesionExpiradaError para que el caller aborte su flujo sin mostrar errores. */
+async function fetchAutenticado(url, options = {}) {
+    if (!currentToken || tokenExpirado(currentToken)) {
+        cerrarSesion();
+        throw new SesionExpiradaError();
+    }
+    const headers = { ...(options.headers || {}), 'Authorization': `Bearer ${currentToken}` };
+    const response = await fetch(url, { ...options, headers });
+    if (response.status === 401) {
+        cerrarSesion();
+        throw new SesionExpiradaError();
+    }
+    return response;
+}
+
+function cerrarSesion() {
+    cerrarMenuFlotanteTopbar();
+    localStorage.removeItem('token');
+    localStorage.removeItem('nombres');
+    localStorage.removeItem('is_admin');
+    currentToken = null;
+    mostrarPantallaLogin();
+}
+
 loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const usuario = document.getElementById('username').value.trim();
@@ -1616,14 +1656,7 @@ loginForm.addEventListener('submit', async (e) => {
     }
 });
 
-btnLogout.addEventListener('click', () => {
-    cerrarMenuFlotanteTopbar();
-    localStorage.removeItem('token');
-    localStorage.removeItem('nombres');
-    localStorage.removeItem('is_admin');
-    currentToken = null;
-    mostrarPantallaLogin();
-});
+btnLogout.addEventListener('click', cerrarSesion);
 
 function esUsuarioAdministrador() {
     return localStorage.getItem('is_admin') === '1';
@@ -1680,16 +1713,11 @@ async function iniciarDashboard() {
 
     // 1. Verificar "Guardia de Seguridad" (Estado de Operación)
     try {
-        const responseOp = await fetch(`${API_BASE}/operacion/activa`, {
-            headers: { 'Authorization': `Bearer ${currentToken}` }
-        });
+        const responseOp = await fetchAutenticado(`${API_BASE}/operacion/activa`);
         
         const dataOp = await responseOp.json();
 
         if (!responseOp.ok) {
-            // Error 401: Token expirado
-            if(responseOp.status === 401) return btnLogout.click();
-
             // Procesar error: extraer icon y status_class del detalle
             const detail = dataOp.detail && typeof dataOp.detail === 'object' ? dataOp.detail : {};
             const iconoError = detail.icon || 'block';
@@ -1749,21 +1777,16 @@ async function iniciarDashboard() {
         cargarProductos();
 
     } catch (error) {
+        if (error instanceof SesionExpiradaError) return;
         estadoTexto.textContent = "Error de conexión con el servidor.";
     }
 }
 
 async function cargarProductos() {
     try {
-        const response = await fetch(`${API_BASE}/inventario/pendientes`, {
-            headers: {
-                'Authorization': `Bearer ${currentToken}`,
-                'X-Barra-Id': String(idBarraActual),
-            }
+        const response = await fetchAutenticado(`${API_BASE}/inventario/pendientes`, {
+            headers: { 'X-Barra-Id': String(idBarraActual) }
         });
-
-        // Fix #25: Manejar token expirado igual que en iniciarDashboard()
-        if (response.status === 401) return btnLogout.click();
 
         const productos = await response.json();
 
@@ -1794,6 +1817,7 @@ async function cargarProductos() {
             actualizarResumenProgresoInventario();
         }
     } catch (error) {
+        if (error instanceof SesionExpiradaError) return;
         console.error("Error cargando productos", error);
         mostrarEstadoVacioPaloteo3();
         ocultarResumenProductos();
@@ -1857,11 +1881,7 @@ async function cargarInventarioExistente() {
     if (!currentOperacionId) return;
 
     try {
-        const response = await fetch(`${API_BASE}/inventario/paloteo/${currentOperacionId}`, {
-            headers: { 'Authorization': `Bearer ${currentToken}` }
-        });
-
-        if (response.status === 401) return btnLogout.click();
+        const response = await fetchAutenticado(`${API_BASE}/inventario/paloteo/${currentOperacionId}`);
         if (response.status === 404) return; // Sin inventario previo, flujo normal de creación
         if (!response.ok) return; // Otro error, ignorar silenciosamente
 
@@ -1878,6 +1898,7 @@ async function cargarInventarioExistente() {
         }
 
     } catch (error) {
+        if (error instanceof SesionExpiradaError) return;
         console.error("Error verificando inventario existente:", error);
     }
 }
@@ -2528,12 +2549,9 @@ async function exportarReportePaloteo3Pdf() {
             })),
         };
 
-        const resp = await fetch('/api/paloteo3/exportar-pdf', {
+        const resp = await fetchAutenticado('/api/paloteo3/exportar-pdf', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${currentToken}`,
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
         });
 
@@ -2557,6 +2575,7 @@ async function exportarReportePaloteo3Pdf() {
         a.remove();
         URL.revokeObjectURL(url);
     } catch (_) {
+        if (_ instanceof SesionExpiradaError) return;
         await mostrarDialogoResultado({ tipo: 'error', titulo: 'Error de red', mensaje: 'No se pudo conectar con el servidor para generar el PDF.' });
         return;
     } finally {
@@ -2604,17 +2623,14 @@ async function actualizarPanelAjustes() {
     _mostrarEstadoAjustes('Verificando diferencias contra la base de datos...');
 
     try {
-        const resp = await fetch(`${API_BASE}/inventario/consolidar/preview`, {
+        const resp = await fetchAutenticado(`${API_BASE}/inventario/consolidar/preview`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${currentToken}`,
                 'X-Barra-Id': String(idBarraActual),
             },
             body: JSON.stringify({ id_operacion: currentOperacionId, id_barra: idBarraActual }),
         });
-
-        if (resp.status === 401) return btnLogout.click();
 
         const data = await resp.json();
 
@@ -2643,6 +2659,7 @@ async function actualizarPanelAjustes() {
         _ocultarEstadoAjustes();
         if (ajustesBtnAplicar) ajustesBtnAplicar.classList.remove('hidden');
     } catch (_) {
+        if (_ instanceof SesionExpiradaError) return;
         _mostrarEstadoAjustes('Error de conexión al verificar los ajustes.');
     }
 }
@@ -2663,17 +2680,14 @@ async function aplicarAjustesInventario() {
     ajustesBtnAplicar.innerHTML = `${renderCriticalIcon('refresh', 'ui-icon animate-spin-ccw')} Aplicando...`;
 
     try {
-        const resp = await fetch(`${API_BASE}/inventario/ajustes/aplicar`, {
+        const resp = await fetchAutenticado(`${API_BASE}/inventario/ajustes/aplicar`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${currentToken}`,
                 'X-Barra-Id': String(idBarraActual),
             },
             body: JSON.stringify({ id_operacion: currentOperacionId, id_barra: idBarraActual }),
         });
-
-        if (resp.status === 401) return btnLogout.click();
 
         const data = await resp.json();
 
@@ -2686,6 +2700,7 @@ async function aplicarAjustesInventario() {
             await mostrarDialogoResultado({ tipo: 'error', titulo: 'No se pudo aplicar', mensaje: detalle });
         }
     } catch (_) {
+        if (_ instanceof SesionExpiradaError) return;
         await mostrarDialogoResultado({ tipo: 'error', titulo: 'Error de red', mensaje: 'No se pudo conectar con el servidor para aplicar los ajustes.' });
     } finally {
         ajustesBtnAplicar.disabled = false;
@@ -3025,12 +3040,9 @@ async function enviarInventario(payload) {
             ? `${API_BASE}/inventario/paloteo/${currentIdInventarioPOS}`
             : `${API_BASE}/inventario/paloteo`;
 
-        const response = await fetch(url, {
+        const response = await fetchAutenticado(url, {
             method: metodo,
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${currentToken}` 
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
 
@@ -3061,11 +3073,13 @@ async function enviarInventario(payload) {
             });
         }
     } catch (error) {
-        await mostrarDialogoResultado({
-            tipo: 'error',
-            titulo: 'Error de red',
-            mensaje: 'No se pudo conectar con el servidor. Revisa tu conexión e intenta de nuevo.'
-        });
+        if (!(error instanceof SesionExpiradaError)) {
+            await mostrarDialogoResultado({
+                tipo: 'error',
+                titulo: 'Error de red',
+                mensaje: 'No se pudo conectar con el servidor. Revisa tu conexión e intenta de nuevo.'
+            });
+        }
     } finally {
         btnGuardar.disabled = !operativaPermitePaloteo;
         btnEnviarInventario.disabled = !operativaPermitePaloteo;
@@ -3275,14 +3289,9 @@ function manejarBusquedaCatalogo(query, tabName) {
 
 async function buscarEnCatalogoYMostrar(query) {
     try {
-        const response = await fetch(`${API_BASE}/inventario/catalogo/buscar?busqueda=${encodeURIComponent(query)}`, {
-            headers: {
-                'Authorization': `Bearer ${currentToken}`,
-                'X-Barra-Id': String(idBarraActual),
-            }
+        const response = await fetchAutenticado(`${API_BASE}/inventario/catalogo/buscar?busqueda=${encodeURIComponent(query)}`, {
+            headers: { 'X-Barra-Id': String(idBarraActual) }
         });
-
-        if (response.status === 401) return btnLogout.click();
         if (!response.ok) { ocultarResultadosCatalogo(); return; }
 
         const resultados = await response.json();
@@ -3291,6 +3300,7 @@ async function buscarEnCatalogoYMostrar(query) {
 
         renderizarResultadosCatalogo(nuevos);
     } catch (error) {
+        if (error instanceof SesionExpiradaError) return;
         console.error('Error buscando en catalogo completo', error);
         ocultarResultadosCatalogo();
     }
@@ -3304,14 +3314,9 @@ async function buscarEnCatalogoYMostrar(query) {
  */
 async function cargarCatalogoCompletoYMostrar() {
     try {
-        const response = await fetch(`${API_BASE}/inventario/catalogo/buscar?limite=${CATALOGO_COMPLETO_LIMITE}`, {
-            headers: {
-                'Authorization': `Bearer ${currentToken}`,
-                'X-Barra-Id': String(idBarraActual),
-            }
+        const response = await fetchAutenticado(`${API_BASE}/inventario/catalogo/buscar?limite=${CATALOGO_COMPLETO_LIMITE}`, {
+            headers: { 'X-Barra-Id': String(idBarraActual) }
         });
-
-        if (response.status === 401) return btnLogout.click();
         if (!response.ok) { ocultarResultadosCatalogo(); return; }
 
         const resultados = await response.json();
@@ -3320,6 +3325,7 @@ async function cargarCatalogoCompletoYMostrar() {
 
         renderizarResultadosCatalogo(nuevos);
     } catch (error) {
+        if (error instanceof SesionExpiradaError) return;
         console.error('Error cargando el catalogo completo', error);
         ocultarResultadosCatalogo();
     }
@@ -3496,15 +3502,10 @@ async function quitarProductoManual(producto) {
 
     if (currentIdInventarioPOS) {
         try {
-            const response = await fetch(`${API_BASE}/inventario/paloteo/${currentIdInventarioPOS}/producto/${producto.id_producto}`, {
+            const response = await fetchAutenticado(`${API_BASE}/inventario/paloteo/${currentIdInventarioPOS}/producto/${producto.id_producto}`, {
                 method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${currentToken}`,
-                    'X-Barra-Id': String(idBarraActual),
-                }
+                headers: { 'X-Barra-Id': String(idBarraActual) }
             });
-
-            if (response.status === 401) return btnLogout.click();
 
             if (!response.ok) {
                 const data = await response.json().catch(() => ({}));
@@ -3516,6 +3517,7 @@ async function quitarProductoManual(producto) {
                 return;
             }
         } catch (error) {
+            if (error instanceof SesionExpiradaError) return;
             console.error('Error quitando producto manual', error);
             await mostrarDialogoResultado({
                 tipo: 'error',
