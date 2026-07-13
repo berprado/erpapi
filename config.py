@@ -13,6 +13,18 @@ class Settings(BaseSettings):
     PALOTEO_SELECTOR_ENABLED: bool = False
     PALOTEO_ALLOWED_BARRAS: str = "1"
 
+    # Freno de fuerza bruta en /api/auth/login: máximo de intentos fallidos
+    # dentro de la ventana antes de responder 429. Un login exitoso resetea
+    # el contador de ese usuario/IP.
+    LOGIN_MAX_INTENTOS_USUARIO: int = 5
+    LOGIN_MAX_INTENTOS_IP: int = 20
+    LOGIN_VENTANA_MINUTOS: int = 5
+
+    # Orígenes cross-origin permitidos (separados por coma). Vacío = la API
+    # solo se consume desde el mismo origen (la PWA integrada) y no se
+    # habilita el middleware CORS.
+    CORS_ALLOWED_ORIGINS: str = ""
+
     # Fix #21: Validar longitud mínima de SECRET_KEY para garantizar tokens seguros.
     @field_validator('SECRET_KEY')
     @classmethod
@@ -36,6 +48,10 @@ class Settings(BaseSettings):
         if v <= 0:
             raise ValueError('PALOTEO_DEFAULT_BARRA_ID debe ser mayor a 0.')
         return v
+
+    @property
+    def cors_allowed_origins(self) -> list[str]:
+        return [o.strip() for o in (self.CORS_ALLOWED_ORIGINS or "").split(',') if o.strip()]
 
     @property
     def paloteo_allowed_barras(self) -> list[int]:

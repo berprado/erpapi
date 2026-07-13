@@ -132,7 +132,7 @@ Docs: `http://localhost:8000/docs`
 |---|---|---|
 | `GET` | `/api` | Estado de la API |
 | `GET` | `/api/health` | Verifica conexion a BD |
-| `POST` | `/api/auth/login` | Inicio de sesion, devuelve JWT |
+| `POST` | `/api/auth/login` | Inicio de sesion, devuelve JWT. Responde `429` si el usuario o la IP acumulan demasiados intentos fallidos en la ventana configurada (`LOGIN_MAX_INTENTOS_*`, `LOGIN_VENTANA_MINUTOS`); un login exitoso resetea el contador. Todo intento (exitoso o fallido) queda registrado en `app_login_auditoria_api` |
 
 ### Operacion (requiere JWT)
 
@@ -282,7 +282,8 @@ Para cada botella abierta:
 | Tabla | Descripcion |
 |---|---|
 | `seg_usuario` | Usuarios |
-| `seg_acceso` | Auditoria de accesos |
+| `seg_acceso` | Auditoria de accesos exitosos (compatibilidad POS) |
+| `app_login_auditoria_api` | Auditoria de intentos de login de la PWA (exito/fallo, motivo, IP); soporta el rate limit del login. DDL en [querys/ddl_app_login_auditoria_api.sql](querys/ddl_app_login_auditoria_api.sql) |
 | `seg_rol` | Catalogo de roles (ej. `ROLE_ADMIN`) |
 | `seg_permiso` | Asignacion de roles por usuario (tabla puente N:M) |
 | `ope_operacion` | Operativas |
@@ -409,7 +410,10 @@ Service Worker:
 - Endpoints de negocio protegidos con HTTPBearer.
 - Control de acceso por rol (`ROLE_ADMIN` via `seg_permiso`/`seg_rol`) para el modulo PESAJE y para `POST /api/inventario/ajustes/aplicar`. La respuesta de login incluye `is_admin` para que el frontend oculte la opcion de menu/boton a usuarios sin ese rol.
 - Validacion de longitud minima de `SECRET_KEY` en configuracion.
-- CORS habilitado para clientes web.
+- Anti-enumeracion en login: la contrasena se valida antes que el estado de la cuenta y usuario inexistente/contrasena incorrecta comparten el mismo `401` generico.
+- Rate limit de login respaldado en `app_login_auditoria_api`: maximo `LOGIN_MAX_INTENTOS_USUARIO` (default 5) fallos por usuario y `LOGIN_MAX_INTENTOS_IP` (default 20) por IP dentro de `LOGIN_VENTANA_MINUTOS` (default 5); al superarlo responde `429`. La IP se resuelve priorizando `X-Forwarded-For` (reverse proxy). Fail-open: si la tabla no existe aun en el entorno, el login sigue funcionando y el freno queda inactivo (warning en logs).
+- CORS deshabilitado por defecto (la PWA se sirve desde el mismo origen que la API). Para permitir clientes externos, definir `CORS_ALLOWED_ORIGINS` en `.env` (origenes separados por coma).
+- Cabeceras de seguridad en toda respuesta: `Content-Security-Policy` (permite solo Tailwind CDN, Google Fonts e inline propio; `connect-src 'self'` bloquea exfiltracion del token), `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`. `/docs` y `/redoc` quedan exentos de CSP porque Swagger UI usa cdn.jsdelivr.net.
 
 ---
 

@@ -27,14 +27,46 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Habilita preflight OPTIONS y cabeceras CORS para clientes web (PWA/frontend).
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
+# CORS solo si se configuran orígenes externos explícitos (CORS_ALLOWED_ORIGINS).
+# La PWA integrada se sirve desde el mismo origen que la API y no necesita CORS.
+if settings.cors_allowed_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_allowed_origins,
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+# CSP mínima que la PWA necesita hoy: Tailwind por CDN (requiere unsafe-eval),
+# Google Fonts, e inline scripts/styles propios de index.html. connect-src 'self'
+# impide exfiltrar el token hacia otros hosts aunque se inyecte un script.
+_CSP_PWA = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com; "
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+    "font-src 'self' https://fonts.gstatic.com; "
+    "img-src 'self' data: blob:; "
+    "connect-src 'self'; "
+    "worker-src 'self'; "
+    "frame-ancestors 'none'; "
+    "base-uri 'self'; "
+    "form-action 'self'"
 )
+
+# Swagger UI carga sus assets desde cdn.jsdelivr.net: /docs queda exento de CSP.
+_RUTAS_SIN_CSP = ("/docs", "/redoc", "/openapi.json")
+
+
+@app.middleware("http")
+async def agregar_cabeceras_seguridad(request: Request, call_next):
+    response = await call_next(request)
+    if not request.url.path.startswith(_RUTAS_SIN_CSP):
+        response.headers.setdefault("Content-Security-Policy", _CSP_PWA)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "same-origin")
+    return response
 
 # Configuración de Seguridad
 security = HTTPBearer()
@@ -151,6 +183,75 @@ def _formatear_nombre_usuario(usuario: models.Usuario) -> str:
     if apellidos and nombres:
         return f"{apellidos}, {nombres}"
     return apellidos or nombres or usuario.usuario
+
+
+def _obtener_ip_cliente(request: Request) -> str:
+    """IP real del cliente. Detrás de un reverse proxy request.client.host es la
+    IP del proxy, por eso se prioriza X-Forwarded-For (primera IP de la cadena)."""
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(',')[0].strip()
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        return real_ip.strip()
+    return request.client.host if request.client else "desconocida"
+
+
+def _registrar_intento_login(db: Session, usuario: str, ip: str, exito: bool, motivo: str = None) -> None:
+    """Deja rastro de todo intento de login (exitoso o no) en app_login_auditoria_api.
+    Fail-open: si la tabla no existe aún en el entorno, el login no debe caerse;
+    se registra un warning y se continúa (el rate limit queda inactivo)."""
+    try:
+        db.add(models.LoginAuditoria(
+            usuario=usuario,
+            exito=1 if exito else 0,
+            motivo=motivo,
+            ip=ip,
+            fecha=datetime.now(timezone.utc),
+        ))
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.warning(
+            "No se pudo registrar el intento de login (¿falta app_login_auditoria_api? "
+            "Ver querys/ddl_app_login_auditoria_api.sql).", exc_info=True
+        )
+
+
+def _contar_fallos_login(db: Session, campo: str, valor: str, desde: datetime) -> int:
+    """Fallos de login desde `desde`, ignorando los anteriores al último éxito
+    (un login correcto resetea el contador de ese usuario/IP)."""
+    if campo not in ("usuario", "ip"):
+        raise ValueError(f"Campo de rate limit no soportado: {campo}")
+    ultimo_exito = db.execute(
+        text(f"SELECT MAX(fecha) FROM app_login_auditoria_api WHERE {campo} = :valor AND exito = 1"),
+        {"valor": valor}
+    ).scalar()
+    if ultimo_exito and ultimo_exito > desde:
+        desde = ultimo_exito
+    total = db.execute(
+        text(f"SELECT COUNT(*) FROM app_login_auditoria_api WHERE {campo} = :valor AND exito = 0 AND fecha > :desde"),
+        {"valor": valor, "desde": desde}
+    ).scalar()
+    return int(total or 0)
+
+
+def _verificar_rate_limit_login(db: Session, usuario: str, ip: str) -> None:
+    """Freno de fuerza bruta: 429 si el usuario o la IP acumulan demasiados
+    fallos dentro de la ventana. Se evalúa ANTES de tocar credenciales para no
+    dar señal alguna sobre la cuenta."""
+    # Fechas naive en UTC para comparar contra los DATETIME que devuelve MySQL.
+    inicio_ventana = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(
+        minutes=settings.LOGIN_VENTANA_MINUTOS
+    )
+    fallos_usuario = _contar_fallos_login(db, "usuario", usuario, inicio_ventana)
+    fallos_ip = _contar_fallos_login(db, "ip", ip, inicio_ventana)
+    if (fallos_usuario >= settings.LOGIN_MAX_INTENTOS_USUARIO
+            or fallos_ip >= settings.LOGIN_MAX_INTENTOS_IP):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Demasiados intentos fallidos. Intente nuevamente en {settings.LOGIN_VENTANA_MINUTOS} minutos."
+        )
 
 
 def _validar_operacion_inicio_cierre(db: Session, id_operacion: int) -> models.Operacion:
@@ -391,14 +492,30 @@ def obtener_configuracion_publica():
 
 @app.post("/api/auth/login", response_model=schemas.Token)
 def login(login_data: schemas.UsuarioLogin, request: Request, db: Session = Depends(get_db)):
+    usuario_solicitado = login_data.usuario.strip()
+    ip_cliente = _obtener_ip_cliente(request)
+
+    # 0. Freno de fuerza bruta: corta con 429 antes de evaluar credenciales.
+    # Fail-open si la tabla de auditoría no existe aún en este entorno.
+    try:
+        _verificar_rate_limit_login(db, usuario_solicitado, ip_cliente)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.warning(
+            "Rate limit de login no disponible (¿falta app_login_auditoria_api?); se permite el intento.",
+            exc_info=True
+        )
+
     # 1. Buscar al usuario y verificar credenciales (hash SHA-256).
     # La contraseña se valida ANTES que el estado de la cuenta para que un
     # tercero sin credenciales no pueda descubrir si un usuario existe o está
     # deshabilitado (misma respuesta 401 genérica en ambos casos).
-    usuario_db = db.query(models.Usuario).filter(models.Usuario.usuario == login_data.usuario).first()
+    usuario_db = db.query(models.Usuario).filter(models.Usuario.usuario == usuario_solicitado).first()
     hash_calculado = hash_password(login_data.contrasena)
 
     if not usuario_db or usuario_db.contrasena != hash_calculado:
+        _registrar_intento_login(db, usuario_solicitado, ip_cliente, exito=False, motivo='CREDENCIALES')
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Usuario o contraseña incorrectos"
@@ -406,17 +523,19 @@ def login(login_data: schemas.UsuarioLogin, request: Request, db: Session = Depe
 
     # 2. Con credenciales válidas, validar que el usuario esté activo y habilitado
     if usuario_db.estado != 'HAB' or usuario_db.habilitado != '1':
+        _registrar_intento_login(db, usuario_solicitado, ip_cliente, exito=False, motivo='DESHABILITADO')
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="El usuario no está activo o habilitado en el sistema"
         )
 
-    # 4. Registrar el acceso en la tabla de auditoría (seg_acceso)
-    client_ip = request.client.host
+    # 4. Registrar el acceso: seg_acceso (compatibilidad POS) + auditoría propia
+    # (resetea el contador de fallos del rate limit para este usuario/IP).
+    _registrar_intento_login(db, usuario_db.usuario, ip_cliente, exito=True)
     nuevo_acceso = models.Acceso(
-        usuario=usuario_db.usuario, 
-        fecha=datetime.now(timezone.utc), 
-        ip=client_ip
+        usuario=usuario_db.usuario,
+        fecha=datetime.now(timezone.utc),
+        ip=ip_cliente
     )
     db.add(nuevo_acceso)
     db.commit()

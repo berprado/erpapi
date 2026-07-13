@@ -16,6 +16,17 @@ class Usuario(Base):
  # No es obligatorio poner las 19 columnas de la tabla si no las vas a leer en la API,
  # pero estas son las esenciales para el Login.
 
+class LoginAuditoria(Base):
+    __tablename__ = "app_login_auditoria_api"
+
+    id = Column(Integer, primary_key=True, index=True)
+    usuario = Column(String(255))
+    exito = Column(Integer)  # 1 = login exitoso, 0 = intento fallido
+    motivo = Column(String(50))  # 'CREDENCIALES' | 'DESHABILITADO' | NULL si éxito
+    ip = Column(String(255))
+    fecha = Column(DateTime)
+
+
 class Acceso(Base):
     __tablename__ = "seg_acceso"
     
