@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -27,7 +27,7 @@
         document.documentElement.classList.add('icons-pending');
     </script>
 
-    <!-- IntegraciÃ³n de Google Material Symbols & Space Grotesk -->
+    <!-- Integración de Google Material Symbols & Space Grotesk -->
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet" />
 
@@ -37,7 +37,7 @@
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- ConfiguraciÃ³n Electric Industrial Design System -->
+    <!-- Configuración Electric Industrial Design System -->
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -329,7 +329,7 @@
             justify-content: center;
         }
 
-        /* Ajustes mÃ³viles para CTA y dialogo */
+        /* Ajustes móviles para CTA y dialogo */
         @media (max-width: 640px) {
             #observaciones-dialog .max-w-lg {
                 max-width: 100%;
@@ -615,21 +615,6 @@
     <!-- ================= PANTALLA DE LOGIN ================= -->
     <div id="login-screen" class="min-h-screen flex flex-col justify-center items-center px-lg">
         <div class="w-full max-w-sm">
-            
-            <!-- Logo DinÃ¡mico con Glitch System -->
-            <div class="text-center mb-md flex flex-col items-center">
-                <div class="logo-wrapper">
-                    <!-- Capa principal: glow permanente -->
-                    <img alt="BackStage Login" class="logo-main" src="/assets/imgs/login_transp.png">
-                    <!-- Capa glitch magenta -->
-                    <img alt="" class="glitch-layer glitch-red" src="/assets/imgs/login_transp.png" aria-hidden="true">
-                    <!-- Capa glitch cyan -->
-                    <img alt="" class="glitch-layer glitch-cyan" src="/assets/imgs/login_transp.png" aria-hidden="true">
-                    <!-- Scanlines CRT -->
-                    <div class="scanlines"></div>
-                </div>
-            </div>
-            
             <!-- Formulario de Ingreso con Corner Accents -->
             <form id="login-form" class="space-y-lg relative">
                 <!-- Corner Accent Top Right -->
@@ -640,6 +625,20 @@
                 
                 <!-- Main Form Container -->
                 <div class="bg-surface-container-low border border-outline-variant p-lg rounded-sharp relative z-10 space-y-lg">
+                    <!-- Logo Dinámico con Glitch System -->
+                    <div class="text-center flex flex-col items-center">
+                        <div class="logo-wrapper">
+                            <!-- Capa principal: glow permanente -->
+                            <img alt="BackStage Login" class="logo-main" src="/assets/imgs/login_transp.png">
+                            <!-- Capa glitch magenta -->
+                            <img alt="" class="glitch-layer glitch-red" src="/assets/imgs/login_transp.png" aria-hidden="true">
+                            <!-- Capa glitch cyan -->
+                            <img alt="" class="glitch-layer glitch-cyan" src="/assets/imgs/login_transp.png" aria-hidden="true">
+                            <!-- Scanlines CRT -->
+                            <div class="scanlines"></div>
+                        </div>
+                    </div>
+
                     <!-- Campo Usuario -->
                     <div>
                         <label class="text-[10px] font-label-mono tracking-widest uppercase text-on-surface-variant mb-xs flex items-center gap-sm">
@@ -654,19 +653,19 @@
                             class="w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface placeholder-outline/40 focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-data-tabular" required>
                     </div>
 
-                    <!-- Campo ContraseÃ±a -->
+                    <!-- Campo Contraseña -->
                     <div>
                         <label class="text-[10px] font-label-mono tracking-widest uppercase text-on-surface-variant mb-xs flex items-center gap-sm">
                             <svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" aria-hidden="true">
                                 <rect x="5" y="11" width="14" height="10" rx="2"></rect>
                                 <path d="M8 11V8a4 4 0 1 1 8 0v3"></path>
                             </svg>
-                            ContraseÃ±a
+                            Contraseña
                         </label>
                         <div class="relative">
-                            <input type="password" id="password" name="password" autocomplete="current-password" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" 
+                            <input type="password" id="password" name="password" autocomplete="current-password" placeholder="••••••••" 
                                 class="w-full bg-surface border border-outline-variant rounded-md px-md py-sm pr-xl text-sm text-on-surface placeholder-outline/40 focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-data-tabular" required>
-                            <button type="button" id="toggle-password" class="absolute right-sm top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-primary-fixed-dim transition-colors" aria-label="Mostrar u ocultar contraseÃ±a">
+                            <button type="button" id="toggle-password" class="absolute right-sm top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-primary-fixed-dim transition-colors" aria-label="Mostrar u ocultar contraseña">
                                 <span data-password-icon>
                                     <svg class="ui-icon ui-icon-sm" viewBox="0 0 24 24" aria-hidden="true">
                                         <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z"></path>
@@ -677,38 +676,21 @@
                         </div>
                     </div>
 
-                    <!-- BotÃ³n Ingresar -->
-                    <button type="submit"
+                    <!-- Botón Ingresar -->
+                    <button type="submit" id="btn-login"
                         class="w-full bg-primary-container text-black h-10 px-sm rounded-sharp flex items-center justify-center gap-xs mt-lg hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest text-[11px] font-label-mono font-semibold disabled:opacity-50 disabled:cursor-not-allowed">
                         <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
                             <path d="M10 17l5-5-5-5"></path>
                             <path d="M15 12H4"></path>
                             <path d="M20 4v16"></path>
                         </svg>
-                        Iniciar SesiÃ³n
+                        Iniciar Sesión
                     </button>
                 </div>
                 
                 <!-- Caja de Errores -->
                 <div id="login-error" class="text-error text-sm text-center font-semibold hidden mt-md bg-error-container/40 border border-error rounded-sharp py-sm px-md shadow-lg"></div>
             </form>
-        </div>
-
-        <!-- Side Industrial Accents -->
-        <div class="hidden md:flex absolute left-lg top-1/2 -translate-y-1/2 flex-col gap-xl pointer-events-none">
-            <div class="w-px h-32 bg-gradient-to-b from-transparent via-primary-fixed/20 to-transparent"></div>
-            <span class="material-symbols-outlined text-outline-variant rotate-90 text-2xl">barcode_scanner</span>
-            <div class="w-px h-32 bg-gradient-to-b from-transparent via-primary-fixed/20 to-transparent"></div>
-        </div>
-        <div class="hidden md:flex absolute right-lg top-1/2 -translate-y-1/2 flex-col gap-xl pointer-events-none">
-            <div class="w-px h-32 bg-gradient-to-b from-transparent via-primary-fixed/20 to-transparent"></div>
-            <span class="material-symbols-outlined text-outline-variant -rotate-90 text-2xl">sensors</span>
-            <div class="w-px h-32 bg-gradient-to-b from-transparent via-primary-fixed/20 to-transparent"></div>
-        </div>
-
-        <!-- System Node ID -->
-        <div class="absolute bottom-md font-label-mono text-[10px] text-outline/30 uppercase tracking-[0.3em]">
-            Node: Terminal_082_PX // Status: Encrypted
         </div>
     </div>
 
@@ -734,7 +716,7 @@
                         <span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-outline-variant" style="font-size:1rem;">search</span>
                         <input type="text" id="topbar-search-input" placeholder="Buscar..." class="w-full bg-surface border border-outline-variant rounded-md pl-10 pr-[7rem] py-xs text-sm text-on-surface placeholder-outline/40 focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-body-base">
                         <span id="topbar-search-contador" class="hidden absolute right-sm top-1/2 -translate-y-1/2 text-[10px] font-label-mono text-on-surface-variant whitespace-nowrap"></span>
-                        <button type="button" id="btn-ver-catalogo-completo" class="hidden topbar-icon-btn absolute right-8 top-1/2 -translate-y-1/2" title="Ver catÃ¡logo completo (paloteo completo)" aria-label="Ver catÃ¡logo completo">
+                        <button type="button" id="btn-ver-catalogo-completo" class="hidden topbar-icon-btn absolute right-8 top-1/2 -translate-y-1/2" title="Ver catálogo completo (paloteo completo)" aria-label="Ver catálogo completo">
                             <span class="material-symbols-outlined" style="font-size:1.1rem;">inventory_2</span>
                         </button>
                     </div>
@@ -745,7 +727,7 @@
                          o todos los listados de una vez (paloteo completo). Ver app.js. -->
                     <div id="topbar-search-catalogo-resultados" class="hidden absolute left-0 right-0 top-full mt-1 bg-surface-container border border-outline-variant rounded-md shadow-lg z-30 max-h-64 overflow-y-auto">
                         <div class="flex items-center justify-between gap-sm px-sm py-xs border-b border-outline-variant">
-                            <span class="text-[10px] font-label-mono uppercase tracking-widest text-on-surface-variant">Sin movimiento esta operativa â€” agregar al conteo</span>
+                            <span class="text-[10px] font-label-mono uppercase tracking-widest text-on-surface-variant">Sin movimiento esta operativa — agregar al conteo</span>
                             <button type="button" id="btn-agregar-todos-catalogo" class="hidden shrink-0 text-[11px] font-label-mono uppercase tracking-widest text-primary-fixed hover:underline whitespace-nowrap"></button>
                         </div>
                         <div id="topbar-search-catalogo-lista"></div>
@@ -800,19 +782,19 @@
             </div>
         </nav>
 
-        <!-- Banner global: modo solo lectura cuando la operativa no estÃ¡ en INICIO CIERRE -->
+        <!-- Banner global: modo solo lectura cuando la operativa no está en INICIO CIERRE -->
         <div id="banner-solo-lectura" class="hidden p-sm flex items-center justify-center gap-sm text-label-mono uppercase tracking-widest text-[11px] sticky top-14 sm:top-16 z-10" style="background: color-mix(in srgb, var(--semantic-warning) 12%, transparent); border-bottom: 1px solid var(--semantic-warning); color: var(--semantic-warning);">
             <span class="material-symbols-outlined" style="font-size: 1.1rem;">visibility</span>
             <span>Modo Lectura</span>
         </div>
 
-        <!-- Ãrea de Contenido -->
+        <!-- Área de Contenido -->
         <main class="flex-1 pb-28 overflow-y-auto" id="main-content">
 
-        <!-- Banner: modo correcciÃ³n (visible en todos los paneles) -->
+        <!-- Banner: modo corrección (visible en todos los paneles) -->
         <div id="banner-correccion" class="hidden p-md max-w-2xl mx-auto w-full flex items-center gap-sm text-label-mono uppercase tracking-widest rounded-md border" style="background: color-mix(in srgb, var(--semantic-warning) 10%, transparent); border-color: var(--semantic-warning); color: var(--semantic-warning);">
             <span class="material-symbols-outlined" style="font-size: 1.1rem;">edit_note</span>
-            <span>Modo CorrecciÃ³n Â·</span>
+            <span>Modo Corrección ·</span>
             <span id="banner-correccion-texto"></span>
         </div>
 
@@ -824,7 +806,7 @@
         <!-- ========== PANEL INVENTARIO (default) ========== -->
         <div id="panel-inventario" class="tab-panel p-md max-w-2xl mx-auto w-full">
             
-            <!-- Status de la OperaciÃ³n -->
+            <!-- Status de la Operación -->
             <div id="estado-operacion" class="bg-surface-container border border-outline-variant rounded-md p-md mb-lg shadow-lg flex items-center gap-md">
                 <div class="bg-surface-container-low p-sm rounded-sharp border border-outline-variant">
                     <span class="inline-flex text-4xl text-primary-fixed animate-pulse status-checking-icon" id="estado-icon" aria-hidden="true">
@@ -864,18 +846,18 @@
                 <span class="text-on-surface font-semibold"><span id="inventario-completados">0</span> / <span id="inventario-total-items">0</span> (<span id="inventario-pct-completados">0%</span>)</span>
             </div>
 
-            <!-- Lista DinÃ¡mica de Insumos -->
+            <!-- Lista Dinámica de Insumos -->
             <div id="lista-productos" class="space-y-4">
-                <!-- JS inyectarÃ¡ las "tarjetas" aquÃ­ -->
+                <!-- JS inyectará las "tarjetas" aquí -->
             </div>
 
-            <!-- BotÃ³n de envÃ­o de Paloteo 1 -->
+            <!-- Botón de envío de Paloteo 1 -->
             <button id="btn-guardar-inventario" type="button" disabled class="mt-md w-full bg-primary-container text-black h-10 px-sm rounded-sharp flex items-center justify-center gap-xs hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest text-[11px] font-label-mono font-semibold disabled:opacity-50 disabled:cursor-not-allowed">
                 <span class="material-symbols-outlined text-sm">done_all</span>
                 Registrar Paloteo
             </button>
 
-            <!-- FAB: volver al inicio de la pÃ¡gina -->
+            <!-- FAB: volver al inicio de la página -->
             <button id="inventario-fab-scroll-top" type="button" aria-label="Volver al inicio" class="fab-scroll-top hidden bg-primary-container text-on-primary-fixed shadow-cyan-glow hover:brightness-110 active:scale-95 transition-all">
                 <span class="material-symbols-outlined">arrow_upward</span>
             </button>
@@ -893,7 +875,7 @@
                         <span class="material-symbols-outlined text-primary-fixed" style="font-size:1rem;">inventory_2</span>
                         Paloteo 3
                     </h2>
-                    <p class="text-[11px] text-on-surface-variant mt-[2px] leading-tight">Captura rÃ¡pida de unidades y peso</p>
+                    <p class="text-[11px] text-on-surface-variant mt-[2px] leading-tight">Captura rápida de unidades y peso</p>
                 </div>
             </div>
 
@@ -910,7 +892,7 @@
                 <div id="stock-list" class="divide-y divide-outline-variant"></div>
             </div>
 
-            <!-- Estado vacÃ­o -->
+            <!-- Estado vacío -->
             <div id="stock-empty-state" class="hidden text-center text-on-surface-variant py-md font-body-base text-sm">
                 No hay productos consumidos para auditar hoy.
             </div>
@@ -922,7 +904,7 @@
                 </button>
             </div>
 
-            <!-- FAB: volver al inicio de la pÃ¡gina -->
+            <!-- FAB: volver al inicio de la página -->
             <button id="stock-fab-scroll-top" type="button" aria-label="Volver al inicio" class="fab-scroll-top hidden bg-primary-container text-on-primary-fixed shadow-cyan-glow hover:brightness-110 active:scale-95 transition-all">
                 <span class="material-symbols-outlined">arrow_upward</span>
             </button>
@@ -985,7 +967,7 @@
                 </button>
             </div>
 
-            <!-- FAB: volver al inicio de la pÃ¡gina -->
+            <!-- FAB: volver al inicio de la página -->
             <button id="scan-fab-scroll-top" type="button" aria-label="Volver al inicio" class="fab-scroll-top hidden bg-primary-container text-on-primary-fixed shadow-cyan-glow hover:brightness-110 active:scale-95 transition-all">
                 <span class="material-symbols-outlined">arrow_upward</span>
             </button>
@@ -1014,15 +996,15 @@
                         <span class="material-symbols-outlined text-primary-fixed" style="font-size:1rem;">monitor_weight</span>
                         Pesaje
                     </h2>
-                    <p class="text-[11px] text-on-surface-variant mt-[2px] leading-tight">Modelos de botella y cÃ³digos de barra</p>
+                    <p class="text-[11px] text-on-surface-variant mt-[2px] leading-tight">Modelos de botella y códigos de barra</p>
                 </div>
             </div>
 
 
-            <!-- Filtro de categorÃ­a -->
+            <!-- Filtro de categoría -->
             <div class="mb-sm">
                 <select id="pesaje-categoria" class="w-full bg-surface-container border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-body-base">
-                    <option value="">Todas las categorÃ­as</option>
+                    <option value="">Todas las categorías</option>
                 </select>
             </div>
 
@@ -1036,12 +1018,12 @@
             <!-- Listado: grid responsivo, la cantidad de columnas se adapta al ancho disponible -->
             <div id="pesaje-list" class="grid gap-sm" style="grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));"></div>
 
-            <!-- Estado vacÃ­o -->
+            <!-- Estado vacío -->
             <div id="pesaje-empty-state" class="hidden text-center text-on-surface-variant py-md font-body-base text-sm">
                 No se encontraron productos con estos filtros.
             </div>
 
-            <!-- FAB: volver al inicio de la pÃ¡gina -->
+            <!-- FAB: volver al inicio de la página -->
             <button id="pesaje-fab-scroll-top" type="button" aria-label="Volver al inicio" class="fab-scroll-top hidden bg-primary-container text-on-primary-fixed shadow-cyan-glow hover:brightness-110 active:scale-95 transition-all">
                 <span class="material-symbols-outlined">arrow_upward</span>
             </button>
@@ -1050,7 +1032,7 @@
 
         </main>
 
-        <!-- DiÃ¡logo opcional de observaciones previo al envÃ­o -->
+        <!-- Diálogo opcional de observaciones previo al envío -->
         <div id="observaciones-dialog" class="fixed inset-0 hidden z-40">
             <div id="observaciones-overlay" class="absolute inset-0 bg-black/70"></div>
             <div class="relative z-10 min-h-screen flex items-center justify-center p-md">
@@ -1060,7 +1042,7 @@
                         Observaciones del cierre (opcional)
                     </h3>
                     <p id="observaciones-dialog-ayuda" class="text-sm text-on-surface-variant mb-md">Puedes dejar este campo en blanco y enviar de todas formas.</p>
-                    <textarea id="observaciones-paloteo" rows="3" placeholder="Ej: FaltÃ³ reportar la merma de una copa" class="w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface mb-md focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-body-base resize-none"></textarea>
+                    <textarea id="observaciones-paloteo" rows="3" placeholder="Ej: Faltó reportar la merma de una copa" class="w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface mb-md focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-body-base resize-none"></textarea>
                     <div class="flex flex-col sm:flex-row gap-sm">
                         <button id="btn-cancelar-observaciones" class="w-full sm:w-auto bg-surface text-on-surface border border-outline-variant py-sm px-md rounded-sharp uppercase tracking-widest text-label-mono hover:border-primary-fixed-dim transition-colors">
                             Volver
@@ -1087,7 +1069,7 @@
                         Nuevo modelo de botella
                     </h3>
                     <p id="modelo-botella-subtitulo" class="text-xs text-on-surface-variant mb-md"></p>
-                    <p class="text-xs text-on-surface-variant mb-md">Volumen estÃ¡ndar: <span id="mb-volumen-oz">-</span> oz</p>
+                    <p class="text-xs text-on-surface-variant mb-md">Volumen estándar: <span id="mb-volumen-oz">-</span> oz</p>
 
                     <div class="space-y-sm mb-md">
                         <!-- Nombre del perfil -->
@@ -1116,9 +1098,9 @@
                                 <input id="mb-gramos-oz" type="text" readonly placeholder="-"
                                     class="w-full bg-surface-container border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface-variant font-data-tabular cursor-not-allowed">
                             </div>
-                            <!-- CÃ³digo de barras -->
+                            <!-- Código de barras -->
                             <div>
-                                <label class="text-[10px] font-label-mono tracking-widest uppercase text-on-surface-variant block mb-xs">CÃ³digo de barras</label>
+                                <label class="text-[10px] font-label-mono tracking-widest uppercase text-on-surface-variant block mb-xs">Código de barras</label>
                                 <input id="mb-barcode" type="text" placeholder="Opcional"
                                     class="w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-data-tabular">
                             </div>
@@ -1141,7 +1123,7 @@
             </div>
         </div>
 
-        <!-- Modal: Resultado / ConfirmaciÃ³n genÃ©rico -->
+        <!-- Modal: Resultado / Confirmación genérico -->
         <div id="resultado-dialog" class="fixed inset-0 hidden z-[60]">
             <div id="resultado-overlay" class="absolute inset-0 bg-black/70"></div>
             <div class="relative z-10 min-h-screen flex items-center justify-center p-md">
@@ -1151,21 +1133,21 @@
                         <span id="resultado-titulo-texto">Resultado</span>
                     </h3>
                     <p id="resultado-mensaje" class="text-sm text-on-surface-variant mb-md whitespace-pre-line"></p>
-                    <!-- Botones para modo resultado (1 botÃ³n) -->
+                    <!-- Botones para modo resultado (1 botón) -->
                     <div id="resultado-btns-ok" class="flex justify-end">
                         <button id="btn-resultado-ok" class="bg-primary-container text-on-primary-fixed font-headline-md text-body-base py-sm px-md rounded-sharp flex items-center justify-center gap-sm hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest">
                             <span class="material-symbols-outlined text-sm">check</span>
                             Aceptar
                         </button>
                     </div>
-                    <!-- Botones para modo confirmaciÃ³n (2 botones) -->
+                    <!-- Botones para modo confirmación (2 botones) -->
                     <div id="resultado-btns-confirm" class="hidden flex flex-col sm:flex-row gap-sm">
                         <button id="btn-resultado-cancelar" class="w-full sm:w-auto bg-surface text-on-surface border border-outline-variant py-sm px-md rounded-sharp uppercase tracking-widest text-label-mono hover:border-primary-fixed-dim transition-colors">
                             Cancelar
                         </button>
                         <button id="btn-resultado-confirmar" class="w-full bg-primary-container text-on-primary-fixed font-headline-md text-body-base py-sm px-md rounded-sharp flex items-center justify-center gap-sm hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest">
                             <span class="material-symbols-outlined text-sm">check</span>
-                            SÃ­, estoy seguro
+                            Sí, estoy seguro
                         </button>
                     </div>
                 </div>
@@ -1276,7 +1258,7 @@
         </div>
     </div>
 
-    <script src="/assets/app.js?v=10.66"></script>
+    <script src="/assets/app.js?v=10.67"></script>
 
     <script>
         (function () {
@@ -1321,7 +1303,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/assets/sw.js?v=10.66')
+                navigator.serviceWorker.register('/assets/sw.js?v=10.67')
                     .then(reg => console.log('[PWA] Service Worker registrado:', reg.scope))
                     .catch(err => console.error('[PWA] Error al registrar SW:', err));
             });

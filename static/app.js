@@ -1574,9 +1574,18 @@ document.addEventListener('DOMContentLoaded', () => {
 // ==========================================
 loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const usuario = document.getElementById('username').value;
+    const usuario = document.getElementById('username').value.trim();
     const contrasena = document.getElementById('password').value;
     const errorBox = document.getElementById('login-error');
+    const btnLogin = document.getElementById('btn-login');
+
+    // Limpiar error de intentos previos y mostrar estado de carga (mismo
+    // spinner de flechas girando que usa PESAJE) mientras se valida.
+    errorBox.classList.add('hidden');
+    const textoOriginalLogin = btnLogin.innerHTML;
+    btnLogin.disabled = true;
+    btnLogin.setAttribute('aria-busy', 'true');
+    btnLogin.innerHTML = `${renderCriticalIcon('refresh', 'ui-icon animate-spin-ccw')} Ingresando...`;
 
     try {
         const response = await fetch(`${API_BASE}/auth/login`, {
@@ -1600,6 +1609,10 @@ loginForm.addEventListener('submit', async (e) => {
     } catch (error) {
         errorBox.textContent = "Error de conexión con el servidor.";
         errorBox.classList.remove('hidden');
+    } finally {
+        btnLogin.disabled = false;
+        btnLogin.removeAttribute('aria-busy');
+        btnLogin.innerHTML = textoOriginalLogin;
     }
 });
 
