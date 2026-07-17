@@ -17,13 +17,17 @@ pip install -r requirements.txt
 # Run dev server (reload enabled)
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
+# Tests (unit only — no DB needed)
+pip install -r requirements-dev.txt
+python -m pytest
+
 # Generate a SECRET_KEY for .env
 python -c "import secrets; print(secrets.token_hex(32))"
 ```
 
 App: `http://localhost:8000/` — API docs (Swagger): `http://localhost:8000/docs`
 
-There is no test suite or linter configured in this repo (no pytest, no `requirements-dev`, no CI workflow). Verify changes by running the server and exercising endpoints via `/docs` or the PWA UI.
+There is a small pytest suite (`pytest.ini` sets `testpaths = tests`; install with `pip install -r requirements-dev.txt`). It covers **pure unit logic only** — weight rounding and the tolerance band (`tests/test_calculos_pesaje.py`) and the Pydantic validators (`tests/test_schemas_paloteo.py`). There are no DB fixtures and no endpoint/integration tests, so route handlers, SQL, and the adjustments flow are not covered — verify those by running the server and exercising endpoints via `/docs` or the PWA UI. No linter and no CI workflow are configured; nothing runs the suite automatically.
 
 ## Architecture
 
@@ -41,7 +45,8 @@ There is no test suite or linter configured in this repo (no pytest, no `require
 - **Operativa state machine**: inventory actions are only allowed while the active `ope_operacion` is in state `24` (INICIO CIERRE). Endpoints re-validate this server-side, not just at session start.
 - **Barra operativa resolution**: if `PALOTEO_SELECTOR_ENABLED=false`, the barra is fixed to `PALOTEO_DEFAULT_BARRA_ID`; if true, frontend may pass `X-Barra-Id` restricted to `PALOTEO_ALLOWED_BARRAS`. Any payload's `id_barra` must match the resolved barra.
 - **Weight conversion** (`_redondear_media_onza_half_up` and surrounding helpers in `main.py`): grams → ounces using each product's `gramos_por_oz` from its weighing profile (`app_producto_pesaje_config_api`), with `peso_liquido = max(0, peso_medido - tara)`. Exact ounces are kept in raw audit (`app_paloteo_registro_crudo`); POS values are rounded to the nearest 0.5 oz using HALF_UP rounding (`Decimal`, not float rounding) to keep backend/frontend in sync.
-- **Tolerance bands**: `_obtener_tolerancia_operativa_oz` defines a dead-band per product category before a weight delta counts as a real adjustment.
+- **Tolerance band**: `_obtener_tolerancia_operativa_oz` defines the dead-band a weight delta must exceed before it counts as a real adjustment. Since v10.39 it is a flat **0.5 oz for every `pesable=1` product** (no per-category distinction) and `0.0` for non-weighable ones, which are counted in whole units and have no scale noise to filter. 0.5 oz is deliberately the POS rounding step: both `real_det` and `ideal_det` are always multiples of 0.5, so any delta that clears the band already sits on the grid and quantizing it introduces no distortion. A band *smaller* than the grid would amplify (a 0.25 oz delta would round up to 0.50 on the voucher). `_cuantizar_delta_onzas_operativo` applies it: `abs(delta) < tolerancia` → `0.0`, otherwise `_redondear_media_onza_half_up`. The comparison is strict, so a delta of exactly 0.50 oz *does* trigger an adjustment. Applied in `_calcular_diferencias_paloteo`, the single source of truth shared by the consolidation preview and by applying adjustments — the only place in the system where tolerance decides anything (elsewhere `tolerancia_oz` is merely reported in the profile payload). It is never applied during capture. Only `delta_det_operativo` is written to `bar_detalle_ajuste`/`bar_detalle_salida_inv`; `delta_paq` (closed bottles) bypasses tolerance and rounding entirely. `bar_inventario` is set to the exact physical `real_det` **only for products that produce an adjustment** — the equalization loop iterates the tolerance-filtered list, so a tolerated product is never written. That is a no-op today (a tolerated product has `delta_det_exacto == 0.0`) but holds only while the multiple-of-0.5 invariant does; making it unconditional is a pending item in `TODO.md`. `static/app.js` mirrors the formula in `cuantizarDeltaOnzas` so the UI matches what the backend persists. Full rationale: `documentos/redondeo_y_tolerancia.md`.
+- **`tolerancia_oz` column is vestigial**: `app_producto_pesaje_config_api.tolerancia_oz` still exists, is mapped in `models.py`, is selected by the product queries, and is exposed in the `PerfilPesaje` schema — but its stored value is **never used**. The API overwrites it with `_obtener_tolerancia_operativa_oz()` before responding; the column survives only as a `None`-check guard for incomplete profiles. It is a leftover of the pre-v10.39 per-category scheme. Do not read tolerance from the DB — call the helper.
 - **Roles**: admin-only endpoints (Pesaje module) are gated by `_es_usuario_administrador`, checking `seg_permiso`/`seg_rol` for `ROLE_ADMIN`. Login response includes `is_admin` so the frontend can hide the Pesaje menu entry.
 - **Soft deletes**: most tables use `estado` (`'HAB'`/`'DES'`) rather than hard deletes; pesaje profile deletion is blocked if it's the last active profile for a product.
 

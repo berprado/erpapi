@@ -1,8 +1,39 @@
 # Documento de decisión: delta exacto, delta operativo y tolerancia en ajustes de inventario
 
+> ## ⚠️ DOCUMENTO HISTÓRICO — PROPUESTA DESCARTADA (superseded por v10.39)
+>
+> **Este documento NO describe el comportamiento del sistema y su recomendación NO se implementó.**
+> Se conserva únicamente como registro del análisis que llevó a la decisión contraria.
+> Para el comportamiento vigente, ver **`documentos/redondeo_y_tolerancia.md`**.
+>
+> **Qué proponía:** grilla legacy de `0.25` para categorías distintas de VINOS/MEZCLADORES,
+> límite inclusivo `<=` para esas categorías, y una tabla nueva `app_ajuste_paloteo_auditoria`
+> para registrar el residuo de cuantización (secciones 4, 6, 7 y 8).
+>
+> **Qué se hizo en su lugar (v10.39, commit `d9e2e20`, 2026-07-01):** se unificó la tolerancia
+> a **0.5 oz para todos los productos pesables**, se eliminó la distinción por categoría, se
+> mantuvo el límite estricto `<` y **no** se creó la tabla de auditoría propuesta.
+>
+> **Por qué se descartó:** la premisa central de este documento (sección 3.2 — que
+> `delta_det_exacto` puede valer `0.26`, `0.30`, `0.3333`…) es empíricamente falsa.
+> `real_det` sale del paloteo ya redondeado a la grilla de 0.5, e `ideal_det` se escribe en
+> `bar_inventario` desde ese mismo `real_det` en cada cierre; la resta de dos múltiplos de 0.5
+> es siempre múltiplo de 0.5. Verificación en BD: de 217 filas pesables activas en
+> `bar_inventario`, **cero** están fuera de la grilla de 0.5. Sin deltas fraccionarios, la
+> distorsión que la grilla `0.25` venía a corregir no puede ocurrir, y toda la maquinaria
+> propuesta (doble grilla, `<=` vs `<`, tabla de auditoría, `residuo_cuantizacion`) administraría
+> un residuo que siempre vale cero. La distorsión que motivó el análisis se había observado sólo
+> sobre datos sintéticos (operativa de prueba 1239, delta de 0.25 oz cargado a mano).
+>
+> **Qué sí sigue vigente de este documento:** los principios de la sección 3.1 (no modificar
+> estructuralmente las tablas legacy del POS) y de la sección 5 (`bar_inventario` debe quedar
+> igualado al físico final — hoy el código lo cumple sólo para productos que generan ajuste;
+> ver el pendiente en `TODO.md`).
+
 **Proyecto:** BackStage | PWA + FastAPI + POS MySQL 5.6  
 **Tema:** Cómo avanzar con el pendiente de redondeo/tolerancia en ingresos y salidas por ajuste  
 **Versión propuesta:** 0.1  
+**Estado:** ❌ Descartada — ver aviso arriba  
 **Fecha:** 2026-07-01  
 
 ---

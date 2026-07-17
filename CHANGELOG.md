@@ -4,6 +4,46 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.75
+- Agrega a `documentos/redondeo_y_tolerancia.md` una seccion de 4 casos
+  completos con productos reales de la BD de test (BRIGHTON PINK 494 y
+  GEORGE FORSTER 495): ruido absorbido por captura, delta exacto 0.5 y zona
+  de divergencia, redondeo de la suma vs por botella, y caso mixto paq/det.
+- Corrige dos errores de ese doc: afirmaba que HALF_UP se replica con
+  `Math.round` (falso: `Math.round(-0.5)` da `-0` y rompe faltantes en el
+  punto medio) y que cada pesaje se redondea antes de sumarse (falso: se
+  redondea el total una sola vez). Refresca referencias de linea de la
+  seccion 1.
+
+## 10.74
+- Agrega pendiente en TODO.md para evaluar si se reconstruye el hueco del
+  propio CHANGELOG (10.52 a 10.70, 19 versiones sin entrada) a partir del
+  `git log`, con los argumentos a favor y en contra y el comando para listar
+  los commits involucrados.
+
+## 10.73
+- Marca `documentos/decision_avance_delta_tolerancia_ajustes_pwa.md` como
+  documento historico con propuesta descartada: seguia recomendando la grilla
+  0.25 que v10.39 rechazo, sin ningun aviso. Se conserva el cuerpo como
+  registro del analisis.
+- Corrige `CLAUDE.md`: afirmaba que no existe suite de tests ni pytest, pero
+  hay 24 tests unitarios en `tests/` con `pytest.ini` y `requirements-dev.txt`.
+  Aclara que cubren solo logica pura (sin BD ni endpoints) y agrega el comando.
+
+## 10.72
+- Corrige la redaccion sobre la igualacion de `bar_inventario` en
+  `documentos/redondeo_y_tolerancia.md` y `CLAUDE.md`: la doc afirmaba que se
+  iguala "siempre" al fisico, pero el loop itera la lista ya filtrada por
+  tolerancia, asi que un producto tolerado nunca se escribe (hoy no-op).
+  Refresca ademas las referencias de linea, desactualizadas. Sin cambios de
+  codigo. Nuevo pendiente en TODO.md para hacer la igualacion incondicional.
+
+## 10.71
+- Actualiza `CLAUDE.md`: la descripcion de la tolerancia operativa seguia
+  diciendo "dead-band per product category" (esquema previo a 10.39). Ahora
+  documenta la banda plana de 0.5 oz, donde se aplica, y que la columna
+  `app_producto_pesaje_config_api.tolerancia_oz` es vestigial.
+
 ## 10.51
 - Reordena el encabezado de la tarjeta de producto (PALOTEO 1 y 2): categoria,
   ID y codigo pasan a mostrarse en una fila arriba del nombre del producto
