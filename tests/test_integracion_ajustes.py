@@ -391,6 +391,83 @@ def test_cardinalidad_producto_con_fila_duplicada(client, crear_usuario, escenar
         assert str(id_duplicado) in r.json()["detail"]
 
 
+# ---------------------------------------------------------------------------
+# Invariante multiplo-de-0.5 roto (ideal fuera de grilla) — frontera del sistema
+# ---------------------------------------------------------------------------
+
+def test_invariante_roto_supra_banda_voucher_cuantizado_stock_exacto(
+        client, crear_usuario, escenario_ajustes, db_session):
+    """Ideal fuera de grilla (32.41) y delta supra-banda: el voucher se
+    cuantiza a la grilla (33.50, pierde el residuo 0.09) pero la igualacion
+    escribe el fisico EXACTO (66.0), asi que el movimiento documental y el
+    movimiento real de stock difieren en el residuo (<= 0.25 por diseno,
+    ver redondeo_y_tolerancia.md). Solo ocurre con el invariante roto."""
+    esc = escenario_ajustes
+    esc.crear_operacion()
+    id_producto = esc.agregar_producto("PYTEST FUERA GRILLA", pesable=True,
+                                       ideal_paq=0, ideal_det=32.41,
+                                       real_paq=0, real_det=66.0)
+    admin = crear_usuario(admin=True)
+
+    r = client.post(PREVIEW, json=_payload(esc), headers=admin.headers)
+    assert r.status_code == 200, r.text
+    delta = next(d for d in r.json()["deltas"] if d["id_producto"] == id_producto)
+    assert abs(delta["delta_det_exacto"] - 33.59) < 1e-6
+    assert delta["delta_det_operativo"] == 33.5
+
+    r = client.post(APLICAR, json=_payload(esc), headers=admin.headers)
+    assert r.status_code == 200, r.text
+    data = r.json()
+
+    voucher = db_session.execute(text(
+        "SELECT cantidad, ind_paq_detalle FROM bar_detalle_ajuste WHERE id_ajuste = :id"),
+        {"id": data["id_ajuste"]}).fetchone()
+    assert (float(voucher[0]), voucher[1]) == (33.5, "0")
+    # el stock queda en el fisico exacto: se movio 33.59, no los 33.50 del voucher
+    assert esc.inventario_de(id_producto) == [(0.0, 66.0)]
+
+
+def test_invariante_roto_borde_de_banda_float_converge_en_stock(
+        client, crear_usuario, escenario_ajustes, db_session):
+    """Borde de banda fuera de grilla: 0.57 - 0.07 da 0.4999... en float, asi
+    que un delta que en decimal es exactamente 0.50 queda TOLERADO (fragilidad
+    documentada en test_calculos_pesaje). La red de contencion de v10.77: el
+    stock igual converge — bar_inventario recibe el fisico exacto sin generar
+    voucher, auditado en igualaciones_sin_movimiento."""
+    esc = escenario_ajustes
+    esc.crear_operacion()
+    id_borde = esc.agregar_producto("PYTEST BORDE FLOAT", pesable=True,
+                                    ideal_paq=0, ideal_det=0.07,
+                                    real_paq=0, real_det=0.57)
+    # segundo producto con movimiento real para que el aplicar no sea skipped
+    esc.agregar_producto("PYTEST ANCLA", pesable=False,
+                         ideal_paq=10, ideal_det=0, real_paq=12, real_det=0)
+    admin = crear_usuario(admin=True)
+
+    r = client.post(PREVIEW, json=_payload(esc), headers=admin.headers)
+    assert r.status_code == 200, r.text
+    delta = next(d for d in r.json()["deltas"] if d["id_producto"] == id_borde)
+    assert delta["delta_det_exacto"] < 0.5          # el float cayo bajo el limite
+    assert abs(delta["delta_det_exacto"] - 0.5) < 1e-9
+    assert delta["delta_det_operativo"] == 0.0      # tolerado pese al 0.50 decimal
+
+    r = client.post(APLICAR, json=_payload(esc), headers=admin.headers)
+    assert r.status_code == 200, r.text
+    data = r.json()
+    # sin voucher para el producto del borde...
+    en_voucher = db_session.execute(text(
+        "SELECT COUNT(*) FROM bar_detalle_ajuste WHERE id_ajuste = :id AND id_producto = :p"),
+        {"id": data["id_ajuste"], "p": id_borde}).scalar()
+    assert en_voucher == 0
+    # ...pero el stock converge al fisico exacto (v10.77)
+    assert esc.inventario_de(id_borde) == [(0.0, 0.57)]
+    payload_control = db_session.execute(text(
+        "SELECT payload_json FROM app_paloteo_ajuste_control WHERE id_operacion = :op"),
+        {"op": esc.id_operacion}).scalar()
+    assert str(id_borde) in payload_control
+    assert '"igualaciones_sin_movimiento"' in payload_control
+
+
 def test_cardinalidad_cubre_tambien_productos_tolerados(client, crear_usuario,
                                                         escenario_ajustes):
     """Desde la igualacion incondicional (v10.77) la cardinalidad se valida

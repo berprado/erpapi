@@ -93,6 +93,10 @@ Esto se verificó con una consulta directa a la BD de test: no existe ningún pr
 
 Si la tolerancia fuera **menor** que la grilla de redondeo (ej. tolerancia 0.25 con grilla 0.5), el delta mínimo que pasaría la banda (ej. 0.25 oz) se amplificaría al redondearse al siguiente múltiplo de 0.5 (quedando 0.50 oz en el comprobante). La tolerancia 0.5 uniforme elimina ese mismatch por definición.
 
+### El invariante también protege la aritmética float (frontera del sistema)
+
+Los múltiplos de 0.5 tienen representación binaria **exacta** en float, así que mientras `real_det` e `ideal_det` estén en grilla, toda resta es exacta y el límite estricto de la banda (`< 0.5`) es determinista — por eso `26.0 − 25.5 == 0.5` dispara ajuste sin ambigüedad. **Fuera de grilla esa garantía se pierde**: dos restas que en decimal valen idénticamente 0.50 pueden caer de lados distintos de la banda según su representación (`12.33 − 11.83 == 0.5` ajusta; `0.57 − 0.07 == 0.4999…` queda tolerado). Además, un delta supra-banda fuera de grilla (ej. 33.59) se cuantiza en el voucher (33.50) mientras la igualación escribe el físico exacto (v10.77), dejando un residuo documental de hasta ±0.25 entre voucher y movimiento real de stock. Ambos efectos solo existen con el invariante roto, la igualación incondicional garantiza que el stock converge igual, y están fijados por tests: `test_calculos_pesaje.py` (`test_cuantizar_delta_fuera_de_grilla`, `test_borde_de_banda_es_fragil_al_float_fuera_de_grilla`) y `test_integracion_ajustes.py` (sección "invariante roto").
+
 ### Tolerancia para productos no pesables
 
 `pesable=0` → tolerancia `0.0`. Los productos no pesables se cuentan por unidades enteras, no se miden con balanza, así que no hay ruido de medición que filtrar. Cualquier diferencia en `cantidad_detalle` se trata directamente como ajuste real.

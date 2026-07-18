@@ -4,6 +4,29 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.80
+- Tests de frontera para deltas fuera de la grilla 0.5 (8 tests nuevos, 59 en
+  total), motivados por la pregunta "¿da lo mismo probar con 1 o 2 decimales?":
+  el eje real no es la cantidad de decimales sino estar dentro/fuera de la
+  grilla. Unitarios: cuantizacion de deltas fuera de grilla (33.59 -> 33.50 en
+  el voucher, residuo <= 0.25) y fragilidad float del borde de banda fuera de
+  grilla (0.57-0.07 = 0.4999... queda tolerado aunque en decimal es 0.50;
+  12.33-11.83 si ajusta — en grilla esto es imposible porque los multiplos de
+  0.5 son exactos en float). Integracion (invariante roto): voucher cuantizado
+  vs stock igualado al fisico exacto, y borde de banda que converge en stock
+  sin voucher gracias a la igualacion incondicional de v10.77. Nueva seccion
+  "El invariante tambien protege la aritmetica float" en
+  documentos/redondeo_y_tolerancia.md.
+
+## 10.79
+- Documenta en TODO.md la validacion end-to-end de la igualacion incondicional
+  (v10.77) completada en test_pos el 2026-07-18: ciclo POS completo sobre la
+  operativa 1254 via el deploy de seenode (paloteo API -> cierre POS ->
+  preview -> aplicar), 18 verificaciones sin fallas, incluido el escenario de
+  banda (delta 0.3 tolerado igualado sin movimiento y auditado). v10.77 queda
+  lista para produccion; alli restan el chequeo de duplicados HAB y el DDL de
+  app_login_auditoria_api. Sin cambios de codigo.
+
 ## 10.78
 - Amplia la suite de integracion a login y paloteo (13 tests nuevos, 51 en
   total). `tests/test_integracion_login.py`: JWT real usable, registro en
