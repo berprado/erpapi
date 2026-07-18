@@ -4,6 +4,23 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.78
+- Amplia la suite de integracion a login y paloteo (13 tests nuevos, 51 en
+  total). `tests/test_integracion_login.py`: JWT real usable, registro en
+  `seg_acceso` y auditoria, 401 generico (sin filtrar si la cuenta existe),
+  403 deshabilitado con motivo, flag `is_admin` y rate limit 429 por usuario
+  (sin auditar los intentos frenados). `tests/test_integracion_paloteo.py`:
+  captura valida con perfil real (casos 1 y 3 del doc de redondeo: exacto al
+  crudo / redondeado al POS, y redondeo de la suma, no por botella),
+  productos omitidos y no pesables, y rechazos 400/409 (estado de operativa,
+  barra, duplicado, peso sobre bruto sin dejar cabecera residual,
+  sobrecapacidad). `tests/conftest.py`: el override de `get_db` ahora cierra
+  la sesion por request (un request fallido descarta sus escrituras
+  pendientes, como en produccion), `crear_usuario` acepta contrasena real y
+  habilitado, y el constructor de escenarios suma `agregar_producto_catalogo`
+  (producto sin conteo fisico, perfil pesable/unidades/sin-config, capacidad
+  de botella) y `crear_operacion(..., con_cabecera_fisico=False)`.
+
 ## 10.77
 - Igualacion incondicional de `bar_inventario` en `/api/inventario/ajustes/aplicar`:
   la igualacion al fisico exacto se separa del filtro de tolerancia — itera todo

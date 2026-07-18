@@ -60,8 +60,8 @@
   - Resuelto (v10.76): `tests/test_integracion_ajustes.py` (15 tests) cubre todo lo pedido — deltas reales (sobrante/faltante en paq y det, banda de tolerancia y limite estricto 0.5), idempotencia (`409`), cardinalidad de `bar_inventario` (sin fila y duplicada, en preview y aplicar), gating de admin (`403`), operativa fuera de estado `23` (`400`) — mas la exclusion via `inventario_excluido` (la regresion exacta del join roto que motivo este pendiente).
   - Infraestructura en `tests/conftest.py`: transaccion externa + savepoints (los `commit()` de los endpoints no persisten; la BD queda intacta), guarda dura si `APP_ENV != test` o host no local, skip limpio si la BD no responde, fabrica de usuarios con JWT real y constructor de escenarios (`EscenarioAjustes`). `httpx` agregado a `requirements-dev.txt` para el `TestClient`.
 
-- [ ] **Ampliar la suite de integracion a login y paloteo**
-  - Con el setup de `tests/conftest.py` ya disponible: login correcto/fallido (y rate limit 429), paloteo valido y con operacion en estado invalido.
+- [x] **Ampliar la suite de integracion a login y paloteo**
+  - Resuelto (v10.78): `tests/test_integracion_login.py` (login correcto con JWT usable y rastro en `seg_acceso`/auditoria, 401 generico, 403 deshabilitado, `is_admin`, rate limit 429 por usuario) y `tests/test_integracion_paloteo.py` (captura valida con perfil real, redondeo de la suma, omitidos/no pesables, 400 por estado/barra/peso bruto/sobrecapacidad, 409 duplicado). Los modulos de PESAJE (perfiles/config) siguen sin cobertura automatizada.
 
 - [ ] **Modulo de reportes historicos de paloteos ya registrados (operativas cerradas)**
   - Motivacion: hoy el PDF de diferencias (REPORTE, `/api/paloteo3/exportar-pdf`) solo puede generarse durante la sesion viva del paloteo, porque las filas se arman en el navegador desde las tarjetas de PALOTEO 1/2. Una vez cerrada la operativa (o cerrado el navegador) ya no se puede regenerar el reporte.

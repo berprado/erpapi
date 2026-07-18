@@ -90,7 +90,15 @@ def client(db_session):
     from main import app
 
     def _get_db_override():
-        yield db_session
+        # Mismo contrato que database.get_db: al terminar el request la sesion
+        # se cierra, descartando escrituras pendientes no commiteadas (rollback
+        # del savepoint). Sin esto, un request que falla a mitad de transaccion
+        # dejaria residuos visibles para las aserciones del test, cosa que en
+        # produccion nunca ocurre.
+        try:
+            yield db_session
+        finally:
+            db_session.close()
 
     app.dependency_overrides[get_db] = _get_db_override
     try:
@@ -122,8 +130,13 @@ def crear_usuario(db_session):
     BD de test (no se crea el rol: si faltara, el fixture falla explicitamente).
     """
 
-    def _crear(admin: bool = False) -> UsuarioTest:
+    def _crear(admin: bool = False, contrasena: str | None = None, habilitado: str = '1') -> UsuarioTest:
+        from main import hash_password
+
         usuario = f"pytest_{uuid.uuid4().hex[:12]}"
+        # contrasena=None deja un hash inutilizable: el usuario sirve para JWT
+        # directo pero no puede loguearse (los tests de login pasan una real).
+        hash_contrasena = hash_password(contrasena) if contrasena else 'sin-password-usable'
         db_session.execute(text("""
             INSERT INTO seg_usuario
                 (paterno, materno, nombres, nro_documento, email, p_cargo, usuario,
@@ -131,9 +144,9 @@ def crear_usuario(db_session):
                  fechafinvigencia, habilitado, estado)
             VALUES
                 ('FIXTURE', 'PYTEST', :usuario, '0', 'fixture@pytest.local', 0, :usuario,
-                 'sin-password-usable', CURDATE(), '1', CURDATE(),
-                 DATE_ADD(CURDATE(), INTERVAL 10 YEAR), '1', 'HAB')
-        """), {"usuario": usuario})
+                 :contrasena, CURDATE(), '1', CURDATE(),
+                 DATE_ADD(CURDATE(), INTERVAL 10 YEAR), :habilitado, 'HAB')
+        """), {"usuario": usuario, "contrasena": hash_contrasena, "habilitado": habilitado})
         id_usuario = db_session.execute(text("SELECT LAST_INSERT_ID()")).scalar()
 
         if admin:
@@ -152,12 +165,13 @@ def crear_usuario(db_session):
 
 
 class EscenarioAjustes:
-    """Constructor de escenarios para el modulo AJUSTES.
+    """Constructor de escenarios para los modulos de inventario (AJUSTES y
+    captura de paloteo).
 
     Crea una categoria propia (fuera de las excluidas 18/10 por auto_increment),
-    una operativa con su cabecera de inventario fisico, y productos con su
-    ideal (bar_inventario) y su conteo fisico (bar_detalle_fisico). Todo queda
-    dentro de la transaccion del test.
+    una operativa (con o sin cabecera de inventario fisico) y productos de
+    catalogo con su ideal (bar_inventario) y, para AJUSTES, su conteo fisico
+    (bar_detalle_fisico). Todo queda dentro de la transaccion del test.
     """
 
     def __init__(self, db: Session):
@@ -174,9 +188,14 @@ class EscenarioAjustes:
     def _ultimo_id(self) -> int:
         return self.db.execute(text("SELECT LAST_INSERT_ID()")).scalar()
 
-    def crear_operacion(self, estado_operacion: int = 23) -> "EscenarioAjustes":
-        """Operativa (23 = CERRADO, el estado que exigen preview/aplicar) con su
-        cabecera HAB de bar_inventario_fisico para la barra fixture."""
+    def crear_operacion(self, estado_operacion: int = 23,
+                        con_cabecera_fisico: bool = True) -> "EscenarioAjustes":
+        """Operativa en el estado dado (23 = CERRADO, exigido por preview/aplicar;
+        24 = INICIO CIERRE, exigido por la captura de paloteo).
+
+        con_cabecera_fisico=False deja la operativa sin cabecera HAB de
+        bar_inventario_fisico — como la encuentra POST /api/inventario/paloteo,
+        que crea la suya y responde 409 si ya existe una."""
         self.db.execute(text("""
             INSERT INTO ope_operacion
                 (fecha, nombre_operacion, estado_operacion, comision, id_dia, usuario_reg, estado)
@@ -184,55 +203,58 @@ class EscenarioAjustes:
         """), {"estado_op": estado_operacion})
         self.id_operacion = self._ultimo_id()
 
-        self.db.execute(text("""
-            INSERT INTO bar_inventario_fisico
-                (fecha, observaciones, estado_registro, id_barra, id_operacion,
-                 usuario_reg, fecha_reg, estado)
-            VALUES (CURDATE(), 'FIXTURE PYTEST', 1, :id_barra, :id_operacion,
-                    'pytest', CURDATE(), 'HAB')
-        """), {"id_barra": self.id_barra, "id_operacion": self.id_operacion})
-        self.id_inventario_fisico = self._ultimo_id()
+        if con_cabecera_fisico:
+            self.db.execute(text("""
+                INSERT INTO bar_inventario_fisico
+                    (fecha, observaciones, estado_registro, id_barra, id_operacion,
+                     usuario_reg, fecha_reg, estado)
+                VALUES (CURDATE(), 'FIXTURE PYTEST', 1, :id_barra, :id_operacion,
+                        'pytest', CURDATE(), 'HAB')
+            """), {"id_barra": self.id_barra, "id_operacion": self.id_operacion})
+            self.id_inventario_fisico = self._ultimo_id()
         self.db.commit()
         return self
 
-    def agregar_producto(
+    def agregar_producto_catalogo(
         self,
         nombre: str,
         *,
-        pesable: bool,
-        ideal_paq: float,
-        ideal_det: float,
-        real_paq: float,
-        real_det: float,
+        perfil: str | None = "pesable",
+        ideal_paq: float = 0.0,
+        ideal_det: float = 0.0,
         filas_inventario: int = 1,
         excluido: bool = False,
-    ) -> int:
-        """Alta de producto + ideal + fisico. Devuelve el id del producto.
+        capacidad_oz: float | None = None,
+    ) -> tuple[int, int | None]:
+        """Producto de catalogo + stock ideal en bar_inventario, SIN conteo
+        fisico (la captura de paloteo lo registra ella misma). Devuelve
+        (id_producto, id_perfil).
 
-        filas_inventario controla la cardinalidad en bar_inventario (0 = sin
-        fila, 2 = duplicada) para los tests de _validar_cardinalidad.
-        excluido=True registra la fila de bar_inventario en inventario_excluido.
-        """
-        assert self.id_inventario_fisico, "Llamar crear_operacion() antes de agregar productos"
-
+        perfil: "pesable" (config con pesable=1, perfil BRIGHTON PINK del doc
+        redondeo_y_tolerancia.md seccion 6: tara 558 g, 29.063830 g/oz, bruto
+        1241 g), "unidades" (config con pesable=0, se cuenta por botellas) o
+        None (sin configuracion: la captura lo reporta en productos_omitidos).
+        capacidad_oz llena alm_producto.cantidad_detalle (onzas de botella
+        llena, usada por la validacion de sobrecapacidad del paloteo)."""
         self.db.execute(text("""
             INSERT INTO alm_producto
                 (nombre, correlativo, id_categoria, medida, p_unidad_medida,
-                 codigo, usuario_reg, estado)
-            VALUES (:nombre, 0, :id_categoria, 750, 0, :codigo, 'pytest', 'HAB')
-        """), {"nombre": nombre, "id_categoria": self.id_categoria, "codigo": f"PYT-{nombre[:12]}"})
+                 cantidad_detalle, codigo, usuario_reg, estado)
+            VALUES (:nombre, 0, :id_categoria, 750, 0, :capacidad, :codigo, 'pytest', 'HAB')
+        """), {"nombre": nombre, "id_categoria": self.id_categoria,
+               "capacidad": capacidad_oz, "codigo": f"PYT-{nombre[:12]}"})
         id_producto = self._ultimo_id()
 
-        if pesable:
-            # Perfil BRIGHTON PINK 700ML (doc redondeo_y_tolerancia.md seccion 6):
-            # solo pesable=1 decide en _calcular_diferencias_paloteo, el resto es contexto.
+        id_perfil = None
+        if perfil is not None:
             self.db.execute(text("""
                 INSERT INTO app_producto_pesaje_config_api
                     (id_producto_almacen, nombre_perfil, peso_bruto, tara,
                      gramos_por_oz, pesable, usuario_reg)
                 VALUES (:id_producto, 'PERFIL PYTEST', 1241.00, 558.00,
-                        29.063830, 1, 'pytest')
-            """), {"id_producto": id_producto})
+                        29.063830, :pesable, 'pytest')
+            """), {"id_producto": id_producto, "pesable": 1 if perfil == "pesable" else 0})
+            id_perfil = self._ultimo_id()
 
         for _ in range(filas_inventario):
             self.db.execute(text("""
@@ -248,6 +270,40 @@ class EscenarioAjustes:
                     text("INSERT INTO inventario_excluido (id) VALUES (:id)"),
                     {"id": self._ultimo_id()},
                 )
+        self.db.commit()
+        return id_producto, id_perfil
+
+    def agregar_producto(
+        self,
+        nombre: str,
+        *,
+        pesable: bool,
+        ideal_paq: float,
+        ideal_det: float,
+        real_paq: float,
+        real_det: float,
+        filas_inventario: int = 1,
+        excluido: bool = False,
+    ) -> int:
+        """Alta de producto + ideal + conteo fisico ya registrado (escenarios de
+        AJUSTES). Devuelve el id del producto.
+
+        pesable=False crea el producto sin configuracion de pesaje (solo el
+        EXISTS pesable=1 decide en _calcular_diferencias_paloteo).
+        filas_inventario controla la cardinalidad en bar_inventario (0 = sin
+        fila, 2 = duplicada) para los tests de _validar_cardinalidad.
+        excluido=True registra la fila de bar_inventario en inventario_excluido.
+        """
+        assert self.id_inventario_fisico, "Llamar crear_operacion() antes de agregar productos"
+
+        id_producto, _ = self.agregar_producto_catalogo(
+            nombre,
+            perfil="pesable" if pesable else None,
+            ideal_paq=ideal_paq,
+            ideal_det=ideal_det,
+            filas_inventario=filas_inventario,
+            excluido=excluido,
+        )
 
         self.db.execute(text("""
             INSERT INTO bar_detalle_fisico
@@ -272,4 +328,12 @@ class EscenarioAjustes:
 
 @pytest.fixture()
 def escenario_ajustes(db_session):
+    return EscenarioAjustes(db_session)
+
+
+@pytest.fixture()
+def escenario_paloteo(db_session):
+    """Mismo constructor de escenarios; alias para los tests de captura de
+    paloteo, que usan crear_operacion(24, con_cabecera_fisico=False) y
+    agregar_producto_catalogo (sin conteo fisico previo)."""
     return EscenarioAjustes(db_session)
