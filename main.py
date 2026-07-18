@@ -1478,7 +1478,12 @@ def previsualizar_consolidacion_ajustes(
     deltas = _calcular_diferencias_paloteo(db, payload.id_barra, inv_fisico_cabecera.id)
 
     ids_con_diferencia = [d["id_producto"] for d in deltas if abs(d["delta_paq"]) > 0 or abs(d["delta_det_operativo"]) > 0]
-    _validar_cardinalidad_bar_inventario(db, payload.id_barra, ids_con_diferencia)
+    # La cardinalidad se valida sobre el MISMO conjunto que aplicar escribira en
+    # bar_inventario (todo producto con fisico != ideal, tolerados incluidos, no
+    # solo los que generan movimientos), para que el problema de datos aparezca
+    # aqui en el preview y no recien al confirmar el ajuste.
+    ids_a_igualar = [d["id_producto"] for d in deltas if d["delta_paq"] != 0.0 or d["delta_det_exacto"] != 0.0]
+    _validar_cardinalidad_bar_inventario(db, payload.id_barra, ids_a_igualar)
 
     if not deltas:
         return {
@@ -1561,6 +1566,17 @@ def _decimal2(valor: float) -> Decimal:
     return Decimal(str(valor)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
+def _mensaje_ajuste_aplicado(con_movimiento: int, igualados: int) -> str:
+    mensaje = f"Ajuste aplicado correctamente sobre {con_movimiento} producto(s)."
+    extras = igualados - con_movimiento
+    if extras > 0:
+        mensaje += (
+            f" Se igualó además bar_inventario al físico en {extras} producto(s) "
+            "con diferencia dentro de la banda de tolerancia."
+        )
+    return mensaje
+
+
 @app.post("/api/inventario/ajustes/aplicar", response_model=schemas.AplicarAjustesResponse)
 def aplicar_ajustes_inventario(
     payload: schemas.AplicarAjustesRequest,
@@ -1571,6 +1587,10 @@ def aplicar_ajustes_inventario(
     """Aplica de forma definitiva las diferencias paloteo-vs-POS: genera bar_ajuste /
     bar_salida_inventario (y sus detalles) y actualiza bar_inventario para que el stock
     vivo quede igual al físico contado. Solo administrador, requiere operación CERRADA (23).
+
+    La igualación de bar_inventario es incondicional respecto de la banda de tolerancia:
+    todo producto cuyo físico difiera del ideal se escribe al físico exacto, aunque su
+    delta caiga dentro de la banda y no genere movimiento documental.
     """
     _validar_operacion_cerrada(db, payload.id_operacion)
 
@@ -1587,7 +1607,17 @@ def aplicar_ajustes_inventario(
     deltas_con_diferencia = [
         d for d in deltas if abs(d["delta_paq"]) > 0 or abs(d["delta_det_operativo"]) > 0
     ]
-    _validar_cardinalidad_bar_inventario(db, payload.id_barra, [d["id_producto"] for d in deltas_con_diferencia])
+    # Igualacion incondicional: ademas de los productos que generan movimientos,
+    # bar_inventario se escribe al fisico exacto para todo producto cuyo fisico
+    # difiera del ideal aunque el delta caiga dentro de la banda de tolerancia.
+    # Asi la garantia "bar_inventario queda igualado al fisico final" no depende
+    # del invariante multiplo-de-0.5 ni de que el producto tenga ademas
+    # diferencia de botellas. deltas_con_diferencia es subconjunto de
+    # deltas_a_igualar (operativo != 0 implica exacto != 0).
+    deltas_a_igualar = [
+        d for d in deltas if d["delta_paq"] != 0.0 or d["delta_det_exacto"] != 0.0
+    ]
+    _validar_cardinalidad_bar_inventario(db, payload.id_barra, [d["id_producto"] for d in deltas_a_igualar])
 
     if not deltas_con_diferencia:
         return {
@@ -1649,7 +1679,6 @@ def aplicar_ajustes_inventario(
             db.add(salida_header)
             db.flush()
 
-        filas_inventario_tocadas = []
         for d in deltas_con_diferencia:
             id_producto = d["id_producto"]
 
@@ -1697,13 +1726,18 @@ def aplicar_ajustes_inventario(
                     estado='HAB',
                 ))
 
-            # Cardinalidad ya validada por _validar_cardinalidad_bar_inventario antes
-            # de iniciar la transaccion; aqui solo se obtiene la fila para mutarla.
-            # with_for_update(): bloquea la fila por el resto de la transaccion para
-            # evitar perder una escritura concurrente sobre el mismo bar_inventario.
+        # Igualacion de bar_inventario sobre deltas_a_igualar (no solo los que
+        # generaron movimientos): un producto con delta tolerado tambien queda
+        # escrito al fisico exacto.
+        # Cardinalidad ya validada por _validar_cardinalidad_bar_inventario antes
+        # de iniciar la transaccion; aqui solo se obtiene la fila para mutarla.
+        # with_for_update(): bloquea la fila por el resto de la transaccion para
+        # evitar perder una escritura concurrente sobre el mismo bar_inventario.
+        filas_inventario_tocadas = []
+        for d in deltas_a_igualar:
             fila_inventario = db.query(models.InventarioBarra).filter(
                 models.InventarioBarra.id_barra == payload.id_barra,
-                models.InventarioBarra.id_producto == id_producto,
+                models.InventarioBarra.id_producto == d["id_producto"],
                 models.InventarioBarra.estado == 'HAB'
             ).with_for_update().first()
             fila_inventario.cantidad_paq = _decimal2(d["real_paq"])
@@ -1751,6 +1785,9 @@ def aplicar_ajustes_inventario(
             estado='APLICADO',
             payload_json=json.dumps({
                 "deltas": deltas_con_diferencia,
+                "igualaciones_sin_movimiento": [
+                    d for d in deltas_a_igualar if d not in deltas_con_diferencia
+                ],
                 "observaciones": obs_final,
             }, default=str),
             usuario_reg=username_actual,
@@ -1779,7 +1816,7 @@ def aplicar_ajustes_inventario(
         "id_salida_inventario": salida_header.id if salida_header else None,
         "productos_afectados": len(deltas_con_diferencia),
         "igualacion_verificada": True,
-        "mensaje": f"Ajuste aplicado correctamente sobre {len(deltas_con_diferencia)} producto(s).",
+        "mensaje": _mensaje_ajuste_aplicado(len(deltas_con_diferencia), len(deltas_a_igualar)),
     }
 
 # --- EXPORTACIÓN PDF PALOTEO 3 ---

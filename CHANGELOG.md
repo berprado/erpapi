@@ -4,7 +4,32 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
-## 10.75
+## 10.77
+- Igualacion incondicional de `bar_inventario` en `/api/inventario/ajustes/aplicar`:
+  la igualacion al fisico exacto se separa del filtro de tolerancia — itera todo
+  producto con `fisico != ideal` (`deltas_a_igualar`), no solo los que generan
+  movimientos. Un delta tolerado ya no depende del invariante multiplo-de-0.5 ni
+  de tener ademas diferencia de botellas para quedar escrito. La validacion de
+  cardinalidad de `bar_inventario` se amplia al mismo conjunto (en preview y
+  aplicar), el control de idempotencia audita las igualaciones sin movimiento en
+  `payload_json.igualaciones_sin_movimiento` y el mensaje de exito las informa.
+  Limite documentado: si ningun producto genera movimientos, aplicar sigue
+  respondiendo `skipped` sin escribir nada (no hay consolidacion). Cierra el
+  pendiente de TODO.md; validacion end-to-end en test_pos pendiente antes de
+  produccion.
+
+## 10.76
+- Tests de integracion del modulo AJUSTES contra la BD de test local
+  (`tests/test_integracion_ajustes.py`, 15 tests): preview con deltas reales
+  (sobrante/faltante paq y det, banda de tolerancia, limite estricto 0.5),
+  aplicar punta a punta verificando cabeceras/detalles/igualacion/control en BD,
+  idempotencia (409), gating de admin (403), estado de operativa (400),
+  cardinalidad de `bar_inventario` (sin fila y duplicada) y exclusion via
+  `inventario_excluido`. Infraestructura nueva en `tests/conftest.py`:
+  transaccion externa + savepoints (la BD queda intacta, los commit de los
+  endpoints solo liberan savepoints), guarda que aborta si `APP_ENV != test` o
+  el host no es local, fabrica de usuarios con JWT real y constructor de
+  escenarios. Agrega `httpx` a `requirements-dev.txt`.
 - Agrega a `documentos/redondeo_y_tolerancia.md` una seccion de 4 casos
   completos con productos reales de la BD de test (BRIGHTON PINK 494 y
   GEORGE FORSTER 495): ruido absorbido por captura, delta exacto 0.5 y zona
