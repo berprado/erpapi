@@ -838,27 +838,29 @@
                 </div>
             </div>
             
-            <!-- Progreso de captura: cuantos productos ya tienen unidades/peso ingresados -->
-            <div id="inventario-resumen-progreso" class="mb-md flex items-center justify-between gap-sm bg-surface-container border border-outline-variant rounded-md px-md py-sm text-label-mono text-[10px] tracking-widest uppercase text-on-surface-variant">
-                <span class="inline-flex items-center gap-xs"><span class="material-symbols-outlined" style="font-size:1rem;">checklist</span>Capturados</span>
-                <span class="text-on-surface font-semibold"><span id="inventario-completados">0</span> / <span id="inventario-total-items">0</span> (<span id="inventario-pct-completados">0%</span>)</span>
+            <div id="inventario-captura-contenido" class="hidden">
+                <!-- Progreso de captura: cuantos productos ya tienen unidades/peso ingresados -->
+                <div id="inventario-resumen-progreso" class="mb-md flex items-center justify-between gap-sm bg-surface-container border border-outline-variant rounded-md px-md py-sm text-label-mono text-[10px] tracking-widest uppercase text-on-surface-variant">
+                    <span class="inline-flex items-center gap-xs"><span class="material-symbols-outlined" style="font-size:1rem;">checklist</span>Capturados</span>
+                    <span class="text-on-surface font-semibold"><span id="inventario-completados">0</span> / <span id="inventario-total-items">0</span> (<span id="inventario-pct-completados">0%</span>)</span>
+                </div>
+
+                <!-- Lista Dinámica de Insumos -->
+                <div id="lista-productos" class="space-y-4">
+                    <!-- JS inyectará las "tarjetas" aquí -->
+                </div>
+
+                <!-- Botón de envío de Paloteo 1 -->
+                <button id="btn-guardar-inventario" type="button" disabled class="mt-md w-full bg-primary-container text-black h-10 px-sm rounded-sharp flex items-center justify-center gap-xs hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest text-[11px] font-label-mono font-semibold disabled:opacity-50 disabled:cursor-not-allowed">
+                    <span class="material-symbols-outlined text-sm">done_all</span>
+                    Registrar Paloteo
+                </button>
+
+                <!-- FAB: volver al inicio de la página -->
+                <button id="inventario-fab-scroll-top" type="button" aria-label="Volver al inicio" class="fab-scroll-top hidden bg-primary-container text-on-primary-fixed shadow-cyan-glow hover:brightness-110 active:scale-95 transition-all">
+                    <span class="material-symbols-outlined">arrow_upward</span>
+                </button>
             </div>
-
-            <!-- Lista Dinámica de Insumos -->
-            <div id="lista-productos" class="space-y-4">
-                <!-- JS inyectará las "tarjetas" aquí -->
-            </div>
-
-            <!-- Botón de envío de Paloteo 1 -->
-            <button id="btn-guardar-inventario" type="button" disabled class="mt-md w-full bg-primary-container text-black h-10 px-sm rounded-sharp flex items-center justify-center gap-xs hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest text-[11px] font-label-mono font-semibold disabled:opacity-50 disabled:cursor-not-allowed">
-                <span class="material-symbols-outlined text-sm">done_all</span>
-                Registrar Paloteo
-            </button>
-
-            <!-- FAB: volver al inicio de la página -->
-            <button id="inventario-fab-scroll-top" type="button" aria-label="Volver al inicio" class="fab-scroll-top hidden bg-primary-container text-on-primary-fixed shadow-cyan-glow hover:brightness-110 active:scale-95 transition-all">
-                <span class="material-symbols-outlined">arrow_upward</span>
-            </button>
 
         </div><!-- /panel-inventario -->
 
@@ -1257,7 +1259,7 @@
         </div>
     </div>
 
-    <script src="/assets/app.js?v=10.80"></script>
+    <script src="/assets/app.js?v=10.81"></script>
 
     <script>
         (function () {
@@ -1302,7 +1304,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/assets/sw.js?v=10.80')
+                navigator.serviceWorker.register('/assets/sw.js?v=10.81')
                     .then(reg => console.log('[PWA] Service Worker registrado:', reg.scope))
                     .catch(err => console.error('[PWA] Error al registrar SW:', err));
             });

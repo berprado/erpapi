@@ -4,6 +4,11 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.81
+- La vista inicial despues del login ahora muestra solo la informacion de
+  operativa (estado y resumen), ocultando las tarjetas de productos de
+  PALOTEO 1 hasta que el usuario entre explicitamente a ese modulo.
+
 ## 10.80
 - Tests de frontera para deltas fuera de la grilla 0.5 (8 tests nuevos, 59 en
   total), motivados por la pregunta "¿da lo mismo probar con 1 o 2 decimales?":

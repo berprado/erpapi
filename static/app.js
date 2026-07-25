@@ -16,6 +16,7 @@ let configuracionPaloteo = {
 };
 let productosInventario = [];
 let modoEnvioOrigen = 'inventario';
+let vistaInicialSoloOperativa = true;
 
 // ==========================================
 // AUTOSAVE: CONFIGURACION Y ESTADO
@@ -51,6 +52,7 @@ const loginScreen = document.getElementById('login-screen');
 const appScreen = document.getElementById('app-screen');
 const loginForm = document.getElementById('login-form');
 const btnLogout = document.getElementById('btn-logout');
+const inventarioCapturaContenido = document.getElementById('inventario-captura-contenido');
 const listaProductos = document.getElementById('lista-productos');
 const submitSection = document.getElementById('submit-section');
 const btnGuardar = document.getElementById('btn-guardar-inventario');
@@ -1670,6 +1672,11 @@ function mostrarPantallaLogin() {
     document.getElementById('password').value = '';
 }
 
+function actualizarVistaInicialInventario() {
+    if (!inventarioCapturaContenido) return;
+    inventarioCapturaContenido.classList.toggle('hidden', vistaInicialSoloOperativa);
+}
+
 async function mostrarPantallaApp() {
     loginScreen.classList.add('hidden');
     appScreen.classList.remove('hidden');
@@ -1680,6 +1687,8 @@ async function mostrarPantallaApp() {
     // Asegurar que el panel de inventario sea el visible al entrar a la app
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
     document.getElementById('panel-inventario').classList.remove('hidden');
+    vistaInicialSoloOperativa = true;
+    actualizarVistaInicialInventario();
     iniciarDashboard();
 }
 
@@ -1689,6 +1698,8 @@ async function mostrarPantallaApp() {
 async function iniciarDashboard() {
     listaProductos.innerHTML = ''; // Limpiar lista
     productosInventario = [];
+    vistaInicialSoloOperativa = true;
+    actualizarVistaInicialInventario();
     operativaPermitePaloteo = false;
     stopAutosaveInterval();
     _actualizarEstadoAutosave('idle', 'Autosave inactivo: esperando operativa en INICIO CIERRE.');
@@ -3568,6 +3579,11 @@ async function quitarProductoManual(producto) {
 function navegarATab(tabName) {
     const panelId = TAB_PANEL_MAP[tabName];
     if (!panelId) return; // ENVIO no navega a ningún panel
+
+    if (tabName === 'inventario' && vistaInicialSoloOperativa) {
+        vistaInicialSoloOperativa = false;
+        actualizarVistaInicialInventario();
+    }
 
     // Ocultar todos los paneles
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
