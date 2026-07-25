@@ -9,6 +9,12 @@ Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git
   operativa (estado y resumen), ocultando las tarjetas de productos de
   PALOTEO 1 hasta que el usuario entre explicitamente a ese modulo.
 
+## 10.82
+- Optimiza la tarjeta de operativa en la vista inicial para mejorar la
+  consistencia entre dispositivos: se compacta el bloque del icono y se ajusta
+  tipografia/espaciado del resumen para mantener etiquetas como "NO PESABLES"
+  en una sola linea en movil.
+
 ## 10.80
 - Tests de frontera para deltas fuera de la grilla 0.5 (8 tests nuevos, 59 en
   total), motivados por la pregunta "¿da lo mismo probar con 1 o 2 decimales?":
