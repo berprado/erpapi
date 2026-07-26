@@ -4,6 +4,10 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.83
+- Modulo PESAJE: amplia la exclusion de categorias en listado y filtro.
+  Ahora se excluyen 10, 11, 13, 14 y 17, ademas de 15, 18, 19 y 20.
+
 ## 10.81
 - La vista inicial despues del login ahora muestra solo la informacion de
   operativa (estado y resumen), ocultando las tarjetas de productos de

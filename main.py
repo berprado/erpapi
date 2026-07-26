@@ -972,7 +972,7 @@ def crear_perfil_pesaje(
     )
 
 
-CATEGORIAS_EXCLUIDAS_PESAJE = (15, 18, 19, 20)
+CATEGORIAS_EXCLUIDAS_PESAJE = (10, 11, 13, 14, 15, 17, 18, 19, 20)
 
 
 @app.get("/api/pesaje/categorias", response_model=List[schemas.CategoriaItem])
