@@ -74,7 +74,7 @@ class CrearPerfilPesajeRequest(BaseModel):
     barcode: Optional[str] = Field(None, max_length=50)
     
 class PesajeConfigItem(BaseModel):
-    id: int
+    id: Optional[int] = None
     id_producto: int
     nombre_producto: str
     codigo_producto: str
@@ -86,7 +86,7 @@ class PesajeConfigItem(BaseModel):
     gramos_por_oz: Optional[float] = None
     pesable: int
     barcode: Optional[str] = None
-    nombre_perfil: str
+    nombre_perfil: Optional[str] = None
     medida: Optional[float] = None
     nombre_unidad_medida: Optional[str] = None
     nombre_unidad_medida_detalle: Optional[str] = None

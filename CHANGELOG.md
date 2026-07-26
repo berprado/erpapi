@@ -4,6 +4,14 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.84
+- Modulo PESAJE: la pestaña INCOMPLETOS ahora incluye tambien los productos
+  pesables habilitados (`alm_producto.ind_permite_comandar=71`) que no tienen
+  ningun modelo activo en `app_producto_pesaje_config_api`.
+- Frontend PESAJE: cuando un producto pesable no tiene modelos activos, el
+  modal muestra el aviso "Sin modelos configurados" y permite crear el primer
+  modelo sin intentar guardar/editar perfiles inexistentes.
+
 ## 10.83
 - Modulo PESAJE: amplia la exclusion de categorias en listado y filtro.
   Ahora se excluyen 10, 11, 13, 14 y 17, ademas de 15, 18, 19 y 20.

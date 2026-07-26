@@ -890,8 +890,15 @@ async function cargarPesaje() {
 
 /** Un producto pesable "esta incompleto" si algun perfil no tiene peso_bruto
  * o tara cargados. No aplica a no pesables (no tienen esos campos). */
+function pesajePerfilesReales(producto) {
+    return (producto.perfiles || []).filter((p) => p.id !== null && p.id !== undefined);
+}
+
 function pesajeProductoTieneIncompleto(producto) {
-    return producto.pesable === 1 && producto.perfiles.some(
+    if (producto.pesable !== 1) return false;
+    const perfilesReales = pesajePerfilesReales(producto);
+    if (perfilesReales.length === 0) return true;
+    return perfilesReales.some(
         (p) => p.peso_bruto === null || p.tara === null
     );
 }
@@ -970,6 +977,7 @@ function crearTarjetaResumenPesaje(producto) {
 
     const medidaTxt = formatearMedidaPesaje(producto.medida, producto.nombre_unidad_medida);
     const detalleTxt = formatearMedidaPesaje(producto.volumen_oz, producto.nombre_unidad_medida_detalle);
+    const perfilesReales = pesajePerfilesReales(producto);
 
     // Estado comandable: Sí/No. La BD guarda 'Si' (sin tilde) en
     // parameter_table (id_master=20); normalizamos a minúsculas y sin tilde
@@ -996,7 +1004,7 @@ function crearTarjetaResumenPesaje(producto) {
         </div>
         <div class="flex flex-wrap gap-xs items-center mb-sm">
             <span class="badge-info text-[9px] font-label-mono px-xs py-[1px] rounded uppercase tracking-widest">Comandable: ${estadoComandable}</span>
-            ${producto.perfiles.length > 1 ? `<span class="badge-info text-[9px] font-label-mono px-xs py-[1px] rounded uppercase tracking-widest">${producto.perfiles.length} modelos</span>` : ''}
+            ${perfilesReales.length > 1 ? `<span class="badge-info text-[9px] font-label-mono px-xs py-[1px] rounded uppercase tracking-widest">${perfilesReales.length} modelos</span>` : ''}
         </div>
         <div class="flex gap-xs mt-auto pt-xs border-t border-outline-variant">
             <button type="button" class="pesaje-btn-editar flex-1 ${PESAJE_BTN_CLASS}">
@@ -1049,9 +1057,17 @@ function renderizarModalPesaje(producto) {
     if (pesajeModalMedidas) pesajeModalMedidas.textContent = medidasCompletas;
 
     pesajeModalPerfiles.innerHTML = '';
-    producto.perfiles.forEach((perfil) => {
+    const perfilesReales = pesajePerfilesReales(producto);
+    perfilesReales.forEach((perfil) => {
         pesajeModalPerfiles.appendChild(crearFilaPerfilPesaje(producto, perfil));
     });
+
+    if (producto.pesable === 1 && perfilesReales.length === 0) {
+        const aviso = document.createElement('div');
+        aviso.className = 'border border-outline-variant rounded-md p-sm text-[11px] font-label-mono uppercase tracking-widest text-on-surface-variant';
+        aviso.textContent = 'Sin modelos configurados. Agrega el primer modelo para este producto.';
+        pesajeModalPerfiles.appendChild(aviso);
+    }
 
     if (producto.pesable === 1) {
         const btnAgregar = document.createElement('button');
@@ -1250,7 +1266,7 @@ function crearFilaPerfilPesaje(producto, perfil) {
 }
 
 async function agregarModeloPesaje(producto) {
-    const perfilBase = producto.perfiles[0] || null;
+    const perfilBase = pesajePerfilesReales(producto)[0] || null;
     const datos = await abrirModalModelo(producto.nombre_producto, perfilBase, producto.volumen_oz);
     if (!datos) return; // usuario canceló
 

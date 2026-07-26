@@ -1031,7 +1031,59 @@ def listar_pesaje_config(
         ORDER BY pc.nombre_producto ASC, pc.nombre_perfil ASC
     """).bindparams(bindparam("excluidas", expanding=True))
 
-    rows = db.execute(query, parametros).mappings().all()
+    rows = list(db.execute(query, parametros).mappings().all())
+
+    # Para la pestaña INCOMPLETOS, además de perfiles pesables con campos nulos,
+    # incluimos los productos pesables habilitados que aún no tienen ninguna
+    # configuración activa en app_producto_pesaje_config_api.
+    if pesable == 1:
+        condiciones_sin_config = [
+            "a.estado = 'HAB'",
+            "a.ind_permite_comandar = 71",
+            "(a.id_categoria IS NULL OR a.id_categoria NOT IN :excluidas)",
+            "NOT EXISTS (SELECT 1 FROM app_producto_pesaje_config_api p WHERE p.id_producto_almacen = a.id AND p.estado = 'HAB')",
+        ]
+        parametros_sin_config = {"excluidas": CATEGORIAS_EXCLUIDAS_PESAJE}
+
+        if nombre:
+            condiciones_sin_config.append("a.nombre LIKE :nombre")
+            parametros_sin_config["nombre"] = f"%{nombre}%"
+        if id_categoria is not None:
+            condiciones_sin_config.append("a.id_categoria = :id_categoria")
+            parametros_sin_config["id_categoria"] = id_categoria
+
+        where_sin_config = f"WHERE {' AND '.join(condiciones_sin_config)}"
+
+        query_sin_config = text(f"""
+            SELECT NULL AS id_pesaje_config,
+                   a.id AS id_producto,
+                   a.nombre AS nombre_producto,
+                   a.codigo AS codigo_producto,
+                   a.id_categoria,
+                   c.nombre AS nombre_categoria,
+                   a.cantidad_detalle,
+                   NULL AS peso_bruto,
+                   NULL AS tara,
+                   NULL AS gramos_por_oz,
+                   1 AS pesable,
+                   NULL AS barcode,
+                   NULL AS nombre_perfil,
+                   vw.medida,
+                   vw.nombre_unidad_medida,
+                   vw.nombre_unidad_medida_detalle,
+                   vw.nombre_ind_permite_comandar
+            FROM alm_producto a
+            LEFT JOIN alm_categoria c ON c.id = a.id_categoria
+            LEFT JOIN vw_alm_producto_con_nombres vw ON vw.id = a.id
+            {where_sin_config}
+            ORDER BY a.nombre ASC
+        """).bindparams(bindparam("excluidas", expanding=True))
+
+        rows_sin_config = db.execute(query_sin_config, parametros_sin_config).mappings().all()
+        rows.extend(rows_sin_config)
+
+    rows.sort(key=lambda row: (row["nombre_producto"] or "", row["nombre_perfil"] or ""))
+
     return [
         schemas.PesajeConfigItem(
             id=row["id_pesaje_config"],
