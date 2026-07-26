@@ -1077,6 +1077,7 @@
                             <label class="text-[10px] font-label-mono tracking-widest uppercase text-on-surface-variant block mb-xs">Nombre del modelo</label>
                             <input id="mb-nombre" type="text" placeholder="Ej: BOTELLA ALTA"
                                 class="w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-body-base uppercase">
+                            <p id="mb-nombre-hint" class="hidden mt-xs text-[10px] text-on-surface-variant font-label-mono tracking-widest uppercase">Primer modelo: Estándar (valor por defecto).</p>
                         </div>
 
                         <div class="grid grid-cols-2 gap-sm">
@@ -1259,7 +1260,7 @@
         </div>
     </div>
 
-    <script src="/assets/app.js?v=10.87"></script>
+    <script src="/assets/app.js?v=10.89"></script>
 
     <script>
         (function () {
@@ -1304,7 +1305,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/assets/sw.js?v=10.87')
+                navigator.serviceWorker.register('/assets/sw.js?v=10.89')
                     .then(reg => console.log('[PWA] Service Worker registrado:', reg.scope))
                     .catch(err => console.error('[PWA] Error al registrar SW:', err));
             });

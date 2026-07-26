@@ -616,6 +616,7 @@ const modeloBotellaDialog  = document.getElementById('modelo-botella-dialog');
 const modeloBotellaOverlay = document.getElementById('modelo-botella-overlay');
 const modeloBotellaSubtit  = document.getElementById('modelo-botella-subtitulo');
 const mbNombre     = document.getElementById('mb-nombre');
+const mbNombreHint = document.getElementById('mb-nombre-hint');
 const mbPesoBruto  = document.getElementById('mb-peso-bruto');
 const mbTara       = document.getElementById('mb-tara');
 const mbGramosOz   = document.getElementById('mb-gramos-oz');
@@ -726,8 +727,11 @@ function abrirModalModelo(nombreProducto, perfilBase, volumenOz, forzarEstandar 
         mbVolumenOz.textContent = volumenOz ? volumenOz.toFixed(2) : '-';
 
         // Pre-llenar con valores del perfil base si existe
-        mbNombre.value    = forzarEstandar ? 'ESTÁNDAR' : '';
+        mbNombre.value    = forzarEstandar ? 'Estándar' : '';
         mbNombre.readOnly = forzarEstandar;
+        if (mbNombreHint) {
+            mbNombreHint.classList.toggle('hidden', !forzarEstandar);
+        }
         mbPesoBruto.value = perfilBase ? perfilBase.peso_bruto : '';
         mbTara.value      = perfilBase ? perfilBase.tara : '';
         mbBarcode.value   = perfilBase ? (perfilBase.barcode || '') : '';
@@ -756,6 +760,9 @@ function abrirModalModelo(nombreProducto, perfilBase, volumenOz, forzarEstandar 
         function cerrar(resultado) {
             modeloBotellaDialog.classList.add('hidden');
             mbNombre.readOnly = false;
+            if (mbNombreHint) {
+                mbNombreHint.classList.add('hidden');
+            }
             btnConfirmarModelo.removeEventListener('click', onConfirmar);
             btnCancelarModelo.removeEventListener('click', onCancelar);
             modeloBotellaOverlay.removeEventListener('click', onCancelar);
@@ -765,7 +772,7 @@ function abrirModalModelo(nombreProducto, perfilBase, volumenOz, forzarEstandar 
         }
 
         function onConfirmar() {
-            const nombre    = mbNombre.value.trim().toUpperCase();
+            const nombre    = forzarEstandar ? 'Estándar' : mbNombre.value.trim().toUpperCase();
             const pesoBruto = parseFloat(mbPesoBruto.value);
             const tara      = parseFloat(mbTara.value);
             const barcode   = mbBarcode.value.trim();

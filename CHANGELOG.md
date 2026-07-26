@@ -4,6 +4,16 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.89
+- UI PESAJE (INCOMPLETOS): se agrega un texto de ayuda en el modal de
+  "Agregar modelo" para el caso de primer perfil sin modelos activos:
+  "Primer modelo: Estándar (valor por defecto)".
+
+## 10.88
+- UI PESAJE (INCOMPLETOS): al crear el primer modelo desde el modal de
+  edición, el campo `nombre_perfil` ahora se precarga exactamente como
+  `Estándar` (en lugar de `ESTÁNDAR`) y se envía con ese mismo valor.
+
 ## 10.87
 - Documentación de PESAJE: se agregan consultas SQL de auditoría/operación en
   `README.md` y `documentos/DOCUMENTACION_ALMACENAMIENTO_PALOTEO.md`
@@ -14,7 +24,7 @@ Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git
 - Modulo PESAJE: al crear el primer perfil activo de un producto, el backend
   fuerza el nombre de modelo a `Estándar`.
 - UI PESAJE: en el modal "Agregar modelo", cuando el producto no tiene
-  perfiles activos, el nombre aparece prellenado como `ESTÁNDAR` y bloqueado;
+  perfiles activos, el nombre aparece prellenado como `Estándar` y bloqueado;
   desde el segundo modelo vuelve a ser editable.
 
 ## 10.85
