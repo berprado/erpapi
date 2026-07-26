@@ -719,14 +719,15 @@ function mostrarDialogoConfirmacion({ titulo, mensaje }) {
 }
 
 /** Muestra el modal de nuevo modelo y resuelve con los datos cuando el usuario confirma, o null si cancela. */
-function abrirModalModelo(nombreProducto, perfilBase, volumenOz) {
+function abrirModalModelo(nombreProducto, perfilBase, volumenOz, forzarEstandar = false) {
     return new Promise((resolve) => {
         // Subtítulo con nombre del producto
         modeloBotellaSubtit.textContent = nombreProducto;
         mbVolumenOz.textContent = volumenOz ? volumenOz.toFixed(2) : '-';
 
         // Pre-llenar con valores del perfil base si existe
-        mbNombre.value    = '';
+        mbNombre.value    = forzarEstandar ? 'ESTÁNDAR' : '';
+        mbNombre.readOnly = forzarEstandar;
         mbPesoBruto.value = perfilBase ? perfilBase.peso_bruto : '';
         mbTara.value      = perfilBase ? perfilBase.tara : '';
         mbBarcode.value   = perfilBase ? (perfilBase.barcode || '') : '';
@@ -754,6 +755,7 @@ function abrirModalModelo(nombreProducto, perfilBase, volumenOz) {
 
         function cerrar(resultado) {
             modeloBotellaDialog.classList.add('hidden');
+            mbNombre.readOnly = false;
             btnConfirmarModelo.removeEventListener('click', onConfirmar);
             btnCancelarModelo.removeEventListener('click', onCancelar);
             modeloBotellaOverlay.removeEventListener('click', onCancelar);
@@ -1266,8 +1268,14 @@ function crearFilaPerfilPesaje(producto, perfil) {
 }
 
 async function agregarModeloPesaje(producto) {
-    const perfilBase = pesajePerfilesReales(producto)[0] || null;
-    const datos = await abrirModalModelo(producto.nombre_producto, perfilBase, producto.volumen_oz);
+    const perfilesReales = pesajePerfilesReales(producto);
+    const perfilBase = perfilesReales[0] || null;
+    const datos = await abrirModalModelo(
+        producto.nombre_producto,
+        perfilBase,
+        producto.volumen_oz,
+        perfilesReales.length === 0
+    );
     if (!datos) return; // usuario canceló
 
     try {

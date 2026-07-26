@@ -900,7 +900,14 @@ def crear_perfil_pesaje(
 
     gramos_por_oz = (payload.peso_bruto - payload.tara) / volumen_oz
 
-    nombre_perfil = payload.nombre_perfil.strip()
+    tiene_perfil_activo = db.query(models.ProductoPesajeConfig.id).filter(
+        models.ProductoPesajeConfig.id_producto_almacen == payload.id_producto,
+        models.ProductoPesajeConfig.estado == 'HAB'
+    ).first() is not None
+
+    # Regla operativa: el primer modelo activo de cada producto debe ser
+    # "Estándar". Los modelos adicionales pueden tener nombre libre.
+    nombre_perfil = payload.nombre_perfil.strip() if tiene_perfil_activo else 'Estándar'
     barcode = payload.barcode.strip() if payload.barcode else None
     if not barcode:
         barcode = db.execute(
