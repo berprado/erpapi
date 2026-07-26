@@ -4,6 +4,11 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.90
+- Modulo PESAJE: corrige duplicado de categorías en el selector de filtro.
+  El frontend ahora deduplica por `id_categoria`, limpia opciones dinámicas
+  previas y evita carreras de carga concurrente.
+
 ## 10.89
 - UI PESAJE (INCOMPLETOS): se agrega un texto de ayuda en el modal de
   "Agregar modelo" para el caso de primer perfil sin modelos activos:

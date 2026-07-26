@@ -819,23 +819,57 @@ const pesajeList                = document.getElementById('pesaje-list');
 const pesajeEmptyState          = document.getElementById('pesaje-empty-state');
 
 let categoriasPesajeCargadas = false;
+let categoriasPesajeCargaPromise = null;
 
 async function cargarCategoriasPesaje() {
     if (categoriasPesajeCargadas || !pesajeCategoriaSel) return;
+    if (categoriasPesajeCargaPromise) {
+        await categoriasPesajeCargaPromise;
+        return;
+    }
+
+    categoriasPesajeCargaPromise = (async () => {
     try {
         const response = await fetchAutenticado(`${API_BASE}/pesaje/categorias`);
         if (!response.ok) return;
         const categorias = await response.json();
+
+        // Limpia opciones dinámicas previas por seguridad ante recargas de UI.
+        pesajeCategoriaSel
+            .querySelectorAll('option[data-pesaje-categoria="1"]')
+            .forEach((opt) => opt.remove());
+
+        // Evita duplicados aunque el backend repita filas o entren 2 cargas.
+        const categoriasUnicas = new Map();
         categorias.forEach((cat) => {
+            const id = String(cat.id_categoria);
+            if (!categoriasUnicas.has(id)) {
+                categoriasUnicas.set(id, cat);
+            }
+        });
+
+        categoriasUnicas.forEach((cat) => {
             const option = document.createElement('option');
             option.value = cat.id_categoria;
             option.textContent = cat.nombre_categoria;
+            option.dataset.pesajeCategoria = '1';
             pesajeCategoriaSel.appendChild(option);
         });
+
+        if (pesajeEstado.idCategoria) {
+            pesajeCategoriaSel.value = pesajeEstado.idCategoria;
+        }
+
         categoriasPesajeCargadas = true;
     } catch (error) {
         // Silencioso: el filtro de categoría queda solo con "Todas"
+    } finally {
+        categoriasPesajeCargaPromise = null;
     }
+
+    })();
+
+    await categoriasPesajeCargaPromise;
 }
 
 function actualizarUIFiltrosPesaje() {
