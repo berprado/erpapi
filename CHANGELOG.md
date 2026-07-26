@@ -4,6 +4,11 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.85
+- Documentación operativa: se agrega en `TODO.md` el pendiente para resolver
+  los 4 conflictos excepcionales donde el catálogo marca pesable y la
+  configuración activa de pesaje está en `pesable=0`.
+
 ## 10.84
 - Modulo PESAJE: la pestaña INCOMPLETOS ahora incluye tambien los productos
   pesables habilitados (`alm_producto.ind_permite_comandar=71`) que no tienen

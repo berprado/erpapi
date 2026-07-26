@@ -40,6 +40,12 @@
   - El token actual expira en 10 horas (`ACCESS_TOKEN_EXPIRE_MINUTES = 600`).
   - Evaluar si se necesita un mecanismo de renovación automática.
 
+- [ ] **Resolver los 4 conflictos excepcionales de pesable en PESAJE**
+  - Contexto (detectado en `adminerp_copy`, `APP_ENV=test`): hay 4 productos habilitados y pesables por catálogo (`alm_producto.estado='HAB'`, `ind_permite_comandar=71`, fuera de categorías excluidas) que tienen configuración activa con `pesable=0` en `app_producto_pesaje_config_api`.
+  - Productos identificados: `ALMA TANNAT ROSADO 750ML` (id 296), `DUO TANNAT MERLOT 750ML` (id 258), `MOSCOW MULE LATA` (id 478), `PATRON SILVER 750ML` (id 31).
+  - Decisión actual: mantenerlos como **casos excepcionales** (sin corrección inmediata).
+  - Pendiente: definir criterio de negocio y resolver su situación (homologar catálogo/configuración o documentar excepción permanente).
+
 - [ ] **Identificar focos de recetas mal configuradas en `bar_detalle_combo_bar`**
   - Motivacion: todas las recetas vigentes (828 filas activas con `ind_paq_detalle='0'`) usan cantidades multiplo de 0.5 oz, pero se encontraron 5 ventas historicas (2025-08-02 a 2025-09-14, `bar_detalle_sal_combo_coctel`) que descontaron 0.07 oz de Coca Cola via el combo "V BUHO NEGRO" (id 392) — un valor que no coincide con la receta actual de ese combo (4.00 oz). La receta ya fue corregida, pero el residuo ya aplicado a `bar_inventario` en su momento nunca se corrigio retroactivamente y se arrastra entre operativas via `bar_inventario_cierre`.
   - Revisar si existen otros combos con historial de cantidades atipicas (no multiplo de 0.5) en `bar_detalle_sal_combo_coctel`, mas alla de este caso ya cerrado.
