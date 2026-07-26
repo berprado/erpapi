@@ -471,6 +471,61 @@ Ejemplo:
 - Soft-delete (`estado='DES'`), nunca `DELETE` físico.
 - Se rechaza con `400` si es el último perfil con `estado='HAB'` del producto (todo producto debe conservar al menos un modelo activo).
 
+**Consultas SQL de control (módulo PESAJE):**
+
+```sql
+-- 1) Universo objetivo del módulo PESAJE
+SELECT COUNT(*) AS total_objetivo
+FROM alm_producto a
+WHERE a.estado = 'HAB'
+  AND a.ind_permite_comandar = 71
+  AND (a.id_categoria IS NULL OR a.id_categoria NOT IN (10,11,13,14,15,17,18,19,20));
+
+-- 2) Productos sin configuración activa (deben aparecer en INCOMPLETOS)
+SELECT a.id, a.codigo, a.nombre
+FROM alm_producto a
+WHERE a.estado = 'HAB'
+  AND a.ind_permite_comandar = 71
+  AND (a.id_categoria IS NULL OR a.id_categoria NOT IN (10,11,13,14,15,17,18,19,20))
+  AND NOT EXISTS (
+    SELECT 1
+    FROM app_producto_pesaje_config_api p
+    WHERE p.id_producto_almacen = a.id
+      AND p.estado = 'HAB'
+  )
+ORDER BY a.nombre ASC;
+
+-- 3) Conflictos excepcionales (catálogo pesable vs configuración pesable=0)
+SELECT DISTINCT a.id AS id_producto, a.codigo, a.nombre, p.id AS id_pesaje_config,
+       p.nombre_perfil, p.pesable
+FROM alm_producto a
+INNER JOIN app_producto_pesaje_config_api p
+  ON p.id_producto_almacen = a.id
+ AND p.estado = 'HAB'
+ AND p.pesable = 0
+WHERE a.estado = 'HAB'
+  AND a.ind_permite_comandar = 71
+  AND (a.id_categoria IS NULL OR a.id_categoria NOT IN (10,11,13,14,15,17,18,19,20))
+ORDER BY a.nombre ASC;
+
+-- 4) Auditoría: primer perfil activo distinto a Estándar
+SELECT p1.id_producto_almacen AS id_producto, a.codigo, a.nombre,
+       p1.id AS id_primer_perfil_activo, p1.nombre_perfil
+FROM app_producto_pesaje_config_api p1
+INNER JOIN (
+    SELECT id_producto_almacen, MIN(id) AS min_id_activo
+    FROM app_producto_pesaje_config_api
+    WHERE estado = 'HAB'
+    GROUP BY id_producto_almacen
+) x
+    ON x.id_producto_almacen = p1.id_producto_almacen
+   AND x.min_id_activo = p1.id
+INNER JOIN alm_producto a ON a.id = p1.id_producto_almacen
+WHERE p1.estado = 'HAB'
+  AND p1.nombre_perfil <> 'Estándar'
+ORDER BY a.nombre ASC;
+```
+
 **Ejemplo de dato:**
 ```json
 {

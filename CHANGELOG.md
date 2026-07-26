@@ -4,6 +4,12 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.87
+- Documentación de PESAJE: se agregan consultas SQL de auditoría/operación en
+  `README.md` y `documentos/DOCUMENTACION_ALMACENAMIENTO_PALOTEO.md`
+  (universo objetivo, faltantes sin configuración, conflictos excepcionales y
+  verificación de primer perfil activo distinto de `Estándar`).
+
 ## 10.86
 - Modulo PESAJE: al crear el primer perfil activo de un producto, el backend
   fuerza el nombre de modelo a `Estándar`.

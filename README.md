@@ -178,6 +178,78 @@ Reglas de barra operativa:
 
 Todos los endpoints de Pesaje requieren ademas que el usuario tenga el rol `ROLE_ADMIN` (verificado contra `seg_permiso`/`seg_rol`), devolviendo `403` si no lo tiene.
 
+#### Consultas SQL de auditoría (PESAJE)
+
+Universo objetivo del módulo (habilitados, pesables por catálogo y fuera de categorías excluidas):
+
+```sql
+SELECT COUNT(*) AS total_objetivo
+FROM alm_producto a
+WHERE a.estado = 'HAB'
+  AND a.ind_permite_comandar = 71
+  AND (a.id_categoria IS NULL OR a.id_categoria NOT IN (10,11,13,14,15,17,18,19,20));
+```
+
+Productos que deberían verse en INCOMPLETOS por no tener configuración activa:
+
+```sql
+SELECT a.id, a.codigo, a.nombre, a.id_categoria, c.nombre AS categoria, a.cantidad_detalle AS volumen_objetivo_oz
+FROM alm_producto a
+LEFT JOIN alm_categoria c ON c.id = a.id_categoria
+WHERE a.estado = 'HAB'
+  AND a.ind_permite_comandar = 71
+  AND (a.id_categoria IS NULL OR a.id_categoria NOT IN (10,11,13,14,15,17,18,19,20))
+  AND NOT EXISTS (
+    SELECT 1
+    FROM app_producto_pesaje_config_api p
+    WHERE p.id_producto_almacen = a.id
+      AND p.estado = 'HAB'
+  )
+ORDER BY a.nombre ASC;
+```
+
+Conflictos excepcionales (catálogo pesable vs configuración activa `pesable=0`):
+
+```sql
+SELECT DISTINCT a.id AS id_producto, a.codigo, a.nombre, a.id_categoria, c.nombre AS categoria,
+       a.ind_permite_comandar, p.id AS id_pesaje_config, p.nombre_perfil, p.pesable, p.estado
+FROM alm_producto a
+INNER JOIN app_producto_pesaje_config_api p
+  ON p.id_producto_almacen = a.id
+ AND p.estado = 'HAB'
+ AND p.pesable = 0
+LEFT JOIN alm_categoria c ON c.id = a.id_categoria
+WHERE a.estado = 'HAB'
+  AND a.ind_permite_comandar = 71
+  AND (a.id_categoria IS NULL OR a.id_categoria NOT IN (10,11,13,14,15,17,18,19,20))
+ORDER BY a.nombre ASC;
+```
+
+Productos cuyo primer perfil activo no es `Estándar`:
+
+```sql
+SELECT
+    p1.id_producto_almacen AS id_producto,
+    a.codigo,
+    a.nombre,
+    p1.id AS id_primer_perfil_activo,
+    p1.nombre_perfil AS nombre_primer_perfil
+FROM app_producto_pesaje_config_api p1
+INNER JOIN (
+    SELECT id_producto_almacen, MIN(id) AS min_id_activo
+    FROM app_producto_pesaje_config_api
+    WHERE estado = 'HAB'
+    GROUP BY id_producto_almacen
+) x
+    ON x.id_producto_almacen = p1.id_producto_almacen
+   AND x.min_id_activo = p1.id
+INNER JOIN alm_producto a
+    ON a.id = p1.id_producto_almacen
+WHERE p1.estado = 'HAB'
+  AND p1.nombre_perfil <> 'Estándar'
+ORDER BY a.nombre;
+```
+
 ### Reporte Paloteo 3 (requiere JWT)
 
 | Metodo | Ruta | Descripcion |
