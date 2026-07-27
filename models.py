@@ -1,5 +1,8 @@
 from database import Base
-from sqlalchemy import Column, Integer, String, DateTime, Date, Numeric, Text, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, Date, Numeric, Text, Boolean, text
+
+NOMBRE_PERFIL_PESAJE_DEFAULT = "Estándar"
+
 class Usuario(Base):
     __tablename__ = "seg_usuario"
 
@@ -54,7 +57,7 @@ class ProductoPesajeConfig(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     id_producto_almacen = Column(Integer, index=True)
-    nombre_perfil = Column(String(100))
+    nombre_perfil = Column(String(100), nullable=False, server_default=text("'Estándar'"))
     peso_bruto = Column(Numeric(10, 2))
     tara = Column(Numeric(10, 2))
     gramos_por_oz = Column(Numeric(10, 6))

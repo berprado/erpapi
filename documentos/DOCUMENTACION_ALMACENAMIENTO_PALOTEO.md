@@ -452,8 +452,11 @@ Ejemplo:
 - `peso_bruto > tara` (obligatorio)
 - El producto debe tener un volumen estándar válido en `alm_producto.cantidad_detalle` (de lo contrario no se puede calcular `gramos_por_oz`)
 - El volumen del nuevo modelo es siempre el mismo que el del producto (no se permite definir un volumen distinto por perfil)
+- El primer perfil activo del producto usa siempre `Estándar`, alineado con el `DEFAULT 'Estándar'` de la columna `nombre_perfil`; los modelos posteriores pueden usar nombre libre
 
 **Reactivación de perfiles eliminados:** si se intenta crear un modelo con un nombre que ya existe para ese producto pero con `estado='DES'` (fue eliminado antes), el backend **reactiva esa misma fila** (mismo `id`) con los nuevos valores de `peso_bruto`/`tara`/`gramos_por_oz`/`barcode` y `estado='HAB'`, en vez de intentar un `INSERT` que chocaría con la clave única. Si el nombre ya existe con `estado='HAB'` (duplicado real), se sigue rechazando con `409`.
+
+**Regla de consistencia de encoding/nombre:** el sistema usa explícitamente `Estándar` (no `ESTÁNDAR`) como valor por defecto del primer perfil para mantenerse consistente con la definición de la tabla y evitar variantes ortográficas/encoding entre UI, backend y BD.
 
 **Vista de consulta (módulo PESAJE):** `v9_pesaje_config_api` expone esta tabla unida con `alm_producto` y `alm_categoria`, filtrando `p.estado = 'HAB' AND pc.estado = 'HAB'` (los perfiles eliminados no aparecen en el listado del módulo).
 

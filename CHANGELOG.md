@@ -4,6 +4,18 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.92
+- Documentación PESAJE: se explicita en `README.md` y en la guía técnica que
+  el primer `nombre_perfil` usa `Estándar` por alineación con el default de
+  `app_producto_pesaje_config_api.nombre_perfil`, para evitar variantes como
+  `ESTÁNDAR`.
+
+## 10.91
+- Modulo PESAJE: se centraliza el valor por defecto del primer
+  `nombre_perfil` como `Estándar`, alineado con el default de
+  `app_producto_pesaje_config_api.nombre_perfil`, para evitar reintroducir
+  variantes como `ESTÁNDAR`.
+
 ## 10.90
 - Modulo PESAJE: corrige duplicado de categorías en el selector de filtro.
   El frontend ahora deduplica por `id_categoria`, limpia opciones dinámicas

@@ -625,6 +625,7 @@ const mbVolumenOz  = document.getElementById('mb-volumen-oz');
 const mbError      = document.getElementById('mb-error');
 const btnCancelarModelo  = document.getElementById('btn-cancelar-modelo');
 const btnConfirmarModelo = document.getElementById('btn-confirmar-modelo');
+const PESAJE_NOMBRE_PERFIL_DEFAULT = 'Estándar';
 
 // ==========================================
 // DIÁLOGOS ESTILIZADOS: RESULTADO Y CONFIRMACIÓN
@@ -727,7 +728,7 @@ function abrirModalModelo(nombreProducto, perfilBase, volumenOz, forzarEstandar 
         mbVolumenOz.textContent = volumenOz ? volumenOz.toFixed(2) : '-';
 
         // Pre-llenar con valores del perfil base si existe
-        mbNombre.value    = forzarEstandar ? 'Estándar' : '';
+        mbNombre.value    = forzarEstandar ? PESAJE_NOMBRE_PERFIL_DEFAULT : '';
         mbNombre.readOnly = forzarEstandar;
         if (mbNombreHint) {
             mbNombreHint.classList.toggle('hidden', !forzarEstandar);
@@ -772,7 +773,7 @@ function abrirModalModelo(nombreProducto, perfilBase, volumenOz, forzarEstandar 
         }
 
         function onConfirmar() {
-            const nombre    = forzarEstandar ? 'Estándar' : mbNombre.value.trim().toUpperCase();
+            const nombre    = forzarEstandar ? PESAJE_NOMBRE_PERFIL_DEFAULT : mbNombre.value.trim().toUpperCase();
             const pesoBruto = parseFloat(mbPesoBruto.value);
             const tara      = parseFloat(mbTara.value);
             const barcode   = mbBarcode.value.trim();

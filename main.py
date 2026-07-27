@@ -905,9 +905,14 @@ def crear_perfil_pesaje(
         models.ProductoPesajeConfig.estado == 'HAB'
     ).first() is not None
 
-    # Regla operativa: el primer modelo activo de cada producto debe ser
-    # "Estándar". Los modelos adicionales pueden tener nombre libre.
-    nombre_perfil = payload.nombre_perfil.strip() if tiene_perfil_activo else 'Estándar'
+    # Regla operativa: el primer modelo activo de cada producto debe usar el
+    # mismo valor por defecto definido en la tabla. Los modelos adicionales
+    # pueden tener nombre libre.
+    nombre_perfil = (
+        payload.nombre_perfil.strip()
+        if tiene_perfil_activo
+        else models.NOMBRE_PERFIL_PESAJE_DEFAULT
+    )
     barcode = payload.barcode.strip() if payload.barcode else None
     if not barcode:
         barcode = db.execute(
