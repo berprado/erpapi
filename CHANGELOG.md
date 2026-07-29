@@ -4,6 +4,9 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.95
+- Corrige `ReferenceError: isOz is not defined` en `formatearDiferencia()` (PALOTEO, captura en tiempo real): al renombrar el parámetro `isOz` -> `isDetalle` en v10.93 (excepción VINOS) quedó una referencia sin migrar en la rama de diferencia negativa (faltante/shortage). Rompía el cálculo de diferencias en vivo para **cualquier producto** con diferencia negativa (no era específico de VINOS), reportado por el usuario probando en `test_pos` tras el deploy de v10.94.
+
 ## 10.94
 - Corrige bug critico detectado en `test_pos`: un perfil de pesaje activo y `pesable=1` con `peso_bruto`/`gramos_por_oz` en `0` (en vez de `null`) pasaba el chequeo de "incompleto" (que solo miraba `null`) y llegaba intacto a la captura de paloteo, donde `gramos_por_oz=0` producia una division por cero sin manejar (500). Ahora el chequeo de perfil incompleto, tanto en la captura (`_procesar_items_paloteo`) como en el listado para paloteo (`_agrupar_filas_producto_pesaje`) y en el modulo PESAJE (frontend, `pesajeProductoTieneIncompleto`), trata `peso_bruto<=0` o `gramos_por_oz<=0` igual que `null` (para productos no-VINOS). Caso real: `PATRON SILVER 750ML` (id 31) tenia su unico perfil activo en `0/0/0`; con este fix pasa a clasificarse como INCOMPLETO sin necesidad de tocar el dato en BD.
 - `tara=0` sigue siendo un valor valido (no se trata como incompleto), ya que el schema lo permite explicitamente.

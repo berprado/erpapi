@@ -4421,7 +4421,7 @@ function formatearDiferencia(diferencia, isDetalle = false, toleranciaDetalle = 
     }
 
     if (diferenciaOperativa < 0) {
-        const val = isOz ? diferenciaOperativa.toFixed(2) : Math.round(diferenciaOperativa);
+        const val = isDetalle ? diferenciaOperativa.toFixed(2) : Math.round(diferenciaOperativa);
         return `<span class="text-data-tabular font-semibold" style="color: var(--semantic-danger)">${val} ${sufijo}</span>`;
     }
 
