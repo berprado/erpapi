@@ -170,10 +170,10 @@ Reglas de barra operativa:
 
 | Metodo | Ruta | Descripcion |
 |---|---|---|
-| `POST` | `/api/pesaje/perfiles` | Crea (o reactiva si existe uno eliminado con el mismo nombre) un modelo de botella para producto pesable. Calcula `gramos_por_oz` en el backend a partir del volumen estandar del producto. Regla: el primer modelo activo de un producto se registra siempre como `Estándar`, alineado con el default de `app_producto_pesaje_config_api.nombre_perfil`; los modelos adicionales pueden tener nombre libre |
+| `POST` | `/api/pesaje/perfiles` | Crea (o reactiva si existe uno eliminado con el mismo nombre) un modelo de botella para producto pesable. Regla general: calcula `gramos_por_oz` en el backend a partir del volumen estandar del producto. Excepción categoria VINOS (`id_categoria=6`): no se calcula por volumen; se fuerza `tara=0` y `gramos_por_oz=1`, y `peso_bruto` representa copas disponibles. El primer modelo activo de un producto se registra siempre como `Estándar`, alineado con el default de `app_producto_pesaje_config_api.nombre_perfil`; los modelos adicionales pueden tener nombre libre |
 | `GET` | `/api/pesaje/categorias` | Lista de categorias habilitadas, para el filtro del modulo PESAJE |
 | `GET` | `/api/pesaje/config` | Lista perfiles de pesaje (tabla `app_producto_pesaje_config_api`), con filtros opcionales `nombre`, `id_categoria`, `pesable`. Excluye siempre las categorias 10, 11, 13, 14, 15, 17, 18, 19 y 20. Para `pesable=1`, además de los perfiles existentes, incluye productos pesables habilitados (`alm_producto.ind_permite_comandar=71`) que todavía no tienen ninguna configuración activa, para que aparezcan en INCOMPLETOS. Ademas de los campos propios del perfil, hace `LEFT JOIN` a `vw_alm_producto_con_nombres` (por `id_producto`) para sumar `medida`, `nombre_unidad_medida`, `nombre_unidad_medida_detalle` y `nombre_ind_permite_comandar` — datos del producto que no dependen de la barra (a diferencia de existencias/cantidades, el peso bruto/tara/codigo de barras es el mismo sin importar donde este el producto), por eso no se usa `nombre_barra` de esa vista |
-| `PUT` | `/api/pesaje/config/{id}` | Edita `peso_bruto`/`tara`/`barcode` de un perfil existente. En productos no pesables solo se permite editar `barcode` |
+| `PUT` | `/api/pesaje/config/{id}` | Edita `peso_bruto`/`tara`/`barcode` de un perfil existente. En categoria VINOS (`id_categoria=6`) se valida y fuerza `tara=0` y `gramos_por_oz=1` (consistencia operativa por copas). En productos no pesables solo se permite editar `barcode` |
 | `DELETE` | `/api/pesaje/config/{id}` | Elimina (soft-delete, `estado='DES'`) un perfil. Rechaza la eliminacion si es el ultimo perfil activo del producto |
 
 Todos los endpoints de Pesaje requieren ademas que el usuario tenga el rol `ROLE_ADMIN` (verificado contra `seg_permiso`/`seg_rol`), devolviendo `403` si no lo tiene.
@@ -348,6 +348,14 @@ Para cada botella abierta:
 3. Se convierte a onzas: `onzas = peso_liquido / gramos_por_oz`.
 4. Se guarda el total exacto en `app_paloteo_registro_crudo`.
 5. Se redondea para POS: `onzas_pos = round(total_onzas * 2) / 2`.
+
+Excepción operativa en VINOS (`id_categoria=6`):
+
+1. Se conserva la misma fórmula para mantener consistencia técnica.
+2. Se usa `peso` como copas disponibles (entrada visual del encargado).
+3. Se fuerza `tara = 0` (constante).
+4. Se fuerza `gramos_por_oz = 1` (constante).
+5. El resultado operativo queda `contenido = (copas - 0) / 1 = copas`.
 
 ---
 

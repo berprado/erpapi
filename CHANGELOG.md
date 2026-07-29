@@ -4,6 +4,10 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.93
+- Modulo PESAJE: se implementa excepción operativa para categoría VINOS (`id_categoria=6`) manteniendo la fórmula unificada. En backend y frontend se fuerza `tara=0` y `gramos_por_oz=1`; `peso_bruto`/captura representa copas disponibles.
+- UI de captura y validaciones: en VINOS se muestran/validan unidades de detalle como copas (sin romper el flujo de productos pesables no-VINOS).
+
 ## 10.92
 - Documentación PESAJE: se explicita en `README.md` y en la guía técnica que
   el primer `nombre_perfil` usa `Estándar` por alineación con el default de

@@ -112,6 +112,19 @@ def _obtener_tolerancia_operativa_oz(pesable: int | None) -> float:
     return 0.5
 
 
+ID_CATEGORIA_VINOS = 6
+TARA_VINOS = 0.0
+GRAMOS_POR_OZ_VINOS = 1.0
+
+
+def _es_producto_vino(db: Session, id_producto: int) -> bool:
+    id_categoria = db.execute(
+        text("SELECT id_categoria FROM alm_producto WHERE id = :id_producto LIMIT 1"),
+        {"id_producto": id_producto}
+    ).scalar()
+    return int(id_categoria or 0) == ID_CATEGORIA_VINOS
+
+
 def _cuantizar_delta_onzas_operativo(delta_exacto: float, tolerancia_oz: float) -> float:
     """Aplica banda muerta y cuantiza el delta en pasos de 0.5 oz."""
     if abs(delta_exacto) < tolerancia_oz:
@@ -313,6 +326,7 @@ def _procesar_items_paloteo(
     productos_corregidos = []
     margen_error_balanza = 10.0
     onzas_max_por_producto = {}
+    es_vino_por_producto = {}
 
     # En modo corrección, usamos actualización selectiva por producto para
     # conservar fecha_mod en los ítems no modificados.
@@ -330,7 +344,11 @@ def _procesar_items_paloteo(
         if item.id_producto not in onzas_max_por_producto:
             onzas_max_por_producto[item.id_producto] = _obtener_onzas_por_botella_llena(db, item.id_producto)
 
+        if item.id_producto not in es_vino_por_producto:
+            es_vino_por_producto[item.id_producto] = _es_producto_vino(db, item.id_producto)
+
         onzas_max_producto = onzas_max_por_producto[item.id_producto]
+        es_vino = es_vino_por_producto[item.id_producto]
 
         configs_producto = db.query(models.ProductoPesajeConfig).filter(
             models.ProductoPesajeConfig.id_producto_almacen == item.id_producto,
@@ -365,7 +383,7 @@ def _procesar_items_paloteo(
                         detail=f"Perfil de botella inválido para producto {item.id_producto}."
                     )
 
-                if any(
+                if (not es_vino) and any(
                     valor is None
                     for valor in (perfil.gramos_por_oz, perfil.tara, perfil.peso_bruto)
                 ):
@@ -377,12 +395,12 @@ def _procesar_items_paloteo(
                         )
                     )
 
-                gr_oz = float(perfil.gramos_por_oz)
-                tara = float(perfil.tara)
-                peso_bruto = float(perfil.peso_bruto)
+                gr_oz = GRAMOS_POR_OZ_VINOS if es_vino else float(perfil.gramos_por_oz)
+                tara = TARA_VINOS if es_vino else float(perfil.tara)
+                peso_bruto = float(perfil.peso_bruto or 0)
                 peso_medido = float(abierta.peso)
 
-                if peso_bruto > 0 and peso_medido > peso_bruto:
+                if (not es_vino) and peso_bruto > 0 and peso_medido > peso_bruto:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail=(
@@ -888,17 +906,26 @@ def crear_perfil_pesaje(
     current_user: models.Usuario = Depends(get_usuario_administrador)
 ):
     """Crea un nuevo modelo de botella para un producto pesable."""
-    if payload.tara >= payload.peso_bruto:
-        raise HTTPException(status_code=400, detail="La tara no puede ser mayor o igual al peso bruto.")
+    es_vino = _es_producto_vino(db, payload.id_producto)
 
-    volumen_oz = _obtener_onzas_por_botella_llena(db, payload.id_producto)
-    if not volumen_oz:
-        raise HTTPException(
-            status_code=400,
-            detail="No se pudo determinar el volumen estándar del producto."
-        )
+    if es_vino:
+        if abs(float(payload.tara) - TARA_VINOS) > 1e-9:
+            raise HTTPException(status_code=400, detail="En categoría VINOS la tara debe ser 0.")
+        tara = TARA_VINOS
+        gramos_por_oz = GRAMOS_POR_OZ_VINOS
+    else:
+        if payload.tara >= payload.peso_bruto:
+            raise HTTPException(status_code=400, detail="La tara no puede ser mayor o igual al peso bruto.")
 
-    gramos_por_oz = (payload.peso_bruto - payload.tara) / volumen_oz
+        volumen_oz = _obtener_onzas_por_botella_llena(db, payload.id_producto)
+        if not volumen_oz:
+            raise HTTPException(
+                status_code=400,
+                detail="No se pudo determinar el volumen estándar del producto."
+            )
+
+        tara = float(payload.tara)
+        gramos_por_oz = (payload.peso_bruto - tara) / volumen_oz
 
     tiene_perfil_activo = db.query(models.ProductoPesajeConfig.id).filter(
         models.ProductoPesajeConfig.id_producto_almacen == payload.id_producto,
@@ -936,7 +963,7 @@ def crear_perfil_pesaje(
     try:
         if perfil_des:
             perfil_des.peso_bruto = payload.peso_bruto
-            perfil_des.tara = payload.tara
+            perfil_des.tara = tara
             perfil_des.gramos_por_oz = gramos_por_oz
             perfil_des.barcode = barcode
             perfil_des.pesable = 1
@@ -955,7 +982,7 @@ def crear_perfil_pesaje(
                 "id_producto": payload.id_producto,
                 "nombre_perfil": nombre_perfil,
                 "peso_bruto": payload.peso_bruto,
-                "tara": payload.tara,
+                "tara": tara,
                 "gramos_por_oz": gramos_por_oz,
                 "barcode": barcode,
                 "usuario_reg": current_user.usuario,
@@ -977,7 +1004,7 @@ def crear_perfil_pesaje(
         id=perfil_id,
         nombre_perfil=nombre_perfil,
         peso_bruto=float(payload.peso_bruto),
-        tara=float(payload.tara),
+        tara=tara,
         gramos_por_oz=gramos_por_oz,
         tolerancia_oz=_obtener_tolerancia_operativa_oz(1),
         barcode=barcode,
@@ -1096,28 +1123,35 @@ def listar_pesaje_config(
 
     rows.sort(key=lambda row: (row["nombre_producto"] or "", row["nombre_perfil"] or ""))
 
-    return [
-        schemas.PesajeConfigItem(
-            id=row["id_pesaje_config"],
-            id_producto=row["id_producto"],
-            nombre_producto=row["nombre_producto"],
-            codigo_producto=row["codigo_producto"],
-            id_categoria=row["id_categoria"],
-            nombre_categoria=row["nombre_categoria"],
-            volumen_oz=float(row["cantidad_detalle"]) if row["cantidad_detalle"] is not None else None,
-            peso_bruto=float(row["peso_bruto"]) if row["peso_bruto"] is not None else None,
-            tara=float(row["tara"]) if row["tara"] is not None else None,
-            gramos_por_oz=float(row["gramos_por_oz"]) if row["gramos_por_oz"] is not None else None,
-            pesable=row["pesable"],
-            barcode=row["barcode"],
-            nombre_perfil=row["nombre_perfil"],
-            medida=float(row["medida"]) if row["medida"] is not None else None,
-            nombre_unidad_medida=row["nombre_unidad_medida"],
-            nombre_unidad_medida_detalle=row["nombre_unidad_medida_detalle"],
-            nombre_ind_permite_comandar=row["nombre_ind_permite_comandar"],
+    salida = []
+    for row in rows:
+        es_vino = int(row["id_categoria"] or 0) == ID_CATEGORIA_VINOS and int(row["pesable"] or 0) == 1
+        tara = TARA_VINOS if es_vino else row["tara"]
+        gramos_por_oz = GRAMOS_POR_OZ_VINOS if es_vino else row["gramos_por_oz"]
+
+        salida.append(
+            schemas.PesajeConfigItem(
+                id=row["id_pesaje_config"],
+                id_producto=row["id_producto"],
+                nombre_producto=row["nombre_producto"],
+                codigo_producto=row["codigo_producto"],
+                id_categoria=row["id_categoria"],
+                nombre_categoria=row["nombre_categoria"],
+                volumen_oz=float(row["cantidad_detalle"]) if row["cantidad_detalle"] is not None else None,
+                peso_bruto=float(row["peso_bruto"]) if row["peso_bruto"] is not None else None,
+                tara=float(tara) if tara is not None else None,
+                gramos_por_oz=float(gramos_por_oz) if gramos_por_oz is not None else None,
+                pesable=row["pesable"],
+                barcode=row["barcode"],
+                nombre_perfil=row["nombre_perfil"],
+                medida=float(row["medida"]) if row["medida"] is not None else None,
+                nombre_unidad_medida=row["nombre_unidad_medida"],
+                nombre_unidad_medida_detalle=row["nombre_unidad_medida_detalle"],
+                nombre_ind_permite_comandar=row["nombre_ind_permite_comandar"],
+            )
         )
-        for row in rows
-    ]
+
+    return salida
 
 
 @app.put("/api/pesaje/config/{id_pesaje_config}", response_model=schemas.PesajeConfigItem)
@@ -1136,18 +1170,30 @@ def actualizar_pesaje_config(
         raise HTTPException(status_code=404, detail="Perfil de pesaje no encontrado.")
 
     if perfil.pesable == 1:
-        if payload.peso_bruto is None or payload.tara is None:
-            raise HTTPException(status_code=400, detail="peso_bruto y tara son obligatorios para un producto pesable.")
-        if payload.tara >= payload.peso_bruto:
-            raise HTTPException(status_code=400, detail="La tara no puede ser mayor o igual al peso bruto.")
+        es_vino = _es_producto_vino(db, perfil.id_producto_almacen)
 
-        volumen_oz = _obtener_onzas_por_botella_llena(db, perfil.id_producto_almacen)
-        if not volumen_oz:
-            raise HTTPException(status_code=400, detail="No se pudo determinar el volumen estándar del producto.")
+        if es_vino:
+            if payload.peso_bruto is None:
+                raise HTTPException(status_code=400, detail="peso_bruto es obligatorio para categoría VINOS.")
+            if payload.tara is not None and abs(float(payload.tara) - TARA_VINOS) > 1e-9:
+                raise HTTPException(status_code=400, detail="En categoría VINOS la tara debe ser 0.")
 
-        perfil.peso_bruto = payload.peso_bruto
-        perfil.tara = payload.tara
-        perfil.gramos_por_oz = (payload.peso_bruto - payload.tara) / volumen_oz
+            perfil.peso_bruto = payload.peso_bruto
+            perfil.tara = TARA_VINOS
+            perfil.gramos_por_oz = GRAMOS_POR_OZ_VINOS
+        else:
+            if payload.peso_bruto is None or payload.tara is None:
+                raise HTTPException(status_code=400, detail="peso_bruto y tara son obligatorios para un producto pesable.")
+            if payload.tara >= payload.peso_bruto:
+                raise HTTPException(status_code=400, detail="La tara no puede ser mayor o igual al peso bruto.")
+
+            volumen_oz = _obtener_onzas_por_botella_llena(db, perfil.id_producto_almacen)
+            if not volumen_oz:
+                raise HTTPException(status_code=400, detail="No se pudo determinar el volumen estándar del producto.")
+
+            perfil.peso_bruto = payload.peso_bruto
+            perfil.tara = payload.tara
+            perfil.gramos_por_oz = (payload.peso_bruto - payload.tara) / volumen_oz
     else:
         if payload.peso_bruto is not None or payload.tara is not None:
             raise HTTPException(
@@ -1171,6 +1217,10 @@ def actualizar_pesaje_config(
         {"id": id_pesaje_config}
     ).mappings().first()
 
+    es_vino = int(row["id_categoria"] or 0) == ID_CATEGORIA_VINOS and int(row["pesable"] or 0) == 1
+    tara = TARA_VINOS if es_vino else row["tara"]
+    gramos_por_oz = GRAMOS_POR_OZ_VINOS if es_vino else row["gramos_por_oz"]
+
     return schemas.PesajeConfigItem(
         id=row["id_pesaje_config"],
         id_producto=row["id_producto"],
@@ -1180,8 +1230,8 @@ def actualizar_pesaje_config(
         nombre_categoria=row["nombre_categoria"],
         volumen_oz=float(row["cantidad_detalle"]) if row["cantidad_detalle"] is not None else None,
         peso_bruto=float(row["peso_bruto"]) if row["peso_bruto"] is not None else None,
-        tara=float(row["tara"]) if row["tara"] is not None else None,
-        gramos_por_oz=float(row["gramos_por_oz"]) if row["gramos_por_oz"] is not None else None,
+        tara=float(tara) if tara is not None else None,
+        gramos_por_oz=float(gramos_por_oz) if gramos_por_oz is not None else None,
         pesable=row["pesable"],
         barcode=row["barcode"],
         nombre_perfil=row["nombre_perfil"],
@@ -1242,11 +1292,15 @@ def _agrupar_filas_producto_pesaje(rows) -> list[dict]:
             }
 
         if row["pesable"] == 1 and row["nombre_perfil"]:
+            es_vino = int(row["id_categoria"] or 0) == ID_CATEGORIA_VINOS
+            tara = TARA_VINOS if es_vino else row["tara"]
+            gramos_por_oz = GRAMOS_POR_OZ_VINOS if es_vino else row["gramos_por_oz"]
+
             # Si el perfil viene incompleto desde BD, se omite para no romper
             # la serialización del endpoint con valores None en campos float.
             if any(
                 row[campo] is None
-                for campo in ("peso_bruto", "tara", "gramos_por_oz", "tolerancia_oz")
+                for campo in ("peso_bruto", "tolerancia_oz")
             ):
                 logger.warning(
                     "Perfil de pesaje incompleto omitido. producto=%s perfil_id=%s",
@@ -1259,8 +1313,8 @@ def _agrupar_filas_producto_pesaje(rows) -> list[dict]:
                 "id": row["perfil_id"],
                 "nombre_perfil": row["nombre_perfil"],
                 "peso_bruto": float(row["peso_bruto"]),
-                "tara": float(row["tara"]),
-                "gramos_por_oz": float(row["gramos_por_oz"]),
+                "tara": float(tara),
+                "gramos_por_oz": float(gramos_por_oz),
                 "tolerancia_oz": _obtener_tolerancia_operativa_oz(row["pesable"]),
                 "barcode": row["barcode"]
             })

@@ -468,11 +468,27 @@ function abrirContenidoDummy(clave) {
 
 // Fix #27: Función centralizada para crear el HTML de un input de peso.
 // Soporta perfiles múltiples para seleccionar el modelo de botella por registro.
-function crearInputPeso(perfilesJson, removable = true) {
+const ID_CATEGORIA_VINOS = 6;
+
+function esCategoriaVinos(idCategoria) {
+    return parseInt(idCategoria, 10) === ID_CATEGORIA_VINOS;
+}
+
+function etiquetaDetalleCorta(idCategoria) {
+    return esCategoriaVinos(idCategoria) ? 'cop' : 'oz';
+}
+
+function etiquetaDetalleLarga(idCategoria) {
+    return esCategoriaVinos(idCategoria) ? 'copas' : 'oz';
+}
+
+function crearInputPeso(perfilesJson, removable = true, esVino = false) {
     const perfiles = JSON.parse(perfilesJson || '[]');
     let selectHTML = '';
     const soloLectura = !operativaPermitePaloteo;
     const disabledAttr = soloLectura ? ' disabled' : '';
+    const placeholder = esVino ? 'Ej: 2' : 'Ej: 950';
+    const step = esVino ? '0.5' : '1';
 
     if (perfiles.length > 1) {
         selectHTML = `<select class="bg-surface-container-low text-data-tabular text-primary-fixed border border-outline-variant rounded-md px-sm py-xs focus:outline-none select-perfil mr-sm cursor-pointer font-semibold"${disabledAttr}>`;
@@ -493,7 +509,7 @@ function crearInputPeso(perfilesJson, removable = true) {
         <div class="relative flex items-center item-peso-wrapper gap-sm">
             ${selectHTML}
             <div class="relative flex-1">
-                <input type="number" min="0" step="1" class="w-full bg-surface border border-outline-variant rounded-md pl-md pr-lg py-sm text-on-surface input-peso focus:border-error focus:outline-none focus:shadow-cyan-glow-focus font-data-tabular" placeholder="Ej: 950" required${disabledAttr}>
+                <input type="number" min="0" step="${step}" class="w-full bg-surface border border-outline-variant rounded-md pl-md pr-lg py-sm text-on-surface input-peso focus:border-error focus:outline-none focus:shadow-cyan-glow-focus font-data-tabular" placeholder="${placeholder}" required${disabledAttr}>
                 ${removeButtonHtml}
             </div>
         </div>
@@ -504,11 +520,12 @@ function crearInputPeso(perfilesJson, removable = true) {
 // (item-peso-wrapper, input-peso, select-perfil) para ser compatible con
 // leerValoresCard/aplicarValoresCard/recalcularTarjeta, pero con botones ±
 // para ajuste rápido en la tabla.
-function crearInputPesoCompacto(perfilesJson, removable = true) {
+function crearInputPesoCompacto(perfilesJson, removable = true, esVino = false) {
     const perfiles = JSON.parse(perfilesJson || '[]');
     let selectHTML = '';
     const soloLectura = !operativaPermitePaloteo;
     const disabledAttr = soloLectura ? ' disabled' : '';
+    const step = esVino ? '0.5' : '1';
 
     if (perfiles.length > 1) {
         selectHTML = `<select class="select-perfil bg-surface-container-low text-on-surface border border-outline-variant rounded px-1 py-1 text-[10px] focus:outline-none cursor-pointer"${disabledAttr}>`;
@@ -529,7 +546,7 @@ function crearInputPesoCompacto(perfilesJson, removable = true) {
     return `
         <div class="item-peso-wrapper flex items-center gap-1">
             ${selectHTML}
-            <input type="number" min="0" step="1" class="input-peso w-14 text-center bg-surface border border-outline-variant rounded px-1 py-1 text-on-surface focus:border-primary-fixed-dim focus:outline-none transition-colors" placeholder="0"${disabledAttr}>
+            <input type="number" min="0" step="${step}" class="input-peso w-14 text-center bg-surface border border-outline-variant rounded px-1 py-1 text-on-surface focus:border-primary-fixed-dim focus:outline-none transition-colors" placeholder="0"${disabledAttr}>
             <button type="button" class="stock-btn-dec-peso${claseBotonAjustePeso} flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded text-on-surface hover:bg-surface-container-highest transition-colors font-semibold leading-none" title="Restar"${disabledAttr}>−</button>
             <button type="button" class="stock-btn-inc-peso${claseBotonAjustePeso} flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded text-on-surface hover:bg-surface-container-highest transition-colors font-semibold leading-none" title="Sumar"${disabledAttr}>+</button>
             ${removeButtonHtml}
@@ -537,13 +554,12 @@ function crearInputPesoCompacto(perfilesJson, removable = true) {
     `;
 }
 
-// Paso de ± en gramos equivalente a media onza del perfil seleccionado
-// (consistente con el redondeo operativo de recalcularTarjeta). Si no hay
-// perfil resoluble, usa un paso fijo conservador de 5 g.
+// Paso de ± en unidad de detalle (gramos o copas) equivalente al medio paso
+// operativo del perfil seleccionado. Si no hay perfil resoluble, usa 1.
 function calcularStepPesoGramos(perfiles, select) {
     const { perfil } = resolverPerfilSeleccionado(perfiles, select);
     const groz = perfil ? parseFloat(perfil.gramos_por_oz) : NaN;
-    if (isNaN(groz) || groz <= 0) return 5;
+    if (isNaN(groz) || groz <= 0) return 1;
     return Math.max(1, Math.round(groz / 2));
 }
 
@@ -721,7 +737,7 @@ function mostrarDialogoConfirmacion({ titulo, mensaje }) {
 }
 
 /** Muestra el modal de nuevo modelo y resuelve con los datos cuando el usuario confirma, o null si cancela. */
-function abrirModalModelo(nombreProducto, perfilBase, volumenOz, forzarEstandar = false) {
+function abrirModalModelo(nombreProducto, perfilBase, volumenOz, forzarEstandar = false, esVino = false) {
     return new Promise((resolve) => {
         // Subtítulo con nombre del producto
         modeloBotellaSubtit.textContent = nombreProducto;
@@ -734,14 +750,19 @@ function abrirModalModelo(nombreProducto, perfilBase, volumenOz, forzarEstandar 
             mbNombreHint.classList.toggle('hidden', !forzarEstandar);
         }
         mbPesoBruto.value = perfilBase ? perfilBase.peso_bruto : '';
-        mbTara.value      = perfilBase ? perfilBase.tara : '';
+        mbTara.value      = esVino ? '0' : (perfilBase ? perfilBase.tara : '');
         mbBarcode.value   = perfilBase ? (perfilBase.barcode || '') : '';
+        mbTara.readOnly = esVino;
         mbError.classList.add('hidden');
         mbError.textContent = '';
 
         function actualizarGramosOz() {
             const pesoBruto = parseFloat(mbPesoBruto.value);
             const tara = parseFloat(mbTara.value);
+            if (esVino && !Number.isNaN(pesoBruto)) {
+                mbGramosOz.value = '1.000000';
+                return;
+            }
             if (!volumenOz || Number.isNaN(pesoBruto) || Number.isNaN(tara)) {
                 mbGramosOz.value = '';
                 return;
@@ -761,6 +782,7 @@ function abrirModalModelo(nombreProducto, perfilBase, volumenOz, forzarEstandar 
         function cerrar(resultado) {
             modeloBotellaDialog.classList.add('hidden');
             mbNombre.readOnly = false;
+            mbTara.readOnly = false;
             if (mbNombreHint) {
                 mbNombreHint.classList.add('hidden');
             }
@@ -775,12 +797,15 @@ function abrirModalModelo(nombreProducto, perfilBase, volumenOz, forzarEstandar 
         function onConfirmar() {
             const nombre    = forzarEstandar ? PESAJE_NOMBRE_PERFIL_DEFAULT : mbNombre.value.trim().toUpperCase();
             const pesoBruto = parseFloat(mbPesoBruto.value);
-            const tara      = parseFloat(mbTara.value);
+            const tara      = esVino ? 0 : parseFloat(mbTara.value);
             const barcode   = mbBarcode.value.trim();
 
             if (!nombre) return mostrarError('El nombre del modelo es obligatorio.');
             if ([pesoBruto, tara].some(Number.isNaN)) {
                 return mostrarError('Todos los valores numéricos deben ser válidos.');
+            }
+            if (esVino && tara !== 0) {
+                return mostrarError('En categoría VINOS la tara debe ser 0.');
             }
 
             cerrar({ nombre, pesoBruto, tara, barcode: barcode || null });
@@ -1145,6 +1170,7 @@ function crearFilaPerfilPesaje(producto, perfil) {
     const row = document.createElement('div');
 
     const esPesable = producto.pesable === 1;
+    const esVino = esCategoriaVinos(producto.id_categoria);
     const puedeEliminar = esPesable && producto.perfiles.length > 1;
     const esIncompleto = esPesable && (perfil.peso_bruto === null || perfil.tara === null);
 
@@ -1172,16 +1198,16 @@ function crearFilaPerfilPesaje(producto, perfil) {
         ` : ''}
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-sm ${esPesable ? '' : 'hidden'}">
             <div>
-                <label class="text-[10px] font-label-mono uppercase tracking-widest text-on-surface-variant block mb-xs">Peso bruto (g)</label>
+                <label class="text-[10px] font-label-mono uppercase tracking-widest text-on-surface-variant block mb-xs">Peso bruto (${esVino ? 'copas' : 'g'})</label>
                 <input type="number" min="0" step="0.01" class="pesaje-input-peso-bruto w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface font-data-tabular" value="${perfil.peso_bruto ?? ''}">
             </div>
             <div>
-                <label class="text-[10px] font-label-mono uppercase tracking-widest text-on-surface-variant block mb-xs">Tara (g)</label>
-                <input type="number" min="0" step="0.01" class="pesaje-input-tara w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface font-data-tabular" value="${perfil.tara ?? ''}">
+                <label class="text-[10px] font-label-mono uppercase tracking-widest text-on-surface-variant block mb-xs">Tara (${esVino ? 'constante' : 'g'})</label>
+                <input type="number" min="0" step="0.01" class="pesaje-input-tara w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface font-data-tabular" value="${esVino ? 0 : (perfil.tara ?? '')}" ${esVino ? 'readonly' : ''}>
             </div>
             <div>
                 <label class="text-[10px] font-label-mono uppercase tracking-widest text-on-surface-variant block mb-xs">gr/oz</label>
-                <input type="text" readonly class="pesaje-input-gramos-oz w-full bg-surface-container border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface-variant font-data-tabular cursor-not-allowed" value="${perfil.gramos_por_oz ?? ''}">
+                <input type="text" readonly class="pesaje-input-gramos-oz w-full bg-surface-container border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface-variant font-data-tabular cursor-not-allowed" value="${esVino ? 1 : (perfil.gramos_por_oz ?? '')}">
             </div>
         </div>
         <div>
@@ -1209,6 +1235,10 @@ function crearFilaPerfilPesaje(producto, perfil) {
         const actualizarGramosOz = () => {
             const pesoBruto = parseFloat(inputPesoBruto.value);
             const tara = parseFloat(inputTara.value);
+            if (esVino) {
+                inputGramosOz.value = '1.000000';
+                return;
+            }
             if (!producto.volumen_oz || Number.isNaN(pesoBruto) || Number.isNaN(tara)) {
                 inputGramosOz.value = '';
                 return;
@@ -1224,9 +1254,14 @@ function crearFilaPerfilPesaje(producto, perfil) {
         const body = { barcode: inputBarcode.value.trim() || null };
         if (esPesable) {
             body.peso_bruto = parseFloat(inputPesoBruto.value);
-            body.tara = parseFloat(inputTara.value);
+            body.tara = esVino ? 0 : parseFloat(inputTara.value);
             if (Number.isNaN(body.peso_bruto) || Number.isNaN(body.tara)) {
                 errorEl.textContent = 'Peso bruto y tara deben ser numéricos.';
+                errorEl.classList.remove('hidden');
+                return;
+            }
+            if (esVino && body.tara !== 0) {
+                errorEl.textContent = 'En categoría VINOS la tara debe ser 0.';
                 errorEl.classList.remove('hidden');
                 return;
             }
@@ -1316,7 +1351,8 @@ async function agregarModeloPesaje(producto) {
         producto.nombre_producto,
         perfilBase,
         producto.volumen_oz,
-        perfilesReales.length === 0
+        perfilesReales.length === 0,
+        esCategoriaVinos(producto.id_categoria)
     );
     if (!datos) return; // usuario canceló
 
@@ -2072,6 +2108,8 @@ function crearTarjetaProductoElement(p, scope = 'inv') {
     const sufijoScope = esCaptura ? `cap-${p.id_producto}` : `${p.id_producto}`;
     const pesosContainerId = esCaptura ? `pesos-cap-${p.id_producto}` : `pesos-${p.id_producto}`;
     const btnAddPesoClass = esCaptura ? 'btn-add-peso-captura' : 'btn-add-peso';
+    const esVino = esCategoriaVinos(p.id_categoria);
+    const unidadDetalle = etiquetaDetalleCorta(p.id_categoria);
 
     const div = document.createElement('div');
     div.className = "bg-surface-container border border-outline-variant rounded-md p-md shadow-lg product-card transition-colors focus-within:border-primary-fixed-dim chassis-panel";
@@ -2083,6 +2121,7 @@ function crearTarjetaProductoElement(p, scope = 'inv') {
     div.dataset.pesable = p.pesable || 0;
     div.dataset.nombre = p.nombre;
     div.dataset.categoria = p.categoria_nombre || '';
+    div.dataset.esVino = esVino ? '1' : '0';
     const perfilesJson = JSON.stringify(p.perfiles || []);
     const perfilBase = (p.perfiles && p.perfiles.length > 0) ? p.perfiles[0] : null;
     div.dataset.perfiles = perfilesJson;
@@ -2112,7 +2151,7 @@ function crearTarjetaProductoElement(p, scope = 'inv') {
                     <div class="flex items-center gap-sm sm:gap-md text-on-surface min-w-0">
                         <span class="w-16 text-right">${parseFloat(p.stock_ideal_unidades).toFixed(0)} bot</span>
                         <span class="text-outline-variant">|</span>
-                        <span class="w-20 text-right">${parseFloat(p.stock_ideal_onzas).toFixed(2)} oz</span>
+                        <span class="w-20 text-right">${parseFloat(p.stock_ideal_onzas).toFixed(2)} ${unidadDetalle}</span>
                     </div>
                 </div>
             </div>
@@ -2129,7 +2168,7 @@ function crearTarjetaProductoElement(p, scope = 'inv') {
                     <div class="flex items-center gap-sm sm:gap-md" style="color: var(--semantic-action)">
                         <span class="w-16 text-right"><span id="val-paq-${sufijoScope}">0</span> bot</span>
                         <span class="text-outline-variant">|</span>
-                        <span class="w-20 text-right"><span id="val-det-${sufijoScope}">0.00</span> oz</span>
+                        <span class="w-20 text-right"><span id="val-det-${sufijoScope}">0.00</span> ${unidadDetalle}</span>
                     </div>
                 </div>
             </div>
@@ -2160,9 +2199,9 @@ function crearTarjetaProductoElement(p, scope = 'inv') {
 
             ${p.pesable === 1 ? `
             <div class="border-t border-outline-variant pt-md sm:border-t-0 sm:border-l sm:pt-0 sm:pl-md">
-                <label class="block text-label-mono font-label-mono text-on-surface-variant mb-xs tracking-widest uppercase">Peso</label>
+                <label class="block text-label-mono font-label-mono text-on-surface-variant mb-xs tracking-widest uppercase">${esVino ? 'Copas' : 'Peso'}</label>
                 <div class="pesos-container grid grid-cols-1 gap-sm" id="${pesosContainerId}">
-                    ${crearInputPeso(perfilesJson, false)}
+                    ${crearInputPeso(perfilesJson, false, esVino)}
                 </div>
                 <div class="mt-sm flex flex-wrap gap-sm">
                     <button type="button" data-id-producto="${p.id_producto}" class="${btnAddPesoClass} btn-action w-full sm:w-auto text-label-mono font-semibold flex items-center justify-center sm:justify-start gap-xs transition-colors uppercase tracking-widest rounded-sharp border px-sm py-xs"${!operativaPermitePaloteo ? ' disabled' : ''}>
@@ -2234,12 +2273,14 @@ function crearFilaPaloteo3(producto) {
     const perfilBase = perfiles.length > 0 ? perfiles[0] : null;
     const idealUnidades = parseFloat(producto.stock_ideal_unidades) || 0;
     const esPesable = parseInt(producto.pesable, 10) === 1;
+    const esVino = esCategoriaVinos(producto.id_categoria);
     const toleranciaOz = perfilBase ? (parseFloat(perfilBase.tolerancia_oz) || 0) : 0;
     const perfilesJson = JSON.stringify(perfiles);
 
     row.dataset.idealUnidades = String(idealUnidades);
     row.dataset.categoria = String(producto.categoria_nombre || '');
     row.dataset.pesable = esPesable ? '1' : '0';
+    row.dataset.esVino = esVino ? '1' : '0';
     row.dataset.tolerancia = String(toleranciaOz);
     row.dataset.perfiles = perfilesJson;
     row.dataset.paqsist = String(idealUnidades);
@@ -2271,9 +2312,9 @@ function crearFilaPaloteo3(producto) {
                 ${esPesable ? `
                 <!-- Pesos (una o más botellas abiertas) con botones +/- y selector de perfil si aplica -->
                 <div class="flex items-center gap-1">
-                    <span class="material-symbols-outlined text-on-surface-variant" style="font-size:1.1rem;" title="Peso">balance</span>
+                    <span class="material-symbols-outlined text-on-surface-variant" style="font-size:1.1rem;" title="${esVino ? 'Copas' : 'Peso'}">balance</span>
                     <div class="pesos-container flex flex-col gap-1" id="stock-pesos-${producto.id_producto}">
-                        ${crearInputPesoCompacto(perfilesJson, false)}
+                        ${crearInputPesoCompacto(perfilesJson, false, esVino)}
                     </div>
                     <button type="button" class="stock-btn-add-peso flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded text-on-surface hover:bg-surface-container-highest transition-colors" title="Agregar botella abierta"${disabledAttrFila}>
                         <span class="material-symbols-outlined" style="font-size:1rem;">add</span>
@@ -2820,10 +2861,11 @@ function syncTodasFilasPaloteo3ConInventario() {
 window.agregarInputPeso = function(idProducto, perfilesJson) {
     const card = document.querySelector(`#lista-productos .product-card[data-id="${idProducto}"]`);
     const perfiles = perfilesJson || (card ? card.dataset.perfiles : '[]');
+    const esVino = card ? esCategoriaVinos(card.dataset.idCategoria) : false;
     const container = document.getElementById(`pesos-${idProducto}`);
     if (!container) return;
     const inputWrapper = document.createElement('div');
-    inputWrapper.innerHTML = crearInputPeso(perfiles, true);
+    inputWrapper.innerHTML = crearInputPeso(perfiles, true, esVino);
     container.appendChild(inputWrapper.firstElementChild);
 }
 
@@ -2834,9 +2876,10 @@ function agregarInputPesoEnCard(card) {
     const containerId = esCaptura ? `pesos-cap-${idProducto}` : `pesos-${idProducto}`;
     const container = card.querySelector(`#${containerId}`) || document.getElementById(containerId);
     if (!container) return;
+    const esVino = esCategoriaVinos(card.dataset.idCategoria);
 
     const inputWrapper = document.createElement('div');
-    inputWrapper.innerHTML = crearInputPeso(card.dataset.perfiles || '[]', true);
+    inputWrapper.innerHTML = crearInputPeso(card.dataset.perfiles || '[]', true, esVino);
     container.appendChild(inputWrapper.firstElementChild);
 }
 
@@ -2895,6 +2938,7 @@ function validarTarjeta(card) {
     };
 
     const pesable = parseInt(card.dataset.pesable, 10) === 1;
+    const esVino = esCategoriaVinos(card.dataset.idCategoria);
     const perfiles = JSON.parse(card.dataset.perfiles || '[]');
     const onzasMax = parseFloat(card.dataset.onzasMax) || 0;
 
@@ -2930,7 +2974,7 @@ function validarTarjeta(card) {
             const nombrePerfil = perfil.nombre_perfil || `Botella ${idx + 1}`;
 
             // Error duro: peso supera el peso bruto de la botella
-            if (!isNaN(pesoBruto) && pesoBruto > 0 && pesoIngresado > pesoBruto) {
+            if (!esVino && !isNaN(pesoBruto) && pesoBruto > 0 && pesoIngresado > pesoBruto) {
                 resultado.erroresPeso.push({ pesoIngresado, pesoBruto, nombrePerfil });
             }
 
@@ -2963,17 +3007,20 @@ async function ejecutarValidacionesGlobales(cards) {
 
     cards.forEach(card => {
         const nombre = card.dataset.nombre;
+        const esVino = esCategoriaVinos(card.dataset.idCategoria);
+        const unidadDetalle = etiquetaDetalleLarga(card.dataset.idCategoria);
         const res = validarTarjeta(card);
-        if (res.erroresPeso.length > 0) erroresPeso.push({ nombre, detalles: res.erroresPeso });
-        if (res.erroresCapacidad.length > 0) erroresCapacidad.push({ nombre, detalles: res.erroresCapacidad });
+        if (res.erroresPeso.length > 0) erroresPeso.push({ nombre, esVino, detalles: res.erroresPeso });
+        if (res.erroresCapacidad.length > 0) erroresCapacidad.push({ nombre, unidadDetalle, detalles: res.erroresCapacidad });
         if (res.camposVacios.length > 0) camposVaciosPorCard.push({ card, nombre, campos: res.camposVacios });
     });
 
     // 1. Bloqueo duro: peso > peso_bruto
     if (erroresPeso.length > 0) {
         const lista = erroresPeso.map(e => {
+            const unidad = e.esVino ? 'cop' : 'g';
             const detalles = e.detalles.map(d =>
-                `  • ${d.nombrePerfil}: ingresado ${d.pesoIngresado.toFixed(1)} g, máximo ${d.pesoBruto.toFixed(1)} g`
+                `  • ${d.nombrePerfil}: ingresado ${d.pesoIngresado.toFixed(1)} ${unidad}, máximo ${d.pesoBruto.toFixed(1)} ${unidad}`
             ).join('\n');
             return `${e.nombre}:\n${detalles}`;
         }).join('\n\n');
@@ -2989,7 +3036,7 @@ async function ejecutarValidacionesGlobales(cards) {
     if (erroresCapacidad.length > 0) {
         const lista = erroresCapacidad.map(e => {
             const detalles = e.detalles.map(d =>
-                `  • ${d.nombrePerfil}: ${d.onzasCalculadas.toFixed(2)} oz (máx. ${d.onzasMaximas.toFixed(2)} oz)`
+                `  • ${d.nombrePerfil}: ${d.onzasCalculadas.toFixed(2)} ${e.unidadDetalle} (máx. ${d.onzasMaximas.toFixed(2)} ${e.unidadDetalle})`
             ).join('\n');
             return `${e.nombre}:\n${detalles}`;
         }).join('\n\n');
@@ -4150,7 +4197,11 @@ if (stockList) {
             const container = row.querySelector('.pesos-container');
             if (container) {
                 const wrapper = document.createElement('div');
-                wrapper.innerHTML = crearInputPesoCompacto(row.dataset.perfiles || '[]', true);
+                wrapper.innerHTML = crearInputPesoCompacto(
+                    row.dataset.perfiles || '[]',
+                    true,
+                    esCategoriaVinos(row.dataset.idCategoria)
+                );
                 container.appendChild(wrapper.firstElementChild);
             }
             return;
@@ -4360,9 +4411,9 @@ btnEnviarInventario.addEventListener('click', async () => {
 // ==========================================
 
 // Función auxiliar para pintar las diferencias (Verde/Roja/Amarillo con Electric Industrial)
-function formatearDiferencia(diferencia, isOz = false, toleranciaOz = 0) {
-    const diferenciaOperativa = isOz ? (cuantizarDeltaOnzas(diferencia, toleranciaOz) ?? 0) : diferencia;
-    const sufijo = isOz ? "oz" : "bot";
+function formatearDiferencia(diferencia, isDetalle = false, toleranciaDetalle = 0, unidadDetalle = 'oz') {
+    const diferenciaOperativa = isDetalle ? (cuantizarDeltaOnzas(diferencia, toleranciaDetalle) ?? 0) : diferencia;
+    const sufijo = isDetalle ? unidadDetalle : 'bot';
 
     // Tolerancia para decimales (evitar ruido por redondeos)
     if (Math.abs(diferenciaOperativa) < 0.01) {
@@ -4374,7 +4425,7 @@ function formatearDiferencia(diferencia, isOz = false, toleranciaOz = 0) {
         return `<span class="text-data-tabular font-semibold" style="color: var(--semantic-danger)">${val} ${sufijo}</span>`;
     }
 
-    const val = isOz ? diferenciaOperativa.toFixed(2) : Math.round(diferenciaOperativa);
+    const val = isDetalle ? diferenciaOperativa.toFixed(2) : Math.round(diferenciaOperativa);
     return `<span class="text-data-tabular font-semibold" style="color: var(--semantic-warning)">+${val} ${sufijo}</span>`;
 }
 
@@ -4403,6 +4454,7 @@ function recalcularTarjeta(card) {
     if (pesable === 1) {
         const perfiles = JSON.parse(card.dataset.perfiles || '[]');
         const tolerancia = parseFloat(card.dataset.tolerancia) || 0;
+        const unidadDetalle = etiquetaDetalleCorta(card.dataset.idCategoria);
         const inputsPeso = card.querySelectorAll('.input-peso');
         const spanDet = card.querySelector(`#val-det-${scope}`) || document.getElementById(`val-det-${scope}`);
         const difDetSpan = card.querySelector(`#dif-det-${scope}`) || document.getElementById(`dif-det-${scope}`);
@@ -4450,7 +4502,7 @@ function recalcularTarjeta(card) {
         card.dataset.pesoTotalGramos = hayPesosValidos ? String(pesoTotalGramos) : '';
 
         if (spanDet) spanDet.textContent = detBarraOperativo.toFixed(2);
-        if (difDetSpan) difDetSpan.innerHTML = formatearDiferencia(difDetOperativoBase, true, tolerancia);
+        if (difDetSpan) difDetSpan.innerHTML = formatearDiferencia(difDetOperativoBase, true, tolerancia, unidadDetalle);
     }
 }
 
