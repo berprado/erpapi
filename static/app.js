@@ -968,7 +968,7 @@ function pesajeProductoTieneIncompleto(producto) {
     const perfilesReales = pesajePerfilesReales(producto);
     if (perfilesReales.length === 0) return true;
     return perfilesReales.some(
-        (p) => p.peso_bruto === null || p.tara === null
+        (p) => p.peso_bruto === null || p.tara === null || p.peso_bruto <= 0 || p.gramos_por_oz <= 0
     );
 }
 
@@ -1172,7 +1172,7 @@ function crearFilaPerfilPesaje(producto, perfil) {
     const esPesable = producto.pesable === 1;
     const esVino = esCategoriaVinos(producto.id_categoria);
     const puedeEliminar = esPesable && producto.perfiles.length > 1;
-    const esIncompleto = esPesable && (perfil.peso_bruto === null || perfil.tara === null);
+    const esIncompleto = esPesable && (perfil.peso_bruto === null || perfil.tara === null || perfil.peso_bruto <= 0 || perfil.gramos_por_oz <= 0);
 
     row.className = esIncompleto
         ? 'border rounded-md p-sm space-y-xs'

@@ -383,9 +383,10 @@ def _procesar_items_paloteo(
                         detail=f"Perfil de botella inválido para producto {item.id_producto}."
                     )
 
-                if (not es_vino) and any(
-                    valor is None
-                    for valor in (perfil.gramos_por_oz, perfil.tara, perfil.peso_bruto)
+                if (not es_vino) and (
+                    perfil.tara is None
+                    or perfil.peso_bruto is None or perfil.peso_bruto <= 0
+                    or perfil.gramos_por_oz is None or perfil.gramos_por_oz <= 0
                 ):
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
@@ -1297,11 +1298,18 @@ def _agrupar_filas_producto_pesaje(rows) -> list[dict]:
             gramos_por_oz = GRAMOS_POR_OZ_VINOS if es_vino else row["gramos_por_oz"]
 
             # Si el perfil viene incompleto desde BD, se omite para no romper
-            # la serialización del endpoint con valores None en campos float.
-            if any(
-                row[campo] is None
-                for campo in ("peso_bruto", "tolerancia_oz")
-            ):
+            # la serialización del endpoint con valores None/cero en campos float.
+            # peso_bruto aplica a ambos (vino y no-vino); tara/gramos_por_oz solo
+            # importan para no-vino, ya que en vino estan siempre forzados arriba.
+            incompleto = (
+                row["tolerancia_oz"] is None
+                or row["peso_bruto"] is None or row["peso_bruto"] <= 0
+                or ((not es_vino) and (
+                    row["tara"] is None
+                    or row["gramos_por_oz"] is None or row["gramos_por_oz"] <= 0
+                ))
+            )
+            if incompleto:
                 logger.warning(
                     "Perfil de pesaje incompleto omitido. producto=%s perfil_id=%s",
                     prod_id,
