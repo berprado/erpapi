@@ -1202,8 +1202,7 @@ def actualizar_pesaje_config(
                 detail="Solo se puede editar el código de barras en productos no pesables."
             )
 
-    if payload.barcode is not None:
-        perfil.barcode = payload.barcode.strip() or None
+    perfil.barcode = payload.barcode.strip() if payload.barcode else None
 
     db.commit()
 

@@ -47,3 +47,4 @@ querys/*
 !querys/fix_trigger_alm_producto_after_insert.sql
 !querys/fix_trigger_alm_producto_after_update.sql
 !querys/fix_12_productos_atascados_produccion.sql
+!querys/fix_barcode_vacio_a_null.sql

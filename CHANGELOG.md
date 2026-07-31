@@ -4,6 +4,9 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.97
+- Corrige `PUT /api/pesaje/config/{id}`: el chequeo `payload.barcode is not None` nunca aplicaba el guardado cuando el frontend mandaba `barcode: null` (vaciar el campo), porque Pydantic no distingue "campo omitido" de "campo explicito en null". Guardar un codigo de barras vacio parecia funcionar (la PWA mostraba exito) pero no persistia. Detectado al intentar limpiar manualmente 5 filas legacy con `barcode=''` en `test_pos`/produccion editando y guardando desde la PWA sin exito.
+
 ## 10.96
 - Documentacion: se agrega en README.md ("Triggers de base de datos") y CLAUDE.md el rol de `trg_alm_producto_after_insert`/`trg_alm_producto_after_update` (sincronizan `app_producto_pesaje_config_api` desde `alm_producto`, viven fuera del repo), con la fuente de verdad en `querys/fix_trigger_alm_producto_after_insert.sql`/`fix_trigger_alm_producto_after_update.sql`. Sin cambios de codigo.
 
