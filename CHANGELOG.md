@@ -4,6 +4,9 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.96
+- Documentacion: se agrega en README.md ("Triggers de base de datos") y CLAUDE.md el rol de `trg_alm_producto_after_insert`/`trg_alm_producto_after_update` (sincronizan `app_producto_pesaje_config_api` desde `alm_producto`, viven fuera del repo), con la fuente de verdad en `querys/fix_trigger_alm_producto_after_insert.sql`/`fix_trigger_alm_producto_after_update.sql`. Sin cambios de codigo.
+
 ## 10.95
 - Corrige `ReferenceError: isOz is not defined` en `formatearDiferencia()` (PALOTEO, captura en tiempo real): al renombrar el parámetro `isOz` -> `isDetalle` en v10.93 (excepción VINOS) quedó una referencia sin migrar en la rama de diferencia negativa (faltante/shortage). Rompía el cálculo de diferencias en vivo para **cualquier producto** con diferencia negativa (no era específico de VINOS), reportado por el usuario probando en `test_pos` tras el deploy de v10.94.
 

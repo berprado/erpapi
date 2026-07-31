@@ -38,6 +38,12 @@ dump_*.sql
 # Archivos de log
 *.log
 
-# Querys de MySQL
-querys/
+# Querys de MySQL: por defecto no se versionan (dumps/exports ad-hoc,
+# backups pesados) -- pero los scripts de DDL puntuales que documentamos
+# como fuente de verdad (triggers, fixes de datos) si se versionan.
+querys/*
 *.sql
+!querys/ddl_app_login_auditoria_api.sql
+!querys/fix_trigger_alm_producto_after_insert.sql
+!querys/fix_trigger_alm_producto_after_update.sql
+!querys/fix_12_productos_atascados_produccion.sql

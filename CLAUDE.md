@@ -37,7 +37,7 @@ There is a pytest suite (`pytest.ini` sets `testpaths = tests`; install with `pi
 - `config.py` — `pydantic-settings` `Settings` loaded from `.env`. Selects DB credentials based on `APP_ENV` (`test` = WAMP local, `production` = remote) via `settings.database_url`. Also owns paloteo "barra operativa" config (`PALOTEO_DEFAULT_BARRA_ID`, `PALOTEO_SELECTOR_ENABLED`, `PALOTEO_ALLOWED_BARRAS`).
 - `database.py` — SQLAlchemy engine/session setup and the `get_db()` FastAPI dependency.
 - `static/` — the PWA frontend (vanilla JS, Tailwind, service worker). Served at `/` with assets under `/assets`. Views: PALOTEO 1/2/3, REPORTE, PESAJE (admin-only). `sw.js` caches static assets cache-first and `/api/*` network-first.
-- `querys/` — ad-hoc SQL dumps/snapshots, not application code.
+- `querys/` — mostly ad-hoc SQL dumps/snapshots, not application code; also holds versioned DDL that must be applied manually per environment (DB triggers, one-off data fixes — e.g. `fix_trigger_alm_producto_after_insert.sql`, `fix_trigger_alm_producto_after_update.sql`).
 - `documentos/` — design notes and process docs for specific features (paloteo storage, ajustes flow, etc).
 
 ### Key domain logic
@@ -49,6 +49,7 @@ There is a pytest suite (`pytest.ini` sets `testpaths = tests`; install with `pi
 - **`tolerancia_oz` column is vestigial**: `app_producto_pesaje_config_api.tolerancia_oz` still exists, is mapped in `models.py`, is selected by the product queries, and is exposed in the `PerfilPesaje` schema — but its stored value is **never used**. The API overwrites it with `_obtener_tolerancia_operativa_oz()` before responding; the column survives only as a `None`-check guard for incomplete profiles. It is a leftover of the pre-v10.39 per-category scheme. Do not read tolerance from the DB — call the helper.
 - **Roles**: admin-only endpoints (Pesaje module) are gated by `_es_usuario_administrador`, checking `seg_permiso`/`seg_rol` for `ROLE_ADMIN`. Login response includes `is_admin` so the frontend can hide the Pesaje menu entry.
 - **Soft deletes**: most tables use `estado` (`'HAB'`/`'DES'`) rather than hard deletes; pesaje profile deletion is blocked if it's the last active profile for a product.
+- **Pesaje config is synced from `alm_producto` by DB triggers, not by this app**: `trg_alm_producto_after_insert`/`trg_alm_producto_after_update` on `alm_producto` (MySQL, external to this repo — no ORM/migration tracks them) keep `app_producto_pesaje_config_api.pesable`/`estado` aligned with `ind_permite_comandar`/`estado`, since the API has no hook into catalog changes made by the ERP/POS. Current definitions live in `querys/fix_trigger_alm_producto_after_insert.sql` and `querys/fix_trigger_alm_producto_after_update.sql` (source of truth — reapply manually if an environment is rebuilt). Full rationale, including the "phantom row" pitfall these fixes address, in `README.md` ("Triggers de base de datos") and `TODO.md` ("conflictos excepcionales de pesable").
 
 ## Mandatory rule: PWA cache busting
 
@@ -63,4 +64,4 @@ Do this for every change, even backend-only ones, per the instructions file.
 
 ## Environments
 
-`APP_ENV` in `.env` selects the DB: `test` → WAMP local (`TEST_DB_*`), `production` → remote (`PROD_DB_*`). `SECRET_KEY` must be ≥32 chars (validated in `config.py`).
+`APP_ENV` in `.env` selects the DB: `test` → WAMP local (`TEST_DB_*`), `test_pos` → remote POS-connected test tunnel (`TEST_POS_DB_*`, LocalToNet), `production` → remote (`PROD_DB_*`, also a LocalToNet tunnel today — see `documentos/despliegue_seenode.md`). `SECRET_KEY` must be ≥32 chars (validated in `config.py`).

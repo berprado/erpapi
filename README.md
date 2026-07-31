@@ -252,6 +252,19 @@ ORDER BY a.nombre;
 
 Nota operativa: el valor `Estándar` se usa de forma intencional y centralizada en backend/frontend para coincidir con el default de la columna `app_producto_pesaje_config_api.nombre_perfil` y evitar variantes como `ESTÁNDAR`.
 
+### Triggers de base de datos: sincronizacion catalogo -> pesaje
+
+Esta API no tiene ningun hook sobre altas/bajas de `alm_producto` (lo gestiona el ERP/POS), asi que dos triggers de MySQL sobre esa tabla mantienen `app_producto_pesaje_config_api` (y la tabla legacy `app_producto_pesaje_config`, no usada por esta API) sincronizada con el catalogo. **Viven en la base de datos de cada entorno, fuera de este repo** — no hay migraciones versionadas de DB; la definicion actual se guarda en `querys/` como fuente de verdad y hay que re-aplicarla manualmente si algun entorno se recrea:
+
+- **`trg_alm_producto_after_insert`** (AFTER INSERT en `alm_producto`): al crear un producto, inserta una fila base en `app_producto_pesaje_config_api` con `pesable` derivado de `ind_permite_comandar=71` **y** de que la categoria no este en `CATEGORIAS_EXCLUIDAS_PESAJE` (la misma constante que usa `main.py`), `nombre_perfil='Estándar'` (default de columna) y `peso_bruto`/`tara`/`gramos_por_oz` en `NULL`. Un producto pesable nuevo cae asi directo en la pestaña INCOMPLETOS, visible y editable desde el primer momento.
+- **`trg_alm_producto_after_update`** (AFTER UPDATE en `alm_producto`): sincroniza `estado` (HAB/DES) y re-evalua `pesable` con el mismo criterio cada vez que cambia el catalogo (ej. se habilita/deshabilita un producto, o cambia `ind_permite_comandar`). Solo promueve `pesable` de `0` a `1` si el perfil ya tiene `peso_bruto` y `gramos_por_oz > 0` reales cargados; en cualquier otro caso deja `pesable` como estaba — nunca auto-habilita un perfil con datos invalidos.
+
+Definicion actual, aplicada y verificada (`SHOW CREATE TRIGGER`) en `test_pos` y produccion el 2026-07-30:
+[querys/fix_trigger_alm_producto_after_insert.sql](querys/fix_trigger_alm_producto_after_insert.sql),
+[querys/fix_trigger_alm_producto_after_update.sql](querys/fix_trigger_alm_producto_after_update.sql).
+
+**Antecedente (por que la validacion de `pesable=1` importa):** antes de este fix, versiones anteriores de estos triggers podian dejar una fila "fantasma" en `pesable=0` con `nombre_perfil='Estándar'` para un producto que el catalogo si marca pesable. Como `app_producto_pesaje_config_api` tiene una clave unica real (`uk_producto_perfil` sobre `id_producto_almacen, nombre_perfil`), esa fila fantasma bloqueaba cualquier arreglo desde la app (`POST /perfiles` responde 409 porque `'Estándar'` ya existe; `DELETE` responde 400 por ser el ultimo perfil activo; `PUT` con `pesable=0` solo permite editar `barcode`) — la unica salida era editar la BD directo, que es como se origino el bug de `PATRON SILVER 750ML` corregido en v10.94 (ver CHANGELOG). La limpieza puntual de los productos afectados en produccion quedo en `querys/fix_12_productos_atascados_produccion.sql`. Historial completo en `TODO.md` ("conflictos excepcionales de pesable").
+
 ### Reporte Paloteo 3 (requiere JWT)
 
 | Metodo | Ruta | Descripcion |
@@ -369,7 +382,7 @@ Excepción operativa en VINOS (`id_categoria=6`):
 | `seg_rol` | Catalogo de roles (ej. `ROLE_ADMIN`) |
 | `seg_permiso` | Asignacion de roles por usuario (tabla puente N:M) |
 | `ope_operacion` | Operativas |
-| `app_producto_pesaje_config_api` | Configuracion/perfiles de pesaje (incluye `estado` para soft-delete y `barcode`) |
+| `app_producto_pesaje_config_api` | Configuracion/perfiles de pesaje (incluye `estado` para soft-delete y `barcode`); sincronizada desde `alm_producto` por triggers de BD externos al repo, ver "Triggers de base de datos" en la seccion de PESAJE |
 | `bar_inventario_fisico` | Cabecera inventario fisico POS |
 | `bar_detalle_fisico` | Detalle inventario fisico POS |
 | `app_paloteo_registro_crudo` | Auditoria cruda de pesajes |
