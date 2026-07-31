@@ -4,6 +4,10 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.98
+- PESAJE: `PUT /api/pesaje/config/{id}` ya no exige `peso_bruto`/`tara` juntos (alcanza con `peso_bruto`, la tara se completa despues) y permite "promover" directo un perfil `pesable=0` si el catalogo dice que deberia ser pesable (mismo criterio que los triggers de BD: `ind_permite_comandar=71` y categoria no excluida) — ya no hace falta SQL directo para destrabar una fila fantasma como la de PATRON SILVER. En VINOS se completa en un solo paso.
+- Agrega `tests/test_integracion_pesaje.py` (6 tests) cubriendo el flujo completo; encontro y corrigio un bug real (mezcla float/Decimal, y ceros heredados tratados como dato valido) antes de tocar ningun entorno.
+
 ## 10.97
 - Corrige `PUT /api/pesaje/config/{id}`: el chequeo `payload.barcode is not None` nunca aplicaba el guardado cuando el frontend mandaba `barcode: null` (vaciar el campo), porque Pydantic no distingue "campo omitido" de "campo explicito en null". Guardar un codigo de barras vacio parecia funcionar (la PWA mostraba exito) pero no persistia. Detectado al intentar limpiar manualmente 5 filas legacy con `barcode=''` en `test_pos`/produccion editando y guardando desde la PWA sin exito.
 

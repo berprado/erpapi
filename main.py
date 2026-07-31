@@ -1015,6 +1015,23 @@ def crear_perfil_pesaje(
 CATEGORIAS_EXCLUIDAS_PESAJE = (10, 11, 13, 14, 15, 17, 18, 19, 20)
 
 
+def _producto_deberia_ser_pesable(db: Session, id_producto: int) -> bool:
+    """Mismo criterio que usan trg_alm_producto_after_insert/after_update para
+    derivar `pesable` desde el catalogo: ind_permite_comandar=71 y categoria
+    fuera de CATEGORIAS_EXCLUIDAS_PESAJE. Se usa para permitir "promover" un
+    perfil pesable=0 sin depender de que el listado ya lo haya filtrado antes."""
+    row = db.execute(
+        text("SELECT ind_permite_comandar, id_categoria FROM alm_producto WHERE id = :id_producto LIMIT 1"),
+        {"id_producto": id_producto}
+    ).mappings().first()
+    if not row or int(row["ind_permite_comandar"] or 0) != 71:
+        return False
+    id_categoria = row["id_categoria"]
+    if id_categoria is not None and int(id_categoria) in CATEGORIAS_EXCLUIDAS_PESAJE:
+        return False
+    return True
+
+
 @app.get("/api/pesaje/categorias", response_model=List[schemas.CategoriaItem])
 def listar_categorias_pesaje(
     db: Session = Depends(get_db),
@@ -1170,36 +1187,74 @@ def actualizar_pesaje_config(
     if not perfil:
         raise HTTPException(status_code=404, detail="Perfil de pesaje no encontrado.")
 
-    if perfil.pesable == 1:
+    # "Promover": un perfil pesable=0 (fila fantasma creada por el trigger de
+    # INSERT, o legacy) se puede completar directo desde aca si el catalogo
+    # dice que el producto deberia ser pesable — sin esto, la unica salida
+    # era SQL directo (ver TODO.md "conflictos excepcionales de pesable").
+    if perfil.pesable == 1 or _producto_deberia_ser_pesable(db, perfil.id_producto_almacen):
+        tocando_pesaje = payload.peso_bruto is not None or payload.tara is not None
         es_vino = _es_producto_vino(db, perfil.id_producto_almacen)
 
-        if es_vino:
-            if payload.peso_bruto is None:
-                raise HTTPException(status_code=400, detail="peso_bruto es obligatorio para categoría VINOS.")
-            if payload.tara is not None and abs(float(payload.tara) - TARA_VINOS) > 1e-9:
-                raise HTTPException(status_code=400, detail="En categoría VINOS la tara debe ser 0.")
+        if tocando_pesaje:
+            if es_vino:
+                if payload.peso_bruto is None:
+                    raise HTTPException(status_code=400, detail="peso_bruto es obligatorio para categoría VINOS.")
+                if payload.tara is not None and abs(float(payload.tara) - TARA_VINOS) > 1e-9:
+                    raise HTTPException(status_code=400, detail="En categoría VINOS la tara debe ser 0.")
 
-            perfil.peso_bruto = payload.peso_bruto
-            perfil.tara = TARA_VINOS
-            perfil.gramos_por_oz = GRAMOS_POR_OZ_VINOS
-        else:
-            if payload.peso_bruto is None or payload.tara is None:
-                raise HTTPException(status_code=400, detail="peso_bruto y tara son obligatorios para un producto pesable.")
-            if payload.tara >= payload.peso_bruto:
-                raise HTTPException(status_code=400, detail="La tara no puede ser mayor o igual al peso bruto.")
+                perfil.peso_bruto = payload.peso_bruto
+                perfil.tara = TARA_VINOS
+                perfil.gramos_por_oz = GRAMOS_POR_OZ_VINOS
+                perfil.pesable = 1
+            else:
+                # peso_bruto y tara ya no son obligatorios juntos: el peso
+                # bruto casi siempre se conoce de entrada, pero la tara recien
+                # se puede medir cuando se termina el contenido de la botella.
+                # Al caer al valor ya guardado (no provisto en el payload), solo
+                # se lo toma como "ya conocido" si es > 0 -- un perfil recien
+                # promovido puede traer ceros heredados de la fila fantasma
+                # (peso_bruto/tara/gramos_por_oz en 0, no NULL), que no son un
+                # dato real (ver TODO.md "conflictos excepcionales de pesable").
+                if payload.peso_bruto is not None:
+                    peso_bruto_final = float(payload.peso_bruto)
+                elif perfil.peso_bruto is not None and float(perfil.peso_bruto) > 0:
+                    peso_bruto_final = float(perfil.peso_bruto)
+                else:
+                    peso_bruto_final = None
 
-            volumen_oz = _obtener_onzas_por_botella_llena(db, perfil.id_producto_almacen)
-            if not volumen_oz:
-                raise HTTPException(status_code=400, detail="No se pudo determinar el volumen estándar del producto.")
+                if payload.tara is not None:
+                    tara_final = float(payload.tara)
+                elif perfil.tara is not None and float(perfil.tara) > 0:
+                    tara_final = float(perfil.tara)
+                else:
+                    tara_final = None
 
-            perfil.peso_bruto = payload.peso_bruto
-            perfil.tara = payload.tara
-            perfil.gramos_por_oz = (payload.peso_bruto - payload.tara) / volumen_oz
+                if peso_bruto_final is None:
+                    raise HTTPException(status_code=400, detail="peso_bruto es obligatorio para completar un perfil pesable.")
+                perfil.peso_bruto = peso_bruto_final
+
+                if tara_final is not None:
+                    if tara_final >= peso_bruto_final:
+                        raise HTTPException(status_code=400, detail="La tara no puede ser mayor o igual al peso bruto.")
+
+                    volumen_oz = _obtener_onzas_por_botella_llena(db, perfil.id_producto_almacen)
+                    if not volumen_oz:
+                        raise HTTPException(status_code=400, detail="No se pudo determinar el volumen estándar del producto.")
+
+                    perfil.tara = tara_final
+                    perfil.gramos_por_oz = (peso_bruto_final - tara_final) / volumen_oz
+                else:
+                    # Tara todavia no medida: queda incompleto (visible y
+                    # editable en INCOMPLETOS) hasta una segunda edicion.
+                    perfil.tara = None
+                    perfil.gramos_por_oz = None
+
+                perfil.pesable = 1
     else:
         if payload.peso_bruto is not None or payload.tara is not None:
             raise HTTPException(
                 status_code=400,
-                detail="Solo se puede editar el código de barras en productos no pesables."
+                detail="Este producto no está habilitado como pesable en el catálogo."
             )
 
     perfil.barcode = payload.barcode.strip() if payload.barcode else None

@@ -1171,8 +1171,15 @@ function crearFilaPerfilPesaje(producto, perfil) {
 
     const esPesable = producto.pesable === 1;
     const esVino = esCategoriaVinos(producto.id_categoria);
+    // "Promover": si el catalogo dice que el producto deberia ser pesable
+    // (mismo criterio que usa el backend, ver _producto_deberia_ser_pesable),
+    // se muestran los campos de peso aunque el perfil todavia este en
+    // pesable=0 (fila fantasma) — permite completarlo sin tocar la BD.
+    const comandarRaw = (producto.nombre_ind_permite_comandar || '').trim().toLowerCase();
+    const catalogoPermitePesar = comandarRaw === 'si' || comandarRaw === 'sí';
+    const puedeConfigurarPeso = esPesable || catalogoPermitePesar;
     const puedeEliminar = esPesable && producto.perfiles.length > 1;
-    const esIncompleto = esPesable && (perfil.peso_bruto === null || perfil.tara === null || perfil.peso_bruto <= 0 || perfil.gramos_por_oz <= 0);
+    const esIncompleto = puedeConfigurarPeso && (perfil.peso_bruto === null || perfil.tara === null || perfil.peso_bruto <= 0 || perfil.gramos_por_oz <= 0);
 
     row.className = esIncompleto
         ? 'border rounded-md p-sm space-y-xs'
@@ -1182,7 +1189,7 @@ function crearFilaPerfilPesaje(producto, perfil) {
     }
 
     row.innerHTML = `
-        ${esPesable ? `
+        ${puedeConfigurarPeso ? `
         <p class="text-[11px] font-label-mono uppercase tracking-widest text-on-surface-variant flex items-center gap-xs">
             Modelo de Botella
         </p>
@@ -1196,7 +1203,7 @@ function crearFilaPerfilPesaje(producto, perfil) {
             ` : ''}
         </h4>
         ` : ''}
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-sm ${esPesable ? '' : 'hidden'}">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-sm ${puedeConfigurarPeso ? '' : 'hidden'}">
             <div>
                 <label class="text-[10px] font-label-mono uppercase tracking-widest text-on-surface-variant block mb-xs">Peso bruto (${esVino ? 'copas' : 'g'})</label>
                 <input type="number" min="0" step="0.01" class="pesaje-input-peso-bruto w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface font-data-tabular" value="${perfil.peso_bruto ?? ''}">
@@ -1231,7 +1238,7 @@ function crearFilaPerfilPesaje(producto, perfil) {
     const inputGramosOz   = row.querySelector('.pesaje-input-gramos-oz');
     const inputBarcode    = row.querySelector('.pesaje-input-barcode');
 
-    if (esPesable && inputGramosOz) {
+    if (puedeConfigurarPeso && inputGramosOz) {
         const actualizarGramosOz = () => {
             const pesoBruto = parseFloat(inputPesoBruto.value);
             const tara = parseFloat(inputTara.value);
@@ -1252,18 +1259,38 @@ function crearFilaPerfilPesaje(producto, perfil) {
     btnGuardar.addEventListener('click', async () => {
         errorEl.classList.add('hidden');
         const body = { barcode: inputBarcode.value.trim() || null };
-        if (esPesable) {
-            body.peso_bruto = parseFloat(inputPesoBruto.value);
-            body.tara = esVino ? 0 : parseFloat(inputTara.value);
-            if (Number.isNaN(body.peso_bruto) || Number.isNaN(body.tara)) {
-                errorEl.textContent = 'Peso bruto y tara deben ser numéricos.';
-                errorEl.classList.remove('hidden');
-                return;
-            }
-            if (esVino && body.tara !== 0) {
-                errorEl.textContent = 'En categoría VINOS la tara debe ser 0.';
-                errorEl.classList.remove('hidden');
-                return;
+        if (puedeConfigurarPeso) {
+            const pesoBrutoTexto = inputPesoBruto.value.trim();
+            // En VINOS la tara es una constante (0), no un dato pendiente de
+            // pesar: se manda siempre. En el resto, la tara recien se conoce
+            // cuando se termina el contenido de la botella — se puede dejar
+            // en blanco y completar despues con una segunda edicion.
+            const taraTexto = esVino ? '0' : inputTara.value.trim();
+            const tocandoPeso = pesoBrutoTexto !== '' || taraTexto !== '';
+
+            if (tocandoPeso) {
+                const pesoBruto = parseFloat(pesoBrutoTexto);
+                if (Number.isNaN(pesoBruto)) {
+                    errorEl.textContent = 'Peso bruto debe ser numérico.';
+                    errorEl.classList.remove('hidden');
+                    return;
+                }
+                body.peso_bruto = pesoBruto;
+
+                if (taraTexto !== '') {
+                    const tara = parseFloat(taraTexto);
+                    if (Number.isNaN(tara)) {
+                        errorEl.textContent = 'Tara debe ser numérica.';
+                        errorEl.classList.remove('hidden');
+                        return;
+                    }
+                    if (esVino && tara !== 0) {
+                        errorEl.textContent = 'En categoría VINOS la tara debe ser 0.';
+                        errorEl.classList.remove('hidden');
+                        return;
+                    }
+                    body.tara = tara;
+                }
             }
         }
 
