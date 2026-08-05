@@ -310,6 +310,26 @@ Reglas:
 
 ---
 
+### POUR COST (requiere JWT + rol administrador)
+
+Modulo de solo lectura: calcula el costo de receta (WAC) y el pour cost % de combos/cocteles y productos sueltos comandables desde el POS. No escribe nada en `adminerp`; la simulacion (cambiar precio objetivo, WAC o receta) vive en el frontend, en memoria. Diseño completo en `documentos/pour_cost/pourcost.md`.
+
+| Metodo | Ruta | Descripcion |
+|---|---|---|
+| `GET` | `/api/pourcost/menu?id_dia=1` | Menu activo (combos + productos sueltos) con su `precio_venta` para el `id_dia` pedido |
+| `GET` | `/api/pourcost/recetas?id_dia=1` | Combos agregados desde `vw_pourcost_receta`: costo total de receta, `precio_venta` del `id_dia` pedido, pour cost % y la lista de ingredientes con su `cogs_ingrediente` |
+| `GET` | `/api/pourcost/productos?id_dia=1` | Productos sueltos comandables (sin receta): costo = su WAC directo (`v9_cache_wac_producto`), sin agregacion de lineas |
+| `GET` | `/api/pourcost/insumos` | Catalogo completo de insumos (`vw_alm_producto_con_nombres` + WAC) para la simulacion "agregar ingrediente" del frontend |
+
+Reglas:
+
+1. `id_dia` es un "horario de precio" (ej. jueves-sabado vs. domingo-lunes con tarifa distinta), no un dia calendario 1:1 — se selecciona manualmente en la UI, default `1`. Las vistas fuente traen su propio `precio_venta` fijo a `id_dia=1`; los endpoints lo ignoran y resuelven el precio aparte contra `v9_menubackstage` filtrando por el `id_dia` recibido.
+2. `sin_wac`/`costo_incompleto` marcan ingredientes sin WAC cacheado (`cache_wac_producto` vacio) — no se ocultan ni se tratan como costo cero silencioso.
+3. Las vistas fuente (`v9_menubackstage`, `vw_pourcost_receta`, `vw_alm_producto_con_nombres`, `v9_cache_wac_producto`) viven en MySQL, no en el ORM de este repo — mismo patron que los triggers de `alm_producto`. DDL versionado en `querys/create_views_pourcost.sql`; ya existen en `test_pos`, que es el entorno de desarrollo/validacion de este modulo (ver `documentos/pour_cost/pourcost.md`, seccion 2).
+4. Sin `Aplicar Precio` (escritura en `ope_precio_venta`) todavia — explicitamente fuera de alcance de esta fase.
+
+---
+
 ## Validaciones Activas (Frontend + Backend)
 
 En el flujo de inventario fisico/paloteo se aplican estas validaciones clave:

@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional, Literal
-from datetime import datetime
+from datetime import datetime, date
 
 # Esquema para lo que la API va a RECIBIR del cliente
 class UsuarioLogin(BaseModel):
@@ -224,3 +224,88 @@ class AplicarAjustesResponse(BaseModel):
     productos_afectados: int
     igualacion_verificada: bool
     mensaje: str
+
+
+# --- POUR COST (solo lectura, ver documentos/pour_cost/pourcost.md) ---
+
+class PourCostMenuItem(BaseModel):
+    """Una fila de v9_menubackstage: combo o producto suelto con su precio vigente para el id_dia pedido."""
+    codigo: str
+    nombre: str
+    precio_venta: Optional[float] = None
+    descripcion: Optional[str] = None
+    id_categoria: Optional[int] = None
+    nombre_categoria: Optional[str] = None
+    tipo: Literal['combo', 'producto']
+    id_origen: int
+    id_dia: int
+    fecha_precio: Optional[date] = None  # ope_precio_venta.fecha_mod es DATE, no DATETIME
+
+
+class PourCostIngrediente(BaseModel):
+    """Una línea de receta (vw_pourcost_receta), sin su precio_venta -- ese se resuelve aparte por id_dia."""
+    id_producto: int
+    codigo_producto: str
+    nombre_producto: str
+    nombre_categoria_producto: Optional[str] = None
+    cantidad_receta: float
+    tipo_cantidad_combo: str
+    tipo_parte_combo: Optional[str] = None
+    unidad_base: Optional[str] = None
+    medida_unidad_base: Optional[float] = None
+    unidades_detalle_por_base: Optional[float] = None
+    unidad_detalle: Optional[str] = None
+    wac_actual: float
+    sin_wac: bool
+    cantidad_unidad_base: float
+    cogs_ingrediente: float
+
+
+class PourCostReceta(BaseModel):
+    """Un combo/cóctel agregado: costo total de receta + precio del id_dia pedido + pour cost resultante."""
+    id_combo_coctel: int
+    codigo_combo: str
+    nombre_combo: str
+    descripcion_combo: Optional[str] = None
+    nombre_categoria_combo: Optional[str] = None
+    id_dia: int
+    precio_venta: Optional[float] = None
+    costo_total_receta: float
+    costo_incompleto: bool
+    pour_cost_pct: Optional[float] = None
+    ingredientes: List[PourCostIngrediente]
+
+
+class PourCostProducto(BaseModel):
+    """Un producto suelto comandable: costo = su WAC directo, sin receta que sumar."""
+    id_producto: int
+    codigo: str
+    nombre: str
+    id_categoria: Optional[int] = None
+    nombre_categoria: Optional[str] = None
+    id_dia: int
+    precio_venta: Optional[float] = None
+    wac_unitario: Optional[float] = None
+    sin_wac: bool
+    pour_cost_pct: Optional[float] = None
+    fecha_actualizacion_wac: Optional[datetime] = None
+
+
+class PourCostInsumo(BaseModel):
+    """Catálogo de insumos (vw_alm_producto_con_nombres + WAC) para la simulación 'agregar ingrediente'."""
+    id: int
+    nombre: str
+    descripcion: Optional[str] = None
+    codigo: Optional[str] = None
+    categoria: Optional[str] = None
+    proveedor: Optional[str] = None
+    nombre_barra: Optional[str] = None
+    medida: Optional[float] = None
+    nombre_unidad_medida: Optional[str] = None
+    cantidad_detalle: Optional[float] = None
+    nombre_unidad_medida_detalle: Optional[str] = None
+    ind_permite_comandar: Optional[int] = None
+    nombre_ind_permite_comandar: Optional[str] = None
+    wac_unitario: Optional[float] = None
+    sin_wac: bool
+    fecha_actualizacion_wac: Optional[datetime] = None

@@ -2212,6 +2212,266 @@ def exportar_pdf_paloteo3(
     )
 
 
+# --- POUR COST (solo lectura, ver documentos/pour_cost/pourcost.md) ---
+# Vistas fuente en adminerp/test_pos: v9_menubackstage, vw_pourcost_receta,
+# vw_alm_producto_con_nombres, v9_cache_wac_producto. DDL versionado en
+# querys/create_views_pourcost.sql (no aplica en este repo -- ya existen en
+# test_pos, ver documentos/pour_cost/pourcost.md seccion 2).
+
+ALMACEN_COSTOS_ID = 1  # Mismo almacen fijo que usa todo el motor de costos (WAC), no una decision de este modulo.
+
+
+def _calcular_pour_cost_pct(costo_total: Decimal, precio_venta) -> Optional[Decimal]:
+    """Pour cost % = costo / precio_venta x 100. None si no hay precio_venta valido (evita ZeroDivisionError)."""
+    if precio_venta is None:
+        return None
+    precio = Decimal(str(precio_venta))
+    if precio <= 0:
+        return None
+    return _decimal2(costo_total / precio * Decimal("100"))
+
+
+def _calcular_precio_sugerido(costo_total: Decimal, target_pour_cost_pct) -> Optional[tuple[Decimal, Decimal]]:
+    """Precio sugerido = costo_total / (target/100). Devuelve (exacto, redondeado a unidad entera) o
+    None si el target no es un porcentaje valido. Redondeado a entero porque el 100% de los precios
+    de venta reales en test_pos no usan centavos (ver documentos/pour_cost/pourcost.md, seccion 4)."""
+    if target_pour_cost_pct is None:
+        return None
+    target = Decimal(str(target_pour_cost_pct))
+    if target <= 0:
+        return None
+    exacto = costo_total / (target / Decimal("100"))
+    redondeado = exacto.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    return (_decimal2(exacto), redondeado)
+
+
+def _agregar_costo_receta(lineas) -> dict:
+    """Agrupa lineas de vw_pourcost_receta (una fila por ingrediente) por id_combo_coctel, sumando
+    cogs_ingrediente con Decimal para no arrastrar error de float. No toca precio_venta -- esa vista
+    lo trae fijo a id_dia=1, se resuelve aparte contra v9_menubackstage (ver pourcost.md, seccion 8.2)."""
+    combos: dict = {}
+    for linea in lineas:
+        id_combo = linea["id_combo_coctel"]
+        combo = combos.get(id_combo)
+        if combo is None:
+            combo = {
+                "codigo_combo": linea["codigo_combo"],
+                "nombre_combo": linea["nombre_combo"],
+                "descripcion_combo": linea["descripcion_combo"],
+                "nombre_categoria_combo": linea["nombre_categoria_combo"],
+                "costo_total": Decimal("0"),
+                "costo_incompleto": False,
+                "ingredientes": [],
+            }
+            combos[id_combo] = combo
+        combo["costo_total"] += Decimal(str(linea["cogs_ingrediente"] or 0))
+        if int(linea["sin_wac"] or 0) == 1:
+            combo["costo_incompleto"] = True
+        combo["ingredientes"].append(linea)
+    return combos
+
+
+def _float_o_none(valor) -> Optional[float]:
+    return float(valor) if valor is not None else None
+
+
+@app.get("/api/pourcost/menu", response_model=List[schemas.PourCostMenuItem])
+def listar_pourcost_menu(
+    id_dia: int = Query(1, ge=1, description="Horario de precio; 1 por defecto (ver pourcost.md, seccion 8.2)"),
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_usuario_administrador)
+):
+    """Menu activo (combos + productos sueltos) con su precio_venta para el id_dia pedido."""
+    rows = db.execute(
+        text("""
+            SELECT codigo, nombre, precio_venta, descripcion, id_categoria, nombre_categoria,
+                   tipo, id_origen, id_dia, fecha_precio
+            FROM v9_menubackstage
+            WHERE id_dia = :id_dia
+            ORDER BY tipo, nombre
+        """),
+        {"id_dia": id_dia}
+    ).mappings().all()
+
+    return [
+        schemas.PourCostMenuItem(
+            codigo=row["codigo"],
+            nombre=row["nombre"],
+            precio_venta=_float_o_none(row["precio_venta"]),
+            descripcion=row["descripcion"],
+            id_categoria=row["id_categoria"],
+            nombre_categoria=row["nombre_categoria"],
+            tipo=row["tipo"],
+            id_origen=row["id_origen"],
+            id_dia=row["id_dia"],
+            fecha_precio=row["fecha_precio"],
+        )
+        for row in rows
+    ]
+
+
+@app.get("/api/pourcost/recetas", response_model=List[schemas.PourCostReceta])
+def listar_pourcost_recetas(
+    id_dia: int = Query(1, ge=1, description="Horario de precio; 1 por defecto (ver pourcost.md, seccion 8.2)"),
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_usuario_administrador)
+):
+    """Costo de receta por combo/coctel (vw_pourcost_receta, agrupado) + precio_venta del id_dia pedido.
+
+    vw_pourcost_receta trae su propio precio_venta fijo a id_dia=1 -- se ignora esa columna y el
+    precio se resuelve aparte contra v9_menubackstage filtrando por el id_dia recibido (ver
+    documentos/pour_cost/pourcost.md, seccion 8, punto 2)."""
+    lineas = db.execute(
+        text("""
+            SELECT id_combo_coctel, codigo_combo, nombre_combo, descripcion_combo, nombre_categoria_combo,
+                   id_producto, codigo_producto, nombre_producto, nombre_categoria_producto,
+                   cantidad_receta, tipo_cantidad_combo, tipo_parte_combo, unidad_base, medida_unidad_base,
+                   unidades_detalle_por_base, unidad_detalle, wac_actual, sin_wac, cantidad_unidad_base,
+                   cogs_ingrediente
+            FROM vw_pourcost_receta
+            ORDER BY id_combo_coctel
+        """)
+    ).mappings().all()
+
+    precios = db.execute(
+        text("""
+            SELECT id_origen, precio_venta
+            FROM v9_menubackstage
+            WHERE tipo = 'combo' AND id_dia = :id_dia
+        """),
+        {"id_dia": id_dia}
+    ).mappings().all()
+    precio_por_combo = {row["id_origen"]: row["precio_venta"] for row in precios}
+
+    combos = _agregar_costo_receta(lineas)
+
+    salida = []
+    for id_combo, combo in combos.items():
+        precio_venta = precio_por_combo.get(id_combo)
+        salida.append(
+            schemas.PourCostReceta(
+                id_combo_coctel=id_combo,
+                codigo_combo=combo["codigo_combo"],
+                nombre_combo=combo["nombre_combo"],
+                descripcion_combo=combo["descripcion_combo"],
+                nombre_categoria_combo=combo["nombre_categoria_combo"],
+                id_dia=id_dia,
+                precio_venta=_float_o_none(precio_venta),
+                costo_total_receta=float(_decimal2(combo["costo_total"])),
+                costo_incompleto=combo["costo_incompleto"],
+                pour_cost_pct=_float_o_none(_calcular_pour_cost_pct(combo["costo_total"], precio_venta)),
+                ingredientes=[
+                    schemas.PourCostIngrediente(
+                        id_producto=linea["id_producto"],
+                        codigo_producto=linea["codigo_producto"],
+                        nombre_producto=linea["nombre_producto"],
+                        nombre_categoria_producto=linea["nombre_categoria_producto"],
+                        cantidad_receta=float(linea["cantidad_receta"]),
+                        tipo_cantidad_combo=linea["tipo_cantidad_combo"],
+                        tipo_parte_combo=linea["tipo_parte_combo"],
+                        unidad_base=linea["unidad_base"],
+                        medida_unidad_base=_float_o_none(linea["medida_unidad_base"]),
+                        unidades_detalle_por_base=_float_o_none(linea["unidades_detalle_por_base"]),
+                        unidad_detalle=linea["unidad_detalle"],
+                        wac_actual=float(linea["wac_actual"] or 0),
+                        sin_wac=bool(int(linea["sin_wac"] or 0)),
+                        cantidad_unidad_base=float(linea["cantidad_unidad_base"]),
+                        cogs_ingrediente=float(linea["cogs_ingrediente"] or 0),
+                    )
+                    for linea in combo["ingredientes"]
+                ],
+            )
+        )
+    return salida
+
+
+@app.get("/api/pourcost/productos", response_model=List[schemas.PourCostProducto])
+def listar_pourcost_productos(
+    id_dia: int = Query(1, ge=1, description="Horario de precio; 1 por defecto (ver pourcost.md, seccion 8.2)"),
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_usuario_administrador)
+):
+    """Productos sueltos comandables (sin receta): costo = su WAC directo. No pasan por
+    vw_pourcost_receta, que solo cubre combos (bar_detalle_combo_bar)."""
+    rows = db.execute(
+        text("""
+            SELECT m.id_origen AS id_producto, m.codigo, m.nombre, m.precio_venta,
+                   m.id_categoria, m.nombre_categoria, m.id_dia,
+                   w.wac_unitario, w.fecha_actualizacion
+            FROM v9_menubackstage m
+            LEFT JOIN v9_cache_wac_producto w
+                   ON w.id_producto = m.id_origen AND w.id_almacen = :id_almacen
+            WHERE m.tipo = 'producto' AND m.id_dia = :id_dia
+            ORDER BY m.nombre
+        """),
+        {"id_dia": id_dia, "id_almacen": ALMACEN_COSTOS_ID}
+    ).mappings().all()
+
+    salida = []
+    for row in rows:
+        wac = row["wac_unitario"]
+        salida.append(
+            schemas.PourCostProducto(
+                id_producto=row["id_producto"],
+                codigo=row["codigo"],
+                nombre=row["nombre"],
+                id_categoria=row["id_categoria"],
+                nombre_categoria=row["nombre_categoria"],
+                id_dia=row["id_dia"],
+                precio_venta=_float_o_none(row["precio_venta"]),
+                wac_unitario=_float_o_none(wac),
+                sin_wac=wac is None,
+                pour_cost_pct=_float_o_none(_calcular_pour_cost_pct(Decimal(str(wac)), row["precio_venta"])) if wac is not None else None,
+                fecha_actualizacion_wac=row["fecha_actualizacion"],
+            )
+        )
+    return salida
+
+
+@app.get("/api/pourcost/insumos", response_model=List[schemas.PourCostInsumo])
+def listar_pourcost_insumos(
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_usuario_administrador)
+):
+    """Catalogo completo de insumos (vw_alm_producto_con_nombres + WAC), para la simulacion 'agregar
+    ingrediente' del sandbox de POUR COST (frontend, en memoria). No depende de id_dia."""
+    rows = db.execute(
+        text("""
+            SELECT vc.id, vc.nombre, vc.descripcion, vc.codigo, vc.categoria, vc.proveedor, vc.nombre_barra,
+                   vc.medida, vc.nombre_unidad_medida, vc.cantidad_detalle, vc.nombre_unidad_medida_detalle,
+                   vc.ind_permite_comandar, vc.nombre_ind_permite_comandar,
+                   w.wac_unitario, w.fecha_actualizacion
+            FROM vw_alm_producto_con_nombres vc
+            LEFT JOIN v9_cache_wac_producto w
+                   ON w.id_producto = vc.id AND w.id_almacen = :id_almacen
+            ORDER BY vc.nombre
+        """),
+        {"id_almacen": ALMACEN_COSTOS_ID}
+    ).mappings().all()
+
+    return [
+        schemas.PourCostInsumo(
+            id=row["id"],
+            nombre=row["nombre"],
+            descripcion=row["descripcion"],
+            codigo=row["codigo"],
+            categoria=row["categoria"],
+            proveedor=row["proveedor"],
+            nombre_barra=row["nombre_barra"],
+            medida=_float_o_none(row["medida"]),
+            nombre_unidad_medida=row["nombre_unidad_medida"],
+            cantidad_detalle=_float_o_none(row["cantidad_detalle"]),
+            nombre_unidad_medida_detalle=row["nombre_unidad_medida_detalle"],
+            ind_permite_comandar=row["ind_permite_comandar"],
+            nombre_ind_permite_comandar=row["nombre_ind_permite_comandar"],
+            wac_unitario=_float_o_none(row["wac_unitario"]),
+            sin_wac=row["wac_unitario"] is None,
+            fecha_actualizacion_wac=row["fecha_actualizacion"],
+        )
+        for row in rows
+    ]
+
+
 # --- SERVIDOR DE ARCHIVOS ESTÁTICOS (FRONTEND) ---
 # Montamos una carpeta llamada 'static' donde vivirá el HTML, CSS y JS
 app.mount("/assets", StaticFiles(directory="static"), name="assets")

@@ -4,6 +4,9 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 11.0
+- Nuevo modulo POUR COST (backend, solo lectura): 4 endpoints admin-only (`GET /api/pourcost/menu`, `/recetas`, `/productos`, `/insumos`) que calculan el costo de receta (WAC) y el pour cost % de combos/cocteles y productos sueltos comandables, consultando las vistas `v9_menubackstage`, `vw_pourcost_receta`, `v9_cache_wac_producto` y `vw_alm_producto_con_nombres` (ya existentes en `test_pos`). `id_dia` (horario de precio) es un query param manual, default `1`. Sin escritura ni simulacion todavia -- eso vive en el frontend (fase siguiente, ver `documentos/pour_cost/pourcost.md`). DDL de las vistas versionado en `querys/create_views_pourcost.sql`.
+
 ## 10.99
 - Documentacion: auditoria de consistencia del modulo PESAJE tras v10.93-v10.98. Corrige contenido desactualizado en `documentos/DOCUMENTACION_ALMACENAMIENTO_PALOTEO.md` (reglas de `PUT /api/pesaje/config/{id}` reescritas para "promover", umbral de INCOMPLETOS con `<=0`, `tolerancia_oz` per-categoria stale desde v10.39, excepcion VINOS agregada) y en `README.md` ("Modulo PESAJE: detalles de UI" — NO PESABLES y el modal ya reflejan "promover"). Sin cambios de codigo.
 
