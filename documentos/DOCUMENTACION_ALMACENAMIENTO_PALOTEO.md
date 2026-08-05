@@ -441,7 +441,7 @@ Ejemplo:
 | `tara` | DECIMAL(10,2) | SÍ | Peso de la botella **vacía** |
 | `gramos_por_oz` | DECIMAL(10,6) | SÍ | Factor de conversión gramos/oz. **Calculado por el backend**, no editable por el usuario: `(peso_bruto - tara) / volumen_estandar_oz`, donde `volumen_estandar_oz` es `alm_producto.cantidad_detalle` del mismo producto |
 | `barcode` | VARCHAR(50) | SÍ | Código de barras del modelo de botella. Opcional; si no se especifica al crear, se copia el de otro perfil existente del mismo producto (si hay) |
-| `tolerancia_oz` | DECIMAL(10,2) | SÍ | Columna heredada, default `1.50`. **No es configurable por el usuario** en el alta de un modelo: el valor operativo real siempre se calcula por categoría de producto vía `_obtener_tolerancia_operativa_oz` (0.5 oz para categorías 6/22, 0.25 oz para el resto), tanto al listar pendientes como al consolidar diferencias |
+| `tolerancia_oz` | DECIMAL(10,2) | SÍ | Columna **vestigial**: sigue existiendo y se selecciona/mapea, pero su valor almacenado nunca se usa. Desde v10.39 la tolerancia operativa real es un valor plano de **0.5 oz para todo producto `pesable=1`** (sin distinción por categoría) y `0.0` para no pesables, calculado en runtime por `_obtener_tolerancia_operativa_oz` y no leído de esta columna. Ver `documentos/redondeo_y_tolerancia.md` |
 | `pesable` | INT (TINYINT) | SÍ | **0** = No pesable, **1** = Pesable |
 | `estado` | VARCHAR(3) | NO | **'HAB'** (default) = activo, **'DES'** = eliminado lógicamente (soft-delete) desde el módulo PESAJE |
 
@@ -453,6 +453,7 @@ Ejemplo:
 - El producto debe tener un volumen estándar válido en `alm_producto.cantidad_detalle` (de lo contrario no se puede calcular `gramos_por_oz`)
 - El volumen del nuevo modelo es siempre el mismo que el del producto (no se permite definir un volumen distinto por perfil)
 - El primer perfil activo del producto usa siempre `Estándar`, alineado con el `DEFAULT 'Estándar'` de la columna `nombre_perfil`; los modelos posteriores pueden usar nombre libre
+- **Excepción categoría VINOS** (`id_categoria=6`): no aplica ninguna de las reglas de volumen anteriores. Se fuerza `tara=0` y `gramos_por_oz=1`; `peso_bruto` pasa a representar copas disponibles, no gramos. Ver la sección "Perfiles de Pesaje" en `README.md` para el detalle completo
 
 **Reactivación de perfiles eliminados:** si se intenta crear un modelo con un nombre que ya existe para ese producto pero con `estado='DES'` (fue eliminado antes), el backend **reactiva esa misma fila** (mismo `id`) con los nuevos valores de `peso_bruto`/`tara`/`gramos_por_oz`/`barcode` y `estado='HAB'`, en vez de intentar un `INSERT` que chocaría con la clave única. Si el nombre ya existe con `estado='HAB'` (duplicado real), se sigue rechazando con `409`.
 
@@ -462,13 +463,15 @@ Ejemplo:
 
 **Categorías excluidas del módulo PESAJE:** los endpoints `GET /api/pesaje/config` y `GET /api/pesaje/categorias` excluyen siempre las categorías con `id` 10, 11, 13, 14, 15, 17, 18, 19 y 20 (y por lo tanto todos sus productos), tanto del listado como del filtro de categorías. Los productos sin categoría asignada (`id_categoria IS NULL`) no se ven afectados por esta exclusión.
 
-**Indicador de datos incompletos (frontend):** en la UI del módulo PESAJE, un producto pesable (`pesable=1`) aparece en INCOMPLETOS cuando tiene al menos un perfil con `peso_bruto` o `tara` en `NULL`, o cuando no tiene ningún modelo activo en `app_producto_pesaje_config_api` (caso "sin modelos configurados").
+**Indicador de datos incompletos (frontend):** en la UI del módulo PESAJE, un producto pesable (`pesable=1`) aparece en INCOMPLETOS cuando tiene al menos un perfil con `peso_bruto` o `tara` en `NULL`, con `peso_bruto<=0` o `gramos_por_oz<=0` (desde v10.94 — un perfil con ceros en vez de `NULL` pasaba antes como "completo" y rompía la captura de paloteo con `ZeroDivisionError`), o cuando no tiene ningún modelo activo en `app_producto_pesaje_config_api` (caso "sin modelos configurados"). `tara=0` sí es un valor válido (no cuenta como incompleto), ya que el schema lo permite explícitamente y es el valor forzado en VINOS.
 
 **Control de acceso:** todas las operaciones de escritura sobre esta tabla (crear, editar, eliminar) requieren que el usuario autenticado tenga el rol `ROLE_ADMIN` (verificado contra `seg_permiso`/`seg_rol`). Un usuario sin ese rol recibe `403 Forbidden`.
 
-**Reglas de edición (`PUT /api/pesaje/config/{id}`):**
-- Si `pesable = 1`: se exigen `peso_bruto` y `tara`, se valida `tara < peso_bruto`, y `gramos_por_oz` se recalcula con la misma fórmula del alta.
-- Si `pesable = 0`: solo se permite editar `barcode`; si el payload incluye `peso_bruto` o `tara`, se rechaza con `400`.
+**Reglas de edición (`PUT /api/pesaje/config/{id}`) — reescritas en v10.98 ("promover"):**
+- `peso_bruto` y `tara` **ya no son obligatorios juntos**. Alcanza con `peso_bruto` (la tara recién se conoce cuando se termina el contenido de la botella); `tara`/`gramos_por_oz` quedan en `NULL` hasta completarlos con una segunda edición, que sí recalcula `gramos_por_oz` con la misma fórmula del alta (validando `tara < peso_bruto`).
+- **Promoción de `pesable=0` a `1` sin SQL directo:** si el perfil está en `pesable=0` pero el catálogo dice que el producto debería ser pesable (`alm_producto.ind_permite_comandar=71` **y** categoría fuera de las excluidas — mismo criterio que usan los triggers de BD, función `_producto_deberia_ser_pesable` en `main.py`), cargar `peso_bruto` promueve el perfil a `pesable=1` en el mismo guardado. Si el catálogo no lo marca pesable, se sigue rechazando con `400` cualquier intento de tocar `peso_bruto`/`tara` (solo se permite editar `barcode`).
+- Categoría VINOS: con `peso_bruto` alcanza para completar el perfil del todo en un solo paso (`tara=0` y `gramos_por_oz=1` se fuerzan igual que en el alta).
+- Contexto: antes de este fix, un perfil `pesable=0` era un callejón sin salida desde la app (`POST` chocaba 409 contra el nombre `'Estándar'` ya ocupado por la fila fantasma, `DELETE` rechazaba con 400 por ser el último perfil activo) — la única salida era editar la BD directo, que es como se originó el bug de `PATRON SILVER 750ML` (v10.94). Ver "conflictos excepcionales de pesable" en `TODO.md` y la sección "Triggers de base de datos" en `README.md`.
 
 **Reglas de eliminación (`DELETE /api/pesaje/config/{id}`):**
 - Soft-delete (`estado='DES'`), nunca `DELETE` físico.

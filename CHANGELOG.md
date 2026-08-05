@@ -4,6 +4,9 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 10.99
+- Documentacion: auditoria de consistencia del modulo PESAJE tras v10.93-v10.98. Corrige contenido desactualizado en `documentos/DOCUMENTACION_ALMACENAMIENTO_PALOTEO.md` (reglas de `PUT /api/pesaje/config/{id}` reescritas para "promover", umbral de INCOMPLETOS con `<=0`, `tolerancia_oz` per-categoria stale desde v10.39, excepcion VINOS agregada) y en `README.md` ("Modulo PESAJE: detalles de UI" — NO PESABLES y el modal ya reflejan "promover"). Sin cambios de codigo.
+
 ## 10.98
 - PESAJE: `PUT /api/pesaje/config/{id}` ya no exige `peso_bruto`/`tara` juntos (alcanza con `peso_bruto`, la tara se completa despues) y permite "promover" directo un perfil `pesable=0` si el catalogo dice que deberia ser pesable (mismo criterio que los triggers de BD: `ind_permite_comandar=71` y categoria no excluida) — ya no hace falta SQL directo para destrabar una fila fantasma como la de PATRON SILVER. En VINOS se completa en un solo paso.
 - Agrega `tests/test_integracion_pesaje.py` (6 tests) cubriendo el flujo completo; encontro y corrigio un bug real (mezcla float/Decimal, y ceros heredados tratados como dato valido) antes de tocar ningun entorno.
