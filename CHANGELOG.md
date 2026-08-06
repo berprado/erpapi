@@ -4,6 +4,9 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 11.1
+- Nuevo módulo POUR COST (PWA, frontend): vista admin-only accesible desde el menú hamburguesa, siguiendo el mismo patrón visual/estructural que PESAJE (tarjetas + modal de detalle). Toggle Cócteles/Productos sueltos, selector de horario de precio "Precios A" / "Precios B" (`id_dia`), filtro de categoría derivado del dataset cargado y búsqueda por nombre. Cada tarjeta muestra el pour cost % con semáforo de color (verde <=28%, ámbar 28-35%, rojo >35%, cortes definidos por el negocio) vía la nueva clase `.badge-caution`. Al hacer click se abre un modal con el desglose real (receta/WAC) y un sandbox de simulación 100% en memoria (cantidad/WAC por ingrediente, % objetivo -> precio sugerido con su delta vs. el precio actual) que nunca escribe en el backend. Las fórmulas de JS espejan exactamente `_calcular_pour_cost_pct`/`_calcular_precio_sugerido` de `main.py` (mismo redondeo HALF_UP manual que `redondearOnzasOperativas`, no `Math.round`).
+
 ## 11.0
 - Nuevo modulo POUR COST (backend, solo lectura): 4 endpoints admin-only (`GET /api/pourcost/menu`, `/recetas`, `/productos`, `/insumos`) que calculan el costo de receta (WAC) y el pour cost % de combos/cocteles y productos sueltos comandables, consultando las vistas `v9_menubackstage`, `vw_pourcost_receta`, `v9_cache_wac_producto` y `vw_alm_producto_con_nombres` (ya existentes en `test_pos`). `id_dia` (horario de precio) es un query param manual, default `1`. Sin escritura ni simulacion todavia -- eso vive en el frontend (fase siguiente, ver `documentos/pour_cost/pourcost.md`). DDL de las vistas versionado en `querys/create_views_pourcost.sql`.
 

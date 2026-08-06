@@ -424,6 +424,7 @@ Flujo actual de navegacion:
 - PALOTEO 3 (captura ciega)
 - AJUSTES (diferencias, exportacion PDF y, solo administradores, aplicar el ajuste definitivo contra `bar_inventario`)
 - PESAJE (CRUD de modelos de botella y codigos de barra; solo visible/accesible para usuarios con rol `ROLE_ADMIN`). Cada tarjeta de producto pesable ofrece dos acciones: EDITAR (modal de modelos/codigos de barra) y CALCULAR (calculadora de peso a onzas integrada; ex-modulo CONVERSOR). CALCULAR solo aparece en productos pesables con todos sus perfiles completos.
+- POUR COST (solo lectura + simulacion; solo visible/accesible para `ROLE_ADMIN`). Costo de receta/WAC y pour cost % de cocteles y productos sueltos, con un sandbox de simulacion en memoria (precio objetivo, WAC/cantidad) que nunca escribe en el backend.
 
 Sincronizacion entre modulos:
 
@@ -509,9 +510,18 @@ sincronizada entre ambos modulos porque comparten el mismo origen de datos.
 - Dentro de la modal se pueden agregar varias "botellas" (una fila por cada una), cada una con su propio selector de modelo si el producto tiene mas de un perfil (`resolverPerfilSeleccionado()`, reutilizado de PALOTEO). El calculo (`peso_liquido = max(0, peso - tara)`, `onzas = peso_liquido / gramos_por_oz`, redondeo HALF_UP con `redondearOnzasOperativas()`) se ejecuta en cliente y muestra tanto el total exacto como el redondeado POS.
 - Cerrar la modal reinicia el estado (no hay boton "Limpiar" separado), ya que no persiste nada entre aperturas.
 
+### Modulo POUR COST: detalles de UI
+
+- Mismo patron visual/estructural que PESAJE (tarjetas + modal de detalle), pero de solo lectura + simulacion: no hay accion "Guardar" en ningun lado del modulo. Solo visible/accesible para `ROLE_ADMIN`, igual criterio que PESAJE.
+- Toggle **Cocteles / Productos sueltos** (`pourCostEstado.tipo`) determina que endpoint se consulta (`/api/pourcost/recetas` o `/api/pourcost/productos`) — son datasets y formas de tarjeta distintas, no un filtro sobre los mismos datos.
+- Selector **Precios A / Precios B** (`pourCostEstado.idDia`, query param `id_dia`) es una eleccion manual del usuario, no se infiere de la operativa activa (decision de diseno, ver `documentos/pour_cost/pourcost.md` seccion 8.2) — cambiarlo vuelve a pedir datos al backend porque el precio depende del horario elegido.
+- El filtro de categoria se llena en cliente a partir del dataset ya cargado (no hay endpoint `/api/pourcost/categorias`); cambia junto con el toggle de tipo.
+- Cada tarjeta muestra el pour cost % en un badge coloreado: verde (`badge-ok`, <=28%), ambar (`badge-caution`, 28-35%) o rojo (`badge-danger`, >35%) — cortes definidos por el negocio, no un estandar generico. `badge-caution` es una clase nueva porque `badge-warning` ya estaba tomada por el rojo de diferencias de PALOTEO/AJUSTES.
+- Al hacer click en una tarjeta se abre `#pourcost-modal` con el desglose real (receta con `cogs_ingrediente` por linea, o WAC directo en productos sueltos) y el sandbox de simulacion: cantidad/WAC editables por ingrediente y un campo de % objetivo que calcula el precio sugerido (exacto + redondeado a unidad entera) y su diferencia contra el precio actual. Todo el calculo (`pourCostCalcularPct`, `pourCostCalcularPrecioSugerido`, `pourCostRedondearHalfUp`) es JS puro que espeja exactamente las funciones de `main.py` (mismo HALF_UP manual que `redondearOnzasOperativas`, no `Math.round`) — nunca se envia nada al backend, "Reiniciar simulacion" descarta los cambios volviendo a clonar el item original.
+
 ### FAB "volver al inicio"
 
-Boton flotante reutilizable (clase `fab-scroll-top` + funcion `inicializarFabScrollTop(fabId, panelId)` en `app.js`) presente en PALOTEO 1, PALOTEO 3, AJUSTES y PESAJE. Aparece al hacer scroll mas alla de un umbral y solo si su panel esta activo; al hacer click hace scroll suave al inicio de la pagina. Para agregarlo a un nuevo modulo: insertar un boton con esa clase dentro del panel y llamar a la funcion con sus ids.
+Boton flotante reutilizable (clase `fab-scroll-top` + funcion `inicializarFabScrollTop(fabId, panelId)` en `app.js`) presente en PALOTEO 1, PALOTEO 3, AJUSTES, PESAJE y POUR COST. Aparece al hacer scroll mas alla de un umbral y solo si su panel esta activo; al hacer click hace scroll suave al inicio de la pagina. Para agregarlo a un nuevo modulo: insertar un boton con esa clase dentro del panel y llamar a la funcion con sus ids.
 
 Service Worker:
 

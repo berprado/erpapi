@@ -528,6 +528,15 @@
             background: rgba(239, 68, 68, 0.1);
             border: 1px solid rgba(239, 68, 68, 0.3);
         }
+
+        /* Tercer nivel real de "atencion" (ambar): badge-warning ya esta tomado
+           por el rojo de diferencias (ver arriba), asi que POUR COST usa esta
+           clase nueva para no pisar ese significado existente. */
+        .badge-caution {
+            color: var(--semantic-warning);
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
         
         /* Button semantic styles */
         .btn-action {
@@ -760,6 +769,10 @@
                         <button id="menu-item-pesaje" type="button" class="floating-menu-item hidden" data-tab="pesaje" role="menuitem">
                             <span class="material-symbols-outlined">monitor_weight</span>
                             Pesaje
+                        </button>
+                        <button id="menu-item-pourcost" type="button" class="floating-menu-item hidden" data-tab="pourcost" role="menuitem">
+                            <span class="material-symbols-outlined">percent</span>
+                            Pour Cost
                         </button>
                         <div class="floating-menu-separator" role="presentation"></div>
                         <button type="button" class="floating-menu-item" data-dummy-link="guia" role="menuitem">
@@ -1029,6 +1042,49 @@
             </button>
         </div><!-- /panel-pesaje -->
 
+        <!-- ========== PANEL POUR COST ========== -->
+        <div id="panel-pourcost" class="tab-panel hidden p-md max-w-6xl mx-auto w-full">
+            <div class="flex items-start justify-between mb-sm">
+                <div>
+                    <h2 class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase flex items-center gap-xs leading-none">
+                        <span class="material-symbols-outlined text-primary-fixed" style="font-size:1rem;">percent</span>
+                        Pour Cost
+                    </h2>
+                    <p class="text-[11px] text-on-surface-variant mt-[2px] leading-tight">Costo de receta y simulación de precio de venta</p>
+                </div>
+            </div>
+
+            <!-- Tipo: Cócteles (con receta) / Productos sueltos (WAC directo) -->
+            <div class="mb-sm flex flex-wrap gap-xs">
+                <button id="pourcost-tipo-cocteles" type="button" class="pourcost-tipo-btn bg-primary-container text-black border border-primary-fixed-dim px-sm py-[6px] rounded-sharp text-[10px] font-label-mono uppercase tracking-widest">Cócteles</button>
+                <button id="pourcost-tipo-productos" type="button" class="pourcost-tipo-btn bg-surface border border-outline-variant text-on-surface px-sm py-[6px] rounded-sharp text-[10px] font-label-mono uppercase tracking-widest">Productos sueltos</button>
+            </div>
+
+            <!-- Horario de precio (id_dia) + filtro de categoría -->
+            <div class="mb-sm flex flex-wrap gap-xs items-center">
+                <div class="flex gap-xs shrink-0">
+                    <button id="pourcost-horario-a" type="button" class="pourcost-horario-btn bg-primary-container text-black border border-primary-fixed-dim px-sm py-[6px] rounded-sharp text-[10px] font-label-mono uppercase tracking-widest">Precios A</button>
+                    <button id="pourcost-horario-b" type="button" class="pourcost-horario-btn bg-surface border border-outline-variant text-on-surface px-sm py-[6px] rounded-sharp text-[10px] font-label-mono uppercase tracking-widest">Precios B</button>
+                </div>
+                <select id="pourcost-categoria" class="flex-1 min-w-[160px] bg-surface-container border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-body-base">
+                    <option value="">Todas las categorías</option>
+                </select>
+            </div>
+
+            <!-- Listado: grid responsivo, la cantidad de columnas se adapta al ancho disponible -->
+            <div id="pourcost-list" class="grid gap-sm" style="grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));"></div>
+
+            <!-- Estado vacío -->
+            <div id="pourcost-empty-state" class="hidden text-center text-on-surface-variant py-md font-body-base text-sm">
+                No se encontraron items con estos filtros.
+            </div>
+
+            <!-- FAB: volver al inicio de la página -->
+            <button id="pourcost-fab-scroll-top" type="button" aria-label="Volver al inicio" class="fab-scroll-top hidden bg-primary-container text-on-primary-fixed shadow-cyan-glow hover:brightness-110 active:scale-95 transition-all">
+                <span class="material-symbols-outlined">arrow_upward</span>
+            </button>
+        </div><!-- /panel-pourcost -->
+
 
         </main>
 
@@ -1191,6 +1247,88 @@
             </div>
         </div>
 
+        <!-- Modal de detalle/simulacion de POUR COST: se abre al hacer click en una
+             tarjeta resumen. A diferencia de #pesaje-modal (edicion real), esto es
+             un sandbox: todo lo editable aqui es solo simulacion en memoria, nunca
+             se envia al backend. Ver documentos/pour_cost/pourcost.md, seccion 6. -->
+        <div id="pourcost-modal" class="hidden fixed inset-0 z-50" aria-hidden="true">
+            <div id="pourcost-modal-overlay" class="absolute inset-0 bg-black/70 backdrop-blur-[2px]"></div>
+            <div class="relative z-10 h-full flex items-center justify-center p-md">
+                <div class="w-full max-w-lg bg-surface-container border border-outline-variant rounded-md shadow-2xl max-h-[85vh] flex flex-col">
+                    <div class="px-md py-sm border-b border-outline-variant flex items-start justify-between shrink-0 gap-md">
+                        <div class="min-w-0 flex-1">
+                            <div id="pourcost-modal-header-info" class="text-[11px] font-label-mono uppercase tracking-wider text-on-surface-variant mb-xs flex items-center flex-wrap gap-xs">
+                                <p id="pourcost-modal-categoria" class="truncate"></p>
+                                <p id="pourcost-modal-codigo" class="border-l border-outline-variant pl-xs truncate"></p>
+                            </div>
+                            <h3 id="pourcost-modal-nombre" class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase truncate"></h3>
+                        </div>
+                        <button id="btn-close-pourcost-modal" type="button" class="topbar-icon-btn shrink-0" aria-label="Cerrar pour cost">
+                            <span class="material-symbols-outlined text-base">close</span>
+                        </button>
+                    </div>
+                    <div class="px-md py-md overflow-y-auto flex-1">
+
+                        <!-- Estado real (recalculado en vivo con los valores simulados) -->
+                        <div class="grid grid-cols-3 gap-sm text-center mb-sm">
+                            <div>
+                                <p class="text-label-mono text-on-surface-variant tracking-widest uppercase text-[10px] mb-xs">Costo</p>
+                                <p id="pourcost-modal-costo" class="text-sm font-semibold text-on-surface font-data-tabular">-</p>
+                            </div>
+                            <div>
+                                <p class="text-label-mono text-on-surface-variant tracking-widest uppercase text-[10px] mb-xs">Precio</p>
+                                <p id="pourcost-modal-precio" class="text-sm font-semibold text-on-surface font-data-tabular">-</p>
+                            </div>
+                            <div>
+                                <p class="text-label-mono text-on-surface-variant tracking-widest uppercase text-[10px] mb-xs">Pour Cost</p>
+                                <p id="pourcost-modal-pct" class="text-headline-md font-semibold font-data-tabular">-</p>
+                            </div>
+                        </div>
+                        <p id="pourcost-modal-incompleto" class="hidden badge-info text-[10px] font-label-mono px-sm py-xs rounded uppercase tracking-widest mb-md inline-block">Costo incompleto: falta WAC de uno o más insumos</p>
+
+                        <!-- Receta editable (solo cócteles) -->
+                        <div id="pourcost-modal-ingredientes-wrap" class="hidden mb-md">
+                            <h4 class="text-[10px] font-label-mono uppercase tracking-widest text-on-surface-variant mb-xs">Receta</h4>
+                            <div id="pourcost-modal-ingredientes" class="space-y-xs"></div>
+                        </div>
+
+                        <!-- WAC directo editable (solo productos sueltos) -->
+                        <div id="pourcost-modal-wac-directo-wrap" class="hidden mb-md">
+                            <label class="text-[10px] font-label-mono tracking-widest uppercase text-on-surface-variant block mb-xs">WAC (costo unitario)</label>
+                            <input id="pourcost-modal-wac-directo" type="number" min="0" step="0.0001"
+                                class="w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface font-data-tabular focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors">
+                        </div>
+
+                        <!-- Sandbox: precio sugerido segun % objetivo -->
+                        <div class="pt-md border-t border-outline-variant">
+                            <h4 class="text-[10px] font-label-mono uppercase tracking-widest text-on-surface-variant mb-xs">Simular pour cost objetivo</h4>
+                            <div class="flex items-center gap-sm mb-sm">
+                                <input id="pourcost-modal-target" type="number" min="0.01" step="0.01" placeholder="Ej: 25"
+                                    class="w-24 bg-surface border border-outline-variant rounded-md px-sm py-sm text-sm text-on-surface font-data-tabular focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors">
+                                <span class="text-sm text-on-surface-variant">% objetivo</span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-sm text-center">
+                                <div>
+                                    <p class="text-label-mono text-on-surface-variant tracking-widest uppercase text-[10px] mb-xs">Precio sugerido</p>
+                                    <p id="pourcost-modal-sugerido" class="text-sm font-semibold text-primary-fixed font-data-tabular">-</p>
+                                </div>
+                                <div>
+                                    <p class="text-label-mono text-on-surface-variant tracking-widest uppercase text-[10px] mb-xs">Vs. precio actual</p>
+                                    <p id="pourcost-modal-delta" class="text-sm font-semibold font-data-tabular">-</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button type="button" id="pourcost-modal-btn-reset" class="mt-md w-full bg-surface border border-outline-variant text-on-surface py-sm px-md rounded-sharp text-[10px] font-label-mono uppercase tracking-widest hover:border-primary-fixed-dim hover:text-primary-fixed transition-colors flex items-center justify-center gap-xs">
+                            <span class="material-symbols-outlined text-sm">restart_alt</span>
+                            Reiniciar simulación
+                        </button>
+                        <p class="mt-sm text-[10px] text-on-surface-variant leading-relaxed">Los valores editables (WAC, cantidad, % objetivo) son solo una simulación en este dispositivo — no se guarda ni se envía nada al sistema.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div id="conversor-modal" class="hidden fixed inset-0 z-50" aria-hidden="true">
             <div id="conversor-modal-overlay" class="absolute inset-0 bg-black/70 backdrop-blur-[2px]"></div>
             <div class="relative z-10 h-full flex items-center justify-center p-md">
@@ -1260,7 +1398,7 @@
         </div>
     </div>
 
-    <script src="/assets/app.js?v=11.0"></script>
+    <script src="/assets/app.js?v=11.1"></script>
 
     <script>
         (function () {
@@ -1305,7 +1443,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/assets/sw.js?v=11.0')
+                navigator.serviceWorker.register('/assets/sw.js?v=11.1')
                     .then(reg => console.log('[PWA] Service Worker registrado:', reg.scope))
                     .catch(err => console.error('[PWA] Error al registrar SW:', err));
             });

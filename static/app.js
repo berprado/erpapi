@@ -1451,6 +1451,504 @@ if (pesajeFiltroNoPesablesBtn) {
 }
 
 // ==========================================
+// MÓDULO POUR COST (solo lectura + simulación en memoria)
+// Ver documentos/pour_cost/pourcost.md para el diseño completo. A diferencia
+// de PESAJE, nada de lo editable en este módulo se envía al backend: el
+// "sandbox" (% objetivo, WAC/cantidad simulados) vive solo en el estado local
+// del modal y se descarta al cerrarlo o reabrir con otro item.
+// ==========================================
+
+// Cortes de negocio para el semáforo de pour cost (definidos por el usuario,
+// no un estándar de industria): <=28% ok, 28-35% atención, >35% alto.
+const POURCOST_UMBRAL_OK = 28;
+const POURCOST_UMBRAL_CAUTION = 35;
+
+const pourCostEstado = {
+    tipo: 'cocteles',       // 'cocteles' (con receta, vw_pourcost_receta) | 'productos' (WAC directo)
+    idDia: 1,               // 1 = "Precios A", 2 = "Precios B" (horario de precio, ver pourcost.md sección 8.2)
+    idCategoria: '',
+    nombre: '',
+    recetas: [],
+    productos: [],
+};
+
+const pourCostTipoCoctelesBtn  = document.getElementById('pourcost-tipo-cocteles');
+const pourCostTipoProductosBtn = document.getElementById('pourcost-tipo-productos');
+const pourCostHorarioABtn      = document.getElementById('pourcost-horario-a');
+const pourCostHorarioBBtn      = document.getElementById('pourcost-horario-b');
+const pourCostCategoriaSel     = document.getElementById('pourcost-categoria');
+const pourCostList             = document.getElementById('pourcost-list');
+const pourCostEmptyState       = document.getElementById('pourcost-empty-state');
+
+// --- Fórmulas: espejo de _calcular_pour_cost_pct / _calcular_precio_sugerido
+// (main.py) y de la convención de redondeo de documentos/pour_cost/pourcost.md
+// sección 4. Math.round() NO es HALF_UP en negativos (ver redondearOnzasOperativas
+// más arriba) -- se reutiliza el mismo truco de escalar + floor/ceil + epsilon. ---
+
+function pourCostRedondearHalfUp(valor, decimales) {
+    if (valor == null || Number.isNaN(Number(valor))) return null;
+    const factor = Math.pow(10, decimales);
+    const numero = Number(valor) * factor;
+    const epsilon = 1e-9;
+    const entero = numero >= 0
+        ? Math.floor(numero + 0.5 + epsilon)
+        : Math.ceil(numero - 0.5 - epsilon);
+    return entero / factor;
+}
+
+/** Pour cost % = costo/precio*100, HALF_UP a 2 decimales. null si no hay
+ * precio válido (evita división por cero) -- espejo de _calcular_pour_cost_pct. */
+function pourCostCalcularPct(costoTotal, precioVenta) {
+    if (precioVenta == null || Number(precioVenta) <= 0) return null;
+    return pourCostRedondearHalfUp((Number(costoTotal) / Number(precioVenta)) * 100, 2);
+}
+
+/** Precio sugerido = costo/(target/100): exacto + redondeado a unidad entera
+ * (el negocio no usa centavos, ver pourcost.md sección 4). null si el target
+ * no es un % válido -- espejo de _calcular_precio_sugerido. */
+function pourCostCalcularPrecioSugerido(costoTotal, targetPct) {
+    if (targetPct == null || Number(targetPct) <= 0) return null;
+    const exacto = Number(costoTotal) / (Number(targetPct) / 100);
+    return {
+        exacto: pourCostRedondearHalfUp(exacto, 2),
+        redondeado: pourCostRedondearHalfUp(exacto, 0),
+    };
+}
+
+function pourCostNivel(pct) {
+    if (pct == null) return null;
+    if (pct <= POURCOST_UMBRAL_OK) return 'ok';
+    if (pct <= POURCOST_UMBRAL_CAUTION) return 'caution';
+    return 'danger';
+}
+
+function pourCostClaseBadge(pct) {
+    const nivel = pourCostNivel(pct);
+    if (nivel === 'ok') return 'badge-ok';
+    if (nivel === 'caution') return 'badge-caution';
+    if (nivel === 'danger') return 'badge-danger';
+    return 'badge-info'; // sin precio para este horario: neutro, no es "bueno" ni "malo"
+}
+
+function pourCostColorTexto(pct) {
+    const nivel = pourCostNivel(pct);
+    if (nivel === 'ok') return 'var(--semantic-action)';
+    if (nivel === 'caution') return 'var(--semantic-warning)';
+    if (nivel === 'danger') return 'var(--semantic-danger)';
+    return '';
+}
+
+function pourCostFormatearMoneda(valor) {
+    if (valor == null || Number.isNaN(Number(valor))) return '-';
+    return Number(valor).toFixed(2);
+}
+
+function pourCostFormatearPct(valor) {
+    if (valor == null || Number.isNaN(Number(valor))) return '-';
+    return `${Number(valor).toFixed(2)}%`;
+}
+
+// --- Carga y filtros ---
+
+function actualizarUIFiltrosPourCost() {
+    const grupos = [
+        { btn: pourCostTipoCoctelesBtn, activo: pourCostEstado.tipo === 'cocteles' },
+        { btn: pourCostTipoProductosBtn, activo: pourCostEstado.tipo === 'productos' },
+        { btn: pourCostHorarioABtn, activo: pourCostEstado.idDia === 1 },
+        { btn: pourCostHorarioBBtn, activo: pourCostEstado.idDia === 2 },
+    ];
+    grupos.forEach(({ btn, activo }) => {
+        if (!btn) return;
+        btn.classList.toggle('bg-primary-container', activo);
+        btn.classList.toggle('text-black', activo);
+        btn.classList.toggle('border-primary-fixed-dim', activo);
+        btn.classList.toggle('bg-surface', !activo);
+        btn.classList.toggle('text-on-surface', !activo);
+        btn.classList.toggle('border-outline-variant', !activo);
+    });
+}
+
+/** Repuebla el filtro de categoría a partir de los datos ya cargados -- POUR
+ * COST no tiene endpoint propio de categorías, se deriva del dataset activo
+ * (cambia con el tipo cócteles/productos). */
+function actualizarCategoriasPourCost() {
+    if (!pourCostCategoriaSel) return;
+    const valorPrevio = pourCostCategoriaSel.value;
+    const esCocteles = pourCostEstado.tipo === 'cocteles';
+    const items = esCocteles ? pourCostEstado.recetas : pourCostEstado.productos;
+    const campoCategoria = esCocteles ? 'nombre_categoria_combo' : 'nombre_categoria';
+
+    const categorias = Array.from(new Set(items.map((item) => item[campoCategoria]).filter(Boolean))).sort();
+
+    pourCostCategoriaSel.querySelectorAll('option[data-pourcost-categoria="1"]').forEach((opt) => opt.remove());
+    categorias.forEach((nombre) => {
+        const option = document.createElement('option');
+        option.value = nombre;
+        option.textContent = nombre;
+        option.dataset.pourcostCategoria = '1';
+        pourCostCategoriaSel.appendChild(option);
+    });
+
+    pourCostCategoriaSel.value = (valorPrevio && categorias.includes(valorPrevio)) ? valorPrevio : '';
+}
+
+function mostrarCargandoPourCost() {
+    if (pourCostEmptyState) pourCostEmptyState.classList.add('hidden');
+    if (!pourCostList) return;
+    pourCostList.innerHTML = `
+        <div class="col-span-full flex items-center justify-center gap-sm py-lg text-on-surface-variant font-label-mono uppercase tracking-widest text-[11px]" aria-live="polite" style="grid-column: 1 / -1;">
+            ${renderCriticalIcon('refresh', 'ui-icon animate-spin-ccw')}
+            Cargando...
+        </div>`;
+}
+
+async function cargarPourCost() {
+    if (!pourCostList) return;
+    mostrarCargandoPourCost();
+    actualizarUIFiltrosPourCost();
+
+    const endpoint = pourCostEstado.tipo === 'cocteles' ? 'recetas' : 'productos';
+    const params = new URLSearchParams();
+    params.set('id_dia', String(pourCostEstado.idDia));
+
+    try {
+        const response = await fetchAutenticado(`${API_BASE}/pourcost/${endpoint}?${params.toString()}`);
+        if (response.status === 403) {
+            pourCostList.innerHTML = '';
+            pourCostEmptyState.textContent = 'No tienes permisos para acceder a este módulo.';
+            pourCostEmptyState.classList.remove('hidden');
+            return;
+        }
+        const datos = response.ok ? await response.json() : [];
+        if (pourCostEstado.tipo === 'cocteles') pourCostEstado.recetas = datos;
+        else pourCostEstado.productos = datos;
+    } catch (error) {
+        if (error instanceof SesionExpiradaError) return;
+        if (pourCostEstado.tipo === 'cocteles') pourCostEstado.recetas = [];
+        else pourCostEstado.productos = [];
+    }
+
+    actualizarCategoriasPourCost();
+    renderizarPourCost();
+}
+
+/** Filtro de categoría/búsqueda: 100% en cliente sobre los datos ya cargados
+ * (no requiere ida y vuelta al backend, a diferencia de PESAJE). */
+function renderizarPourCost() {
+    if (!pourCostList) return;
+    pourCostList.innerHTML = '';
+
+    const esCocteles = pourCostEstado.tipo === 'cocteles';
+    let items = esCocteles ? pourCostEstado.recetas : pourCostEstado.productos;
+
+    if (pourCostEstado.idCategoria) {
+        const campoCategoria = esCocteles ? 'nombre_categoria_combo' : 'nombre_categoria';
+        items = items.filter((item) => item[campoCategoria] === pourCostEstado.idCategoria);
+    }
+    if (pourCostEstado.nombre) {
+        const query = pourCostEstado.nombre.toLowerCase();
+        const campoNombre = esCocteles ? 'nombre_combo' : 'nombre';
+        items = items.filter((item) => (item[campoNombre] || '').toLowerCase().includes(query));
+    }
+
+    if (pourCostEmptyState) pourCostEmptyState.classList.toggle('hidden', items.length > 0);
+
+    items.forEach((item) => {
+        pourCostList.appendChild(esCocteles ? crearTarjetaPourCostReceta(item) : crearTarjetaPourCostProducto(item));
+    });
+}
+
+function filtrarPourCost(query) {
+    pourCostEstado.nombre = query.trim();
+    renderizarPourCost();
+}
+
+if (pourCostTipoCoctelesBtn) {
+    pourCostTipoCoctelesBtn.addEventListener('click', () => {
+        pourCostEstado.tipo = 'cocteles';
+        pourCostEstado.idCategoria = '';
+        cargarPourCost();
+    });
+}
+if (pourCostTipoProductosBtn) {
+    pourCostTipoProductosBtn.addEventListener('click', () => {
+        pourCostEstado.tipo = 'productos';
+        pourCostEstado.idCategoria = '';
+        cargarPourCost();
+    });
+}
+if (pourCostHorarioABtn) {
+    pourCostHorarioABtn.addEventListener('click', () => {
+        pourCostEstado.idDia = 1;
+        cargarPourCost();
+    });
+}
+if (pourCostHorarioBBtn) {
+    pourCostHorarioBBtn.addEventListener('click', () => {
+        pourCostEstado.idDia = 2;
+        cargarPourCost();
+    });
+}
+if (pourCostCategoriaSel) {
+    pourCostCategoriaSel.addEventListener('change', () => {
+        pourCostEstado.idCategoria = pourCostCategoriaSel.value;
+        renderizarPourCost();
+    });
+}
+
+// --- Tarjetas ---
+
+function crearTarjetaPourCostReceta(combo) {
+    const div = document.createElement('div');
+    div.className = 'bg-surface-container border border-outline-variant rounded-md p-md shadow-lg transition-colors flex flex-col gap-xs cursor-pointer hover:border-primary-fixed-dim';
+
+    div.innerHTML = `
+        <div class="text-[11px] text-on-surface-variant font-label-mono uppercase tracking-wider mb-xs flex items-center flex-wrap gap-xs">
+            ${combo.nombre_categoria_combo ? `<span>${escapeHtml(combo.nombre_categoria_combo)}</span>` : ''}
+            <span class="${combo.nombre_categoria_combo ? 'border-l border-outline-variant pl-xs' : ''}">COD ${escapeHtml(combo.codigo_combo)}</span>
+        </div>
+        <p class="text-sm font-semibold text-on-surface leading-tight mb-xs">${escapeHtml(combo.nombre_combo)}</p>
+        <div class="flex flex-wrap gap-xs text-[10px] font-label-mono text-on-surface-variant mb-xs">
+            <span class="bg-surface-container-low px-xs py-[1px] rounded">Precio ${pourCostFormatearMoneda(combo.precio_venta)}</span>
+            <span class="bg-surface-container-low px-xs py-[1px] rounded">Costo ${pourCostFormatearMoneda(combo.costo_total_receta)}</span>
+        </div>
+        <div class="flex flex-wrap gap-xs items-center mb-sm">
+            <span class="${pourCostClaseBadge(combo.pour_cost_pct)} text-[10px] font-label-mono px-sm py-[2px] rounded uppercase tracking-widest font-semibold">${pourCostFormatearPct(combo.pour_cost_pct)}</span>
+            ${combo.costo_incompleto ? '<span class="badge-info text-[9px] font-label-mono px-xs py-[1px] rounded uppercase tracking-widest">Costo incompleto</span>' : ''}
+        </div>
+    `;
+
+    div.addEventListener('click', () => abrirModalPourCostReceta(combo));
+    return div;
+}
+
+function crearTarjetaPourCostProducto(producto) {
+    const div = document.createElement('div');
+    div.className = 'bg-surface-container border border-outline-variant rounded-md p-md shadow-lg transition-colors flex flex-col gap-xs cursor-pointer hover:border-primary-fixed-dim';
+
+    div.innerHTML = `
+        <div class="text-[11px] text-on-surface-variant font-label-mono uppercase tracking-wider mb-xs flex items-center flex-wrap gap-xs">
+            ${producto.nombre_categoria ? `<span>${escapeHtml(producto.nombre_categoria)}</span>` : ''}
+            <span class="${producto.nombre_categoria ? 'border-l border-outline-variant pl-xs' : ''}">COD ${escapeHtml(producto.codigo)}</span>
+        </div>
+        <p class="text-sm font-semibold text-on-surface leading-tight mb-xs">${escapeHtml(producto.nombre)}</p>
+        <div class="flex flex-wrap gap-xs text-[10px] font-label-mono text-on-surface-variant mb-xs">
+            <span class="bg-surface-container-low px-xs py-[1px] rounded">Precio ${pourCostFormatearMoneda(producto.precio_venta)}</span>
+            <span class="bg-surface-container-low px-xs py-[1px] rounded">WAC ${pourCostFormatearMoneda(producto.wac_unitario)}</span>
+        </div>
+        <div class="flex flex-wrap gap-xs items-center mb-sm">
+            <span class="${pourCostClaseBadge(producto.pour_cost_pct)} text-[10px] font-label-mono px-sm py-[2px] rounded uppercase tracking-widest font-semibold">${pourCostFormatearPct(producto.pour_cost_pct)}</span>
+            ${producto.sin_wac ? '<span class="badge-info text-[9px] font-label-mono px-xs py-[1px] rounded uppercase tracking-widest">Sin WAC</span>' : ''}
+        </div>
+    `;
+
+    div.addEventListener('click', () => abrirModalPourCostProducto(producto));
+    return div;
+}
+
+// --- Modal: detalle + sandbox de simulación (solo en memoria, ver header de sección) ---
+
+const pourCostModal                 = document.getElementById('pourcost-modal');
+const pourCostModalOverlay          = document.getElementById('pourcost-modal-overlay');
+const btnClosePourCostModal         = document.getElementById('btn-close-pourcost-modal');
+const pourCostModalCategoria        = document.getElementById('pourcost-modal-categoria');
+const pourCostModalCodigo           = document.getElementById('pourcost-modal-codigo');
+const pourCostModalNombre           = document.getElementById('pourcost-modal-nombre');
+const pourCostModalCosto            = document.getElementById('pourcost-modal-costo');
+const pourCostModalPrecio           = document.getElementById('pourcost-modal-precio');
+const pourCostModalPct              = document.getElementById('pourcost-modal-pct');
+const pourCostModalIncompleto       = document.getElementById('pourcost-modal-incompleto');
+const pourCostModalIngredientesWrap = document.getElementById('pourcost-modal-ingredientes-wrap');
+const pourCostModalIngredientes     = document.getElementById('pourcost-modal-ingredientes');
+const pourCostModalWacDirectoWrap   = document.getElementById('pourcost-modal-wac-directo-wrap');
+const pourCostModalWacDirecto       = document.getElementById('pourcost-modal-wac-directo');
+const pourCostModalTarget           = document.getElementById('pourcost-modal-target');
+const pourCostModalSugerido         = document.getElementById('pourcost-modal-sugerido');
+const pourCostModalDelta            = document.getElementById('pourcost-modal-delta');
+const pourCostModalBtnReset         = document.getElementById('pourcost-modal-btn-reset');
+
+// Estado de la simulación del item actualmente abierto (se descarta al cerrar
+// o reabrir con otro item -- nunca se envía al backend).
+let pourCostSimulacion = null;
+// Item original (sin modificar) del modal abierto, para poder "Reiniciar simulación".
+let pourCostUltimoItemAbierto = null;
+
+function pourCostClonarParaSimulacion(item, esCoctel) {
+    if (esCoctel) {
+        return {
+            esCoctel: true,
+            precioVenta: item.precio_venta,
+            ingredientes: (item.ingredientes || []).map((ing) => ({
+                nombre_producto: ing.nombre_producto,
+                unidad_base: ing.unidad_base,
+                cantidad_unidad_base: ing.cantidad_unidad_base,
+                wac_actual: ing.wac_actual,
+                sin_wac: ing.sin_wac,
+            })),
+        };
+    }
+    return { esCoctel: false, precioVenta: item.precio_venta, wac: item.wac_unitario };
+}
+
+/** Recalcula costo total, pour cost % y precio sugerido a partir del estado
+ * de simulación actual, y repinta el resumen del modal. Se llama en cada
+ * edición (cantidad, WAC, % objetivo) para que la UI reaccione en vivo. */
+function pourCostRecalcularSimulacion() {
+    if (!pourCostSimulacion) return;
+
+    let costoTotal;
+    if (pourCostSimulacion.esCoctel) {
+        costoTotal = pourCostSimulacion.ingredientes.reduce(
+            (acumulado, ing) => acumulado + (Number(ing.cantidad_unidad_base) || 0) * (Number(ing.wac_actual) || 0),
+            0
+        );
+    } else {
+        costoTotal = Number(pourCostSimulacion.wac) || 0;
+    }
+    costoTotal = pourCostRedondearHalfUp(costoTotal, 2);
+
+    const pct = pourCostCalcularPct(costoTotal, pourCostSimulacion.precioVenta);
+
+    if (pourCostModalCosto) pourCostModalCosto.textContent = pourCostFormatearMoneda(costoTotal);
+    if (pourCostModalPrecio) pourCostModalPrecio.textContent = pourCostFormatearMoneda(pourCostSimulacion.precioVenta);
+    if (pourCostModalPct) {
+        pourCostModalPct.textContent = pourCostFormatearPct(pct);
+        pourCostModalPct.style.color = pourCostColorTexto(pct);
+    }
+
+    const target = pourCostModalTarget ? parseFloat(pourCostModalTarget.value) : NaN;
+    const sugerido = Number.isFinite(target) && target > 0 ? pourCostCalcularPrecioSugerido(costoTotal, target) : null;
+
+    if (pourCostModalSugerido) pourCostModalSugerido.textContent = sugerido ? pourCostFormatearMoneda(sugerido.redondeado) : '-';
+    if (pourCostModalDelta) {
+        if (sugerido && pourCostSimulacion.precioVenta != null) {
+            const delta = sugerido.redondeado - Number(pourCostSimulacion.precioVenta);
+            pourCostModalDelta.textContent = `${delta > 0 ? '+' : ''}${delta.toFixed(2)}`;
+            pourCostModalDelta.style.color = delta > 0 ? 'var(--semantic-warning)' : delta < 0 ? 'var(--semantic-action)' : '';
+        } else {
+            pourCostModalDelta.textContent = '-';
+            pourCostModalDelta.style.color = '';
+        }
+    }
+}
+
+function pourCostCrearFilaIngrediente(ingrediente, index) {
+    const div = document.createElement('div');
+    div.className = 'flex items-center gap-xs p-sm bg-surface border border-outline-variant rounded-md';
+
+    div.innerHTML = `
+        <div class="flex-1 min-w-0">
+            <p class="text-xs text-on-surface truncate">${escapeHtml(ingrediente.nombre_producto)}</p>
+            ${ingrediente.sin_wac ? '<p class="text-[9px] font-label-mono uppercase tracking-widest" style="color:var(--semantic-warning)">Sin WAC cacheado</p>' : ''}
+        </div>
+        <div class="flex flex-col items-center shrink-0">
+            <label class="text-[9px] font-label-mono uppercase tracking-widest text-on-surface-variant">${ingrediente.unidad_base ? escapeHtml(ingrediente.unidad_base) : 'Cant.'}</label>
+            <input type="number" min="0" step="0.01" data-campo="cantidad_unidad_base" data-index="${index}"
+                value="${Number(ingrediente.cantidad_unidad_base ?? 0)}"
+                class="w-16 bg-surface-container border border-outline-variant rounded-sm px-xs py-[2px] text-xs text-on-surface font-data-tabular text-center focus:border-primary-fixed-dim focus:outline-none">
+        </div>
+        <div class="flex flex-col items-center shrink-0">
+            <label class="text-[9px] font-label-mono uppercase tracking-widest text-on-surface-variant">WAC</label>
+            <input type="number" min="0" step="0.0001" data-campo="wac_actual" data-index="${index}"
+                value="${Number(ingrediente.wac_actual ?? 0)}"
+                class="w-16 bg-surface-container border border-outline-variant rounded-sm px-xs py-[2px] text-xs text-on-surface font-data-tabular text-center focus:border-primary-fixed-dim focus:outline-none">
+        </div>
+    `;
+    return div;
+}
+
+if (pourCostModalIngredientes) {
+    pourCostModalIngredientes.addEventListener('input', (e) => {
+        const input = e.target.closest('input[data-campo]');
+        if (!input || !pourCostSimulacion || !pourCostSimulacion.esCoctel) return;
+        const index = parseInt(input.dataset.index, 10);
+        const valor = parseFloat(input.value);
+        if (pourCostSimulacion.ingredientes[index]) {
+            pourCostSimulacion.ingredientes[index][input.dataset.campo] = Number.isFinite(valor) ? valor : 0;
+        }
+        pourCostRecalcularSimulacion();
+    });
+}
+
+if (pourCostModalWacDirecto) {
+    pourCostModalWacDirecto.addEventListener('input', () => {
+        if (!pourCostSimulacion || pourCostSimulacion.esCoctel) return;
+        const valor = parseFloat(pourCostModalWacDirecto.value);
+        pourCostSimulacion.wac = Number.isFinite(valor) ? valor : 0;
+        pourCostRecalcularSimulacion();
+    });
+}
+
+if (pourCostModalTarget) pourCostModalTarget.addEventListener('input', pourCostRecalcularSimulacion);
+
+function abrirModalPourCostReceta(combo) {
+    if (!pourCostModal) return;
+    pourCostUltimoItemAbierto = combo;
+    pourCostSimulacion = pourCostClonarParaSimulacion(combo, true);
+
+    if (pourCostModalCategoria) pourCostModalCategoria.textContent = combo.nombre_categoria_combo || '';
+    if (pourCostModalCodigo) pourCostModalCodigo.textContent = `COD ${combo.codigo_combo}`;
+    if (pourCostModalNombre) pourCostModalNombre.textContent = combo.nombre_combo;
+    if (pourCostModalIncompleto) pourCostModalIncompleto.classList.toggle('hidden', !combo.costo_incompleto);
+
+    if (pourCostModalIngredientesWrap) pourCostModalIngredientesWrap.classList.remove('hidden');
+    if (pourCostModalWacDirectoWrap) pourCostModalWacDirectoWrap.classList.add('hidden');
+
+    if (pourCostModalIngredientes) {
+        pourCostModalIngredientes.innerHTML = '';
+        pourCostSimulacion.ingredientes.forEach((ing, index) => {
+            pourCostModalIngredientes.appendChild(pourCostCrearFilaIngrediente(ing, index));
+        });
+    }
+
+    if (pourCostModalTarget) pourCostModalTarget.value = '';
+    pourCostRecalcularSimulacion();
+
+    pourCostModal.classList.remove('hidden');
+    pourCostModal.setAttribute('aria-hidden', 'false');
+}
+
+function abrirModalPourCostProducto(producto) {
+    if (!pourCostModal) return;
+    pourCostUltimoItemAbierto = producto;
+    pourCostSimulacion = pourCostClonarParaSimulacion(producto, false);
+
+    if (pourCostModalCategoria) pourCostModalCategoria.textContent = producto.nombre_categoria || '';
+    if (pourCostModalCodigo) pourCostModalCodigo.textContent = `COD ${producto.codigo}`;
+    if (pourCostModalNombre) pourCostModalNombre.textContent = producto.nombre;
+    if (pourCostModalIncompleto) pourCostModalIncompleto.classList.toggle('hidden', !producto.sin_wac);
+
+    if (pourCostModalIngredientesWrap) pourCostModalIngredientesWrap.classList.add('hidden');
+    if (pourCostModalWacDirectoWrap) pourCostModalWacDirectoWrap.classList.remove('hidden');
+    if (pourCostModalWacDirecto) pourCostModalWacDirecto.value = Number(producto.wac_unitario ?? 0);
+
+    if (pourCostModalTarget) pourCostModalTarget.value = '';
+    pourCostRecalcularSimulacion();
+
+    pourCostModal.classList.remove('hidden');
+    pourCostModal.setAttribute('aria-hidden', 'false');
+}
+
+function cerrarModalPourCost() {
+    if (!pourCostModal) return;
+    pourCostSimulacion = null;
+    pourCostUltimoItemAbierto = null;
+    pourCostModal.classList.add('hidden');
+    pourCostModal.setAttribute('aria-hidden', 'true');
+}
+
+if (btnClosePourCostModal) btnClosePourCostModal.addEventListener('click', cerrarModalPourCost);
+if (pourCostModalOverlay) pourCostModalOverlay.addEventListener('click', cerrarModalPourCost);
+
+if (pourCostModalBtnReset) {
+    pourCostModalBtnReset.addEventListener('click', () => {
+        if (!pourCostUltimoItemAbierto) return;
+        if (pourCostSimulacion?.esCoctel) abrirModalPourCostReceta(pourCostUltimoItemAbierto);
+        else abrirModalPourCostProducto(pourCostUltimoItemAbierto);
+    });
+}
+
+// ==========================================
 // CALCULADORA PESO -> ONZAS (ex-módulo CONVERSOR, ahora integrada en las
 // tarjetas de PESAJE vía el botón CALCULAR). Sin estado de operativa ni
 // persistencia; calcula todo en cliente reutilizando redondearOnzasOperativas()
@@ -1616,6 +2114,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     inicializarFabScrollTop('pesaje-fab-scroll-top', 'panel-pesaje');
+    inicializarFabScrollTop('pourcost-fab-scroll-top', 'panel-pourcost');
     inicializarFabScrollTop('inventario-fab-scroll-top', 'panel-inventario');
     inicializarFabScrollTop('stock-fab-scroll-top', 'panel-stock');
     inicializarFabScrollTop('scan-fab-scroll-top', 'panel-scan');
@@ -1812,6 +2311,8 @@ async function mostrarPantallaApp() {
     document.getElementById('user-display').textContent = localStorage.getItem('nombres');
     const menuItemPesaje = document.getElementById('menu-item-pesaje');
     if (menuItemPesaje) menuItemPesaje.classList.toggle('hidden', !esUsuarioAdministrador());
+    const menuItemPourCost = document.getElementById('menu-item-pourcost');
+    if (menuItemPourCost) menuItemPourCost.classList.toggle('hidden', !esUsuarioAdministrador());
     await cargarConfiguracionPublica();
     // Asegurar que el panel de inventario sea el visible al entrar a la app
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
@@ -3267,6 +3768,7 @@ const TAB_PANEL_MAP = {
     scan:       'panel-scan',
     logs:       'panel-logs',
     pesaje:     'panel-pesaje',
+    pourcost:   'panel-pourcost',
 };
 
 // ==========================================
@@ -3293,6 +3795,7 @@ const BUSQUEDA_POR_TAB = {
     logs:       { placeholder: 'Buscar producto para saltar a su tarjeta...', handler: buscarYNavegarCaptura, permiteAgregarCatalogo: true },
     stock:      { placeholder: 'Buscar por ID, código o nombre...', handler: filtrarStockPaloteo3, permiteAgregarCatalogo: true },
     pesaje:     { placeholder: 'Buscar por nombre de producto...', handler: filtrarPesaje },
+    pourcost:   { placeholder: 'Buscar por nombre...', handler: filtrarPourCost },
 };
 
 let busquedaTopbarAbierta = false;
@@ -3748,6 +4251,10 @@ function navegarATab(tabName) {
 
     if (tabName === 'pesaje') {
         cargarPesaje();
+    }
+
+    if (tabName === 'pourcost') {
+        cargarPourCost();
     }
 
     // Actualizar estado visual de tabs (excepto btn-guardar que tiene su propio estado)
