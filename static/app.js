@@ -1790,9 +1790,47 @@ function pourCostClonarParaSimulacion(item, esCoctel) {
     return { esCoctel: false, precioVenta: item.precio_venta, wac: item.wac_unitario };
 }
 
-/** Recalcula costo total, pour cost % y precio sugerido a partir del estado
- * de simulación actual, y repinta el resumen del modal. Se llama en cada
- * edición (cantidad, WAC, % objetivo) para que la UI reaccione en vivo. */
+/** Pinta Costo/Precio/Pour Cost tal cual llegan (sin recalcular nada). Se usa
+ * al abrir el modal para mostrar el valor *autoritativo* del backend (Decimal
+ * en Python) en vez del recomputo en cliente (float de JS) -- summar muchas
+ * líneas en cada aritmética puede diferir en el último decimal (mismo tipo de
+ * deriva que documenta redondeo_y_tolerancia.md para la grilla de oz). Sin
+ * esto, el modal podía mostrar un % distinto al de la tarjeta con solo
+ * abrirlo, antes de que el usuario tocara nada. */
+function pourCostPintarResumenCosto(costoTotal, precioVenta, pct) {
+    if (pourCostModalCosto) pourCostModalCosto.textContent = pourCostFormatearMoneda(costoTotal);
+    if (pourCostModalPrecio) pourCostModalPrecio.textContent = pourCostFormatearMoneda(precioVenta);
+    if (pourCostModalPct) {
+        pourCostModalPct.textContent = pourCostFormatearPct(pct);
+        pourCostModalPct.style.color = pourCostColorTexto(pct);
+    }
+}
+
+/** Lee el % objetivo del input y pinta precio sugerido + delta vs precio
+ * actual. Depende de `costoTotal` explícito (no de pourCostSimulacion) para
+ * poder usarse tanto con el valor autoritativo inicial como con el simulado. */
+function pourCostPintarSugerido(costoTotal, precioVenta) {
+    const target = pourCostModalTarget ? parseFloat(pourCostModalTarget.value) : NaN;
+    const sugerido = Number.isFinite(target) && target > 0 ? pourCostCalcularPrecioSugerido(costoTotal, target) : null;
+
+    if (pourCostModalSugerido) pourCostModalSugerido.textContent = sugerido ? pourCostFormatearMoneda(sugerido.redondeado) : '-';
+    if (pourCostModalDelta) {
+        if (sugerido && precioVenta != null) {
+            const delta = sugerido.redondeado - Number(precioVenta);
+            pourCostModalDelta.textContent = `${delta > 0 ? '+' : ''}${delta.toFixed(2)}`;
+            pourCostModalDelta.style.color = delta > 0 ? 'var(--semantic-warning)' : delta < 0 ? 'var(--semantic-action)' : '';
+        } else {
+            pourCostModalDelta.textContent = '-';
+            pourCostModalDelta.style.color = '';
+        }
+    }
+}
+
+/** Recalcula costo total y pour cost % a partir del estado de simulación
+ * actual (cantidades/WAC editados) y repinta todo el resumen del modal. Se
+ * llama en cada edición para que la UI reaccione en vivo -- a diferencia de
+ * pourCostPintarResumenCosto, esto SÍ hace la suma en JS porque ya no hay un
+ * valor autoritativo del backend que refleje la simulación en curso. */
 function pourCostRecalcularSimulacion() {
     if (!pourCostSimulacion) return;
 
@@ -1808,44 +1846,32 @@ function pourCostRecalcularSimulacion() {
     costoTotal = pourCostRedondearHalfUp(costoTotal, 2);
 
     const pct = pourCostCalcularPct(costoTotal, pourCostSimulacion.precioVenta);
-
-    if (pourCostModalCosto) pourCostModalCosto.textContent = pourCostFormatearMoneda(costoTotal);
-    if (pourCostModalPrecio) pourCostModalPrecio.textContent = pourCostFormatearMoneda(pourCostSimulacion.precioVenta);
-    if (pourCostModalPct) {
-        pourCostModalPct.textContent = pourCostFormatearPct(pct);
-        pourCostModalPct.style.color = pourCostColorTexto(pct);
-    }
-
-    const target = pourCostModalTarget ? parseFloat(pourCostModalTarget.value) : NaN;
-    const sugerido = Number.isFinite(target) && target > 0 ? pourCostCalcularPrecioSugerido(costoTotal, target) : null;
-
-    if (pourCostModalSugerido) pourCostModalSugerido.textContent = sugerido ? pourCostFormatearMoneda(sugerido.redondeado) : '-';
-    if (pourCostModalDelta) {
-        if (sugerido && pourCostSimulacion.precioVenta != null) {
-            const delta = sugerido.redondeado - Number(pourCostSimulacion.precioVenta);
-            pourCostModalDelta.textContent = `${delta > 0 ? '+' : ''}${delta.toFixed(2)}`;
-            pourCostModalDelta.style.color = delta > 0 ? 'var(--semantic-warning)' : delta < 0 ? 'var(--semantic-action)' : '';
-        } else {
-            pourCostModalDelta.textContent = '-';
-            pourCostModalDelta.style.color = '';
-        }
-    }
+    pourCostPintarResumenCosto(costoTotal, pourCostSimulacion.precioVenta, pct);
+    pourCostPintarSugerido(costoTotal, pourCostSimulacion.precioVenta);
 }
 
 function pourCostCrearFilaIngrediente(ingrediente, index) {
     const div = document.createElement('div');
     div.className = 'flex items-center gap-xs p-sm bg-surface border border-outline-variant rounded-md';
 
+    // `unidad_base` describe la presentación del insumo (ej. "ML" = la botella
+    // se mide en mililitros), NO la unidad de `cantidad_unidad_base` (que es
+    // una fracción de esa presentación, ej. 0.059 de una botella de 2L) --
+    // por eso no se usa como label del input de cantidad, para no dar a
+    // entender un volumen que no es. Se muestra aparte, como referencia.
     div.innerHTML = `
         <div class="flex-1 min-w-0">
             <p class="text-xs text-on-surface truncate">${escapeHtml(ingrediente.nombre_producto)}</p>
+            <p class="text-[9px] font-label-mono uppercase tracking-widest text-on-surface-variant">
+                ${ingrediente.unidad_base ? `Presentación: ${escapeHtml(ingrediente.unidad_base)}` : ''}
+            </p>
             ${ingrediente.sin_wac ? '<p class="text-[9px] font-label-mono uppercase tracking-widest" style="color:var(--semantic-warning)">Sin WAC cacheado</p>' : ''}
         </div>
         <div class="flex flex-col items-center shrink-0">
-            <label class="text-[9px] font-label-mono uppercase tracking-widest text-on-surface-variant">${ingrediente.unidad_base ? escapeHtml(ingrediente.unidad_base) : 'Cant.'}</label>
-            <input type="number" min="0" step="0.01" data-campo="cantidad_unidad_base" data-index="${index}"
+            <label class="text-[9px] font-label-mono uppercase tracking-widest text-on-surface-variant" title="Fracción de la presentación del insumo usada en la receta">Cant.</label>
+            <input type="number" min="0" step="0.0001" data-campo="cantidad_unidad_base" data-index="${index}"
                 value="${Number(ingrediente.cantidad_unidad_base ?? 0)}"
-                class="w-16 bg-surface-container border border-outline-variant rounded-sm px-xs py-[2px] text-xs text-on-surface font-data-tabular text-center focus:border-primary-fixed-dim focus:outline-none">
+                class="w-20 bg-surface-container border border-outline-variant rounded-sm px-xs py-[2px] text-xs text-on-surface font-data-tabular text-center focus:border-primary-fixed-dim focus:outline-none">
         </div>
         <div class="flex flex-col items-center shrink-0">
             <label class="text-[9px] font-label-mono uppercase tracking-widest text-on-surface-variant">WAC</label>
@@ -1902,7 +1928,10 @@ function abrirModalPourCostReceta(combo) {
     }
 
     if (pourCostModalTarget) pourCostModalTarget.value = '';
-    pourCostRecalcularSimulacion();
+    // Estado inicial: el valor tal cual lo calculó el backend (Decimal), no un
+    // recomputo en JS -- ver comentario de pourCostPintarResumenCosto.
+    pourCostPintarResumenCosto(combo.costo_total_receta, combo.precio_venta, combo.pour_cost_pct);
+    pourCostPintarSugerido(combo.costo_total_receta, combo.precio_venta);
 
     pourCostModal.classList.remove('hidden');
     pourCostModal.setAttribute('aria-hidden', 'false');
@@ -1923,7 +1952,10 @@ function abrirModalPourCostProducto(producto) {
     if (pourCostModalWacDirecto) pourCostModalWacDirecto.value = Number(producto.wac_unitario ?? 0);
 
     if (pourCostModalTarget) pourCostModalTarget.value = '';
-    pourCostRecalcularSimulacion();
+    // Estado inicial: costo = wac_unitario tal cual (no hay suma que recalcular
+    // en productos sueltos, pero se mantiene el mismo patrón que recetas).
+    pourCostPintarResumenCosto(producto.wac_unitario, producto.precio_venta, producto.pour_cost_pct);
+    pourCostPintarSugerido(producto.wac_unitario, producto.precio_venta);
 
     pourCostModal.classList.remove('hidden');
     pourCostModal.setAttribute('aria-hidden', 'false');
