@@ -4,6 +4,9 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 11.3
+- POUR COST: corrige un tercer efecto de la misma raíz que v11.2 -- el listener del campo "% objetivo" llamaba a `pourCostRecalcularSimulacion()` completo, que recalcula Costo/Pour Cost sumando en `float` de JS aunque el usuario no hubiera tocado ningún ingrediente. Al escribir el % solo, el Pour Cost real caía de 23.97% a 23.98% igual que antes de v11.2. Ahora el costo/precio "vigentes" del modal se guardan en `pourCostCostoActual`/`pourCostPrecioActual` (el valor del backend hasta que se edite un ingrediente/WAC) y el campo "% objetivo" solo repinta precio sugerido/delta a partir de ese valor, sin tocar el Costo/Pour Cost mostrado arriba.
+
 ## 11.2
 - POUR COST: corrige dos hallazgos de la primera prueba visual contra datos reales de test_pos (via seenode). (1) El modal de simulación recalculaba en cliente (`float` de JS) desde el momento en que se abría, mostrando un pour cost % con una centésima de diferencia respecto al de la tarjeta (`Decimal` del backend) sin que el usuario editara nada — ahora pinta el valor autoritativo del backend al abrir (`pourCostPintarResumenCosto`) y solo recalcula en cliente a partir de una edición real. (2) La cantidad editable de cada ingrediente mostraba la unidad de presentación del insumo (ej. "ML") como si fuera la unidad de esa cantidad, cuando en realidad es una fracción de esa presentación (ej. 0.059 de una botella de 2L) — la etiqueta del input pasa a "Cant." genérico y la presentación se muestra aparte, como referencia.
 

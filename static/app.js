@@ -1790,6 +1790,14 @@ function pourCostClonarParaSimulacion(item, esCoctel) {
     return { esCoctel: false, precioVenta: item.precio_venta, wac: item.wac_unitario };
 }
 
+// Costo/precio "vigentes" del modal abierto: el valor autoritativo del
+// backend hasta que el usuario edite un ingrediente/WAC, momento en el que
+// pasan a ser el recalculo en cliente. El campo "% objetivo" LEE de aca en
+// vez de recalcular por su cuenta -- typear un target no debe mover el costo
+// ni el pour cost real, solo el precio sugerido (ver pourCostPintarSugerido).
+let pourCostCostoActual = null;
+let pourCostPrecioActual = null;
+
 /** Pinta Costo/Precio/Pour Cost tal cual llegan (sin recalcular nada). Se usa
  * al abrir el modal para mostrar el valor *autoritativo* del backend (Decimal
  * en Python) en vez del recomputo en cliente (float de JS) -- summar muchas
@@ -1798,6 +1806,9 @@ function pourCostClonarParaSimulacion(item, esCoctel) {
  * esto, el modal podía mostrar un % distinto al de la tarjeta con solo
  * abrirlo, antes de que el usuario tocara nada. */
 function pourCostPintarResumenCosto(costoTotal, precioVenta, pct) {
+    pourCostCostoActual = costoTotal;
+    pourCostPrecioActual = precioVenta;
+
     if (pourCostModalCosto) pourCostModalCosto.textContent = pourCostFormatearMoneda(costoTotal);
     if (pourCostModalPrecio) pourCostModalPrecio.textContent = pourCostFormatearMoneda(precioVenta);
     if (pourCostModalPct) {
@@ -1905,7 +1916,14 @@ if (pourCostModalWacDirecto) {
     });
 }
 
-if (pourCostModalTarget) pourCostModalTarget.addEventListener('input', pourCostRecalcularSimulacion);
+if (pourCostModalTarget) {
+    // Solo repinta precio sugerido/delta a partir del costo vigente -- NO
+    // dispara pourCostRecalcularSimulacion(): escribir un % objetivo no debe
+    // mover el Costo/Pour Cost real que se ve arriba (ver pourCostCostoActual).
+    pourCostModalTarget.addEventListener('input', () => {
+        pourCostPintarSugerido(pourCostCostoActual, pourCostPrecioActual);
+    });
+}
 
 function abrirModalPourCostReceta(combo) {
     if (!pourCostModal) return;
