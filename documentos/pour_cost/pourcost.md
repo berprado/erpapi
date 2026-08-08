@@ -81,7 +81,7 @@ Los tres primeros aceptan `id_dia` como **query param** (decidido en sección 8,
 | Endpoint | Fuente | Devuelve |
 |---|---|---|
 | `GET /api/pourcost/menu?id_dia=1` | `v9_menubackstage`, filtrando `id_dia` | Lista plana: combos + productos sueltos, con `precio_venta` del horario elegido |
-| `GET /api/pourcost/recetas?id_dia=1` | `vw_combo_detalle_reload` + `vw_cache_wac_producto_detalle` (costo/receta, agrupado por `id_combo_coctel`) **+ `v9_menubackstage` filtrado por `id_dia`** (precio) | Un objeto por combo: costo total, `precio_venta` del `id_dia` pedido, pour cost, lista de ingredientes con su `cogs_ingrediente` |
+| `GET /api/pourcost/recetas?id_dia=1` | `vw_combo_detalle_reload` + `vw_cache_wac_producto_detalle` (costo/receta, agrupado por `id_combo_coctel`) **+ `v9_menubackstage` filtrado por `id_dia`** (precio) | Un objeto por combo: costo total, `precio_venta` del `id_dia` pedido, pour cost, lista de ingredientes con su `cogs_ingrediente`, `cantidad_receta`, `cantidad_unidad_base`, `ind_tipo_producto` y `tipo_parte_combo` |
 | `GET /api/pourcost/productos?id_dia=1` | `v9_menubackstage` (`tipo='producto'`, filtrado por `id_dia`) + `v9_cache_wac_producto` | Un objeto por producto suelto: `wac_unitario`, `precio_venta` del horario elegido, pour cost directo |
 | `GET /api/pourcost/insumos` | `vw_alm_producto_con_nombres` | Catálogo completo para la simulación "agregar ingrediente" (no depende de `id_dia`) |
 
@@ -93,7 +93,18 @@ Toda la simulación corre en memoria del cliente, sin `POST`/`PUT` a `adminerp`:
 
 - **Simulación inversa:** el usuario ingresa un % objetivo → se despeja el precio sugerido con la fórmula de la sección 4.
 - **Alteración de WAC:** el usuario simula un cambio de costo de un insumo → recalcula `cogs_ingrediente` de esa línea y el total.
-- **Alteración de receta:** el usuario cambia la cantidad (oz) de un ingrediente → recalcula esa línea usando `cantidad_detalle`/`unidades_detalle_por_base` igual que hace el backend.
+- **Alteración de receta:** el usuario cambia la cantidad visible de un ingrediente en el modal (selector `[−] [cantidad] [+]`) → el frontend recalcula esa línea usando `cantidad_receta` como valor editable y `cantidad_unidad_base` como valor interno de costeo. Para líneas tipo `Detalle`, la edición se expresa en la unidad práctica de la receta y se convierte internamente a la fracción base para el cálculo. Para líneas tipo `Unidad`, el valor editado se usa directamente como base de costeo.
+
+### 6.1 Consistencia del modal de ingredientes
+
+El modal de cócteles debe mantener una separación explícita entre los dos conceptos que usa el backend:
+
+- `cantidad_receta`: cantidad visible y editada por el usuario en la unidad práctica de la receta.
+- `cantidad_unidad_base`: fracción interna usada para el cálculo de costo, derivada de `cantidad_receta` y de la vista de receta.
+
+En la implementación, la edición debe afectar solo `cantidad_receta`; `cantidad_unidad_base` debe recalcularse internamente y no exponerse como campo editable. La normalización de entradas debe aceptar valores como `1`, `1.0`, `1,0` y `1,5`, rechazar vacíos, negativos o no numéricos, y evitar errores de punto flotante al calcular el costo. El contrato del endpoint debe conservar los campos `ind_tipo_producto` y `tipo_parte_combo` para no perder el contexto de ingredientes principales y opcionales en la simulación local.
+
+Además, la UI debe reemplazar textos genéricos como `Presentación: ML` por una presentación estructurada de envase y rendimiento, por ejemplo: `ENVASE: 1000 ML · RENDIMIENTO: 34 OZ`.
 
 ## 7. Cierre del flujo — Fase 2, fuera de alcance v1
 
@@ -115,7 +126,14 @@ Botón "Aplicar Precio" → `INSERT` en `ope_precio_venta`. Queda **explícitame
 
 El usuario aportó `DOCUMENTO_MAESTRO_MOTOR_FINANCIERO_V9_WAC_COGS.md` y `GUIA_DECISION_SNAPSHOT_WAC_CIERRE_OPERATIVA.md` — documentación de un proyecto más amplio (motor financiero V9: `analytics_cogs_historico`, `snapshot_job.php`, congelamiento de WAC al cierre de operativa, KPIs `v9_item_base`/`v9_kpi_operativa`). **No pertenece a este repo y la mayor parte queda fuera del alcance de POUR COST v1** — es contexto para entender de dónde salen `cache_wac_producto`/`v9_cache_wac_producto` (puntos 3 y 4 arriba), no una lista de trabajo pendiente para este módulo. POUR COST v1 lee directamente el WAC vigente (lectura "V9 dinámico"); no depende de `analytics_cogs_historico` ni del snapshot job, y no se ve afectado por sus inconsistencias documentadas (job no migrado, granularidad sin definir, etc.) porque no los toca.
 
-## 9. Plan de pruebas (decidido, 2026-08-05)
+## 9. Referencias visuales
+
+Las imágenes aportadas sirven como referencia visual del estado actual del modal y deben consultarse junto con la receta y las vistas SQL al implementar la refactorización:
+
+- [long_island.png](./long_island.png)
+- [chuflay.png](./chuflay.png)
+
+## 10. Plan de pruebas (decidido, 2026-08-05)
 
 - **Unitarias, sin DB** (como `tests/test_calculos_pesaje.py`): las fórmulas de pour cost, precio sugerido y agregación de `cogs_ingrediente` son Python puro — se pueden testear con datos de ejemplo sin tocar la base. Corren en la suite normal (`python -m pytest`).
 - **Sin integración automatizada en v1.** El desarrollo y la validación de los 4 `GET` se hacen a mano contra `test_pos` (`APP_ENV=test_pos` en `.env` al levantar `uvicorn` localmente, o directo contra el deploy de seenode) — `tests/conftest.py` exige `APP_ENV=test` a propósito y no se toca ese guard. Mismo nivel de cobertura que `POST /pesaje/perfiles` o los exports PDF hoy.
