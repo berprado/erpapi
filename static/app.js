@@ -2027,8 +2027,44 @@ if (pourCostModalTarget) {
     });
 }
 
+// Botones [−][+] para % objetivo (paso 0,5).
+const pourCostTargetMenos = document.getElementById('pourcost-modal-target-menos');
+const pourCostTargetMas   = document.getElementById('pourcost-modal-target-mas');
+if (pourCostTargetMenos && pourCostModalTarget) {
+    pourCostTargetMenos.addEventListener('click', () => {
+        const actual = parseFloat(pourCostModalTarget.value) || 0;
+        pourCostModalTarget.value = Math.max(0.5, Math.round((actual - 0.5) * 10) / 10);
+        pourCostPintarSugerido(pourCostCostoActual, pourCostPrecioActual);
+    });
+}
+if (pourCostTargetMas && pourCostModalTarget) {
+    pourCostTargetMas.addEventListener('click', () => {
+        const actual = parseFloat(pourCostModalTarget.value) || 0;
+        pourCostModalTarget.value = Math.round((actual + 0.5) * 10) / 10;
+        pourCostPintarSugerido(pourCostCostoActual, pourCostPrecioActual);
+    });
+}
+
 if (pourCostModalPrecioInput) {
     pourCostModalPrecioInput.addEventListener('input', () => {
+        pourCostPintarResultadoPrecio(pourCostCostoActual);
+    });
+}
+
+// Botones [−][+] para precio Bs (paso 1).
+const pourCostPrecioMenos = document.getElementById('pourcost-modal-precio-menos');
+const pourCostPrecioMas   = document.getElementById('pourcost-modal-precio-mas');
+if (pourCostPrecioMenos && pourCostModalPrecioInput) {
+    pourCostPrecioMenos.addEventListener('click', () => {
+        const actual = Math.round(parseFloat(pourCostModalPrecioInput.value) || 0);
+        pourCostModalPrecioInput.value = Math.max(1, actual - 1);
+        pourCostPintarResultadoPrecio(pourCostCostoActual);
+    });
+}
+if (pourCostPrecioMas && pourCostModalPrecioInput) {
+    pourCostPrecioMas.addEventListener('click', () => {
+        const actual = Math.round(parseFloat(pourCostModalPrecioInput.value) || 0);
+        pourCostModalPrecioInput.value = actual + 1;
         pourCostPintarResultadoPrecio(pourCostCostoActual);
     });
 }

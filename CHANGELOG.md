@@ -4,7 +4,10 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
-## 11.5
+## 11.6
+- POUR COST: botones [−][+] en los dos inputs del simulador. % objetivo: paso 0,5 (ej. 25 → 25,5 → 26), mínimo 0,5. Precio Bs: paso 1, mínimo 1 Bs (acorde con que los precios reales son enteros). Ambos actualizan sus resultados en tiempo real al hacer clic.
+
+
 - POUR COST: calculadora bidireccional en el modal. Además del campo "% objetivo → precio sugerido" ya existente, se añade la dirección inversa: ingresar un precio en Bs muestra el pour cost % resultante con semáforo de color. El % se actualiza en tiempo real si el costo simulado cambia (por edición de ingredientes/WAC).
 
 
