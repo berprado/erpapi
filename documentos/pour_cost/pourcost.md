@@ -1,6 +1,6 @@
 # Módulo POUR COST — Diseño y Alcance (v1)
 
-Guía de referencia del módulo POUR COST: cálculo y simulación del costo de venta (pour cost) de combos/cócteles y productos sueltos comandados desde el POS. Estado: **implementado** (rama `feature/pour-cost`, cache v11.5). Este documento se mantiene como fuente de verdad de las decisiones de diseño y debe actualizarse cuando cambie el comportamiento del módulo.
+Guía de referencia del módulo POUR COST: cálculo y simulación del costo de venta (pour cost) de combos/cócteles y productos sueltos comandados desde el POS. Estado: **implementado** (rama `feature/pour-cost`, cache v11.6). Este documento se mantiene como fuente de verdad de las decisiones de diseño y debe actualizarse cuando cambie el comportamiento del módulo.
 
 ## 0. Qué resuelve
 
@@ -91,7 +91,7 @@ Los tres primeros aceptan `id_dia` como query param (default `1`), ya que `vw_po
 
 Toda la simulación corre en memoria del cliente, sin `POST`/`PUT` a `adminerp`:
 
-- **Simulación inversa (bidireccional):** el usuario puede ingresar un **% objetivo** para obtener el precio sugerido (`costo / (% / 100)`), o bien ingresar un **precio en Bs** para obtener el pour cost % resultante (`costo / precio × 100`). Ambas direcciones reaccionan en tiempo real si el costo simulado cambia por edición de cantidades/WAC.
+- **Simulación inversa (bidireccional):** el usuario puede ingresar un **% objetivo** para obtener el precio sugerido (`costo / (% / 100)`), o bien ingresar un **precio en Bs** para obtener el pour cost % resultante (`costo / precio × 100`). Ambos campos tienen controles `[−][valor][+]`: % con paso 0,5 (mínimo 0,5), precio con paso 1 Bs (mínimo 1). Ambas direcciones reaccionan en tiempo real si el costo simulado cambia por edición de cantidades/WAC.
 - **Alteración de WAC:** el usuario edita el WAC de un ingrediente → recalcula `cogs_ingrediente` de esa línea y el total.
 - **Alteración de receta:** selector `[−] [cantidad] [+]` con paso 0,5 por ingrediente. El frontend edita `cantidad_receta` y deriva `cantidad_unidad_base` internamente (`pourCostCantidadUnidadBase`). Para `Detalle`: `cantidad_unidad_base = cantidad_receta / unidades_detalle_por_base`; para `Unidad`: `cantidad_unidad_base = cantidad_receta`.
 - **Reiniciar simulación:** restaura exactamente los valores originales del backend (cantidades, WAC, costos y % original).
