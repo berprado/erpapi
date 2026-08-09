@@ -1780,14 +1780,45 @@ function pourCostClonarParaSimulacion(item, esCoctel) {
             precioVenta: item.precio_venta,
             ingredientes: (item.ingredientes || []).map((ing) => ({
                 nombre_producto: ing.nombre_producto,
+                tipo_cantidad_combo: ing.tipo_cantidad_combo,
+                tipo_parte_combo: ing.tipo_parte_combo,
                 unidad_base: ing.unidad_base,
-                cantidad_unidad_base: ing.cantidad_unidad_base,
+                medida_unidad_base: ing.medida_unidad_base,
+                unidades_detalle_por_base: ing.unidades_detalle_por_base,
+                unidad_detalle: ing.unidad_detalle,
+                cantidad_receta: ing.cantidad_receta,   // editable por el usuario
                 wac_actual: ing.wac_actual,
                 sin_wac: ing.sin_wac,
             })),
         };
     }
     return { esCoctel: false, precioVenta: item.precio_venta, wac: item.wac_unitario };
+}
+
+/** Deriva cantidad_unidad_base (fracción de envase) a partir de cantidad_receta.
+ * Espejo de la fórmula en vw_pourcost_receta (ver querys/create_views_pourcost.sql).
+ * No redondear aquí: el resultado se usa directamente en cálculo de costo. */
+function pourCostCantidadUnidadBase(ing) {
+    const receta = Number(ing.cantidad_receta) || 0;
+    if (ing.tipo_cantidad_combo === 'Unidad') return receta;
+    const divisor = Number(ing.unidades_detalle_por_base);
+    if (!Number.isFinite(divisor) || divisor === 0) return 0;
+    return receta / divisor;
+}
+
+/** Normaliza entrada decimal (acepta coma o punto) para cantidad_receta.
+ * Devuelve null si la cadena no representa un número finito no negativo. */
+function pourCostNormalizarCantidad(str) {
+    const val = parseFloat(String(str).replace(',', '.').trim());
+    if (!Number.isFinite(val) || val < 0) return null;
+    return Math.round(val * 100) / 100;
+}
+
+/** Formatea una cantidad de receta para mostrar: sin decimales innecesarios,
+ * usa coma como separador decimal (convención en español). */
+function pourCostFormatearCantidadReceta(val) {
+    if (val == null || !Number.isFinite(Number(val))) return '0';
+    return parseFloat(Number(val).toFixed(2)).toString().replace('.', ',');
 }
 
 // Costo/precio "vigentes" del modal abierto: el valor autoritativo del
@@ -1847,8 +1878,10 @@ function pourCostRecalcularSimulacion() {
 
     let costoTotal;
     if (pourCostSimulacion.esCoctel) {
+        // Usar pourCostCantidadUnidadBase para derivar la fracción internamente;
+        // NO redondear antes de multiplicar para preservar precisión decimal.
         costoTotal = pourCostSimulacion.ingredientes.reduce(
-            (acumulado, ing) => acumulado + (Number(ing.cantidad_unidad_base) || 0) * (Number(ing.wac_actual) || 0),
+            (acumulado, ing) => acumulado + pourCostCantidadUnidadBase(ing) * (Number(ing.wac_actual) || 0),
             0
         );
     } else {
@@ -1865,26 +1898,49 @@ function pourCostCrearFilaIngrediente(ingrediente, index) {
     const div = document.createElement('div');
     div.className = 'flex items-center gap-xs p-sm bg-surface border border-outline-variant rounded-md';
 
-    // `unidad_base` describe la presentación del insumo (ej. "ML" = la botella
-    // se mide en mililitros), NO la unidad de `cantidad_unidad_base` (que es
-    // una fracción de esa presentación, ej. 0.059 de una botella de 2L) --
-    // por eso no se usa como label del input de cantidad, para no dar a
-    // entender un volumen que no es. Se muestra aparte, como referencia.
+    // Unidad práctica de la receta: OZ para Detalle, unidad_base para Unidad.
+    const esDetalle = ingrediente.tipo_cantidad_combo !== 'Unidad';
+    const unidadReceta = esDetalle
+        ? (ingrediente.unidad_detalle || '')
+        : (ingrediente.unidad_base || '');
+
+    // Información de envase y rendimiento para ingredientes tipo Detalle.
+    let envaseRendimiento = '';
+    if (esDetalle) {
+        const envase = (ingrediente.medida_unidad_base != null && ingrediente.unidad_base)
+            ? `${pourCostFormatearCantidadReceta(ingrediente.medida_unidad_base)} ${escapeHtml(ingrediente.unidad_base)}`
+            : '';
+        const rendimiento = (ingrediente.unidades_detalle_por_base != null && ingrediente.unidad_detalle)
+            ? `${pourCostFormatearCantidadReceta(ingrediente.unidades_detalle_por_base)} ${escapeHtml(ingrediente.unidad_detalle)}`
+            : '';
+        if (envase && rendimiento) envaseRendimiento = `ENVASE: ${envase} &middot; RENDIMIENTO: ${rendimiento}`;
+        else if (envase) envaseRendimiento = `ENVASE: ${envase}`;
+        else if (rendimiento) envaseRendimiento = `RENDIMIENTO: ${rendimiento}`;
+    } else if (ingrediente.unidad_base) {
+        envaseRendimiento = escapeHtml(ingrediente.unidad_base);
+    }
+
+    const cantidadMostrada = pourCostFormatearCantidadReceta(ingrediente.cantidad_receta);
+    const btnClase = 'w-7 h-7 flex items-center justify-center bg-surface-container border border-outline-variant rounded-sm text-sm leading-none text-on-surface select-none touch-manipulation hover:bg-surface-container-high active:bg-surface-container-highest';
+
     div.innerHTML = `
         <div class="flex-1 min-w-0">
             <p class="text-xs text-on-surface truncate">${escapeHtml(ingrediente.nombre_producto)}</p>
-            <p class="text-[9px] font-label-mono uppercase tracking-widest text-on-surface-variant">
-                ${ingrediente.unidad_base ? `Presentación: ${escapeHtml(ingrediente.unidad_base)}` : ''}
-            </p>
+            ${envaseRendimiento ? `<p class="text-[9px] font-label-mono uppercase tracking-widest text-on-surface-variant">${envaseRendimiento}</p>` : ''}
             ${ingrediente.sin_wac ? '<p class="text-[9px] font-label-mono uppercase tracking-widest" style="color:var(--semantic-warning)">Sin WAC cacheado</p>' : ''}
         </div>
-        <div class="flex flex-col items-center shrink-0">
-            <label class="text-[9px] font-label-mono uppercase tracking-widest text-on-surface-variant" title="Fracción de la presentación del insumo usada en la receta">Cant.</label>
-            <input type="number" min="0" step="0.0001" data-campo="cantidad_unidad_base" data-index="${index}"
-                value="${Number(ingrediente.cantidad_unidad_base ?? 0)}"
-                class="w-20 bg-surface-container border border-outline-variant rounded-sm px-xs py-[2px] text-xs text-on-surface font-data-tabular text-center focus:border-primary-fixed-dim focus:outline-none">
+        <div class="flex flex-col items-end shrink-0 gap-[2px]">
+            <label class="text-[9px] font-label-mono uppercase tracking-widest text-on-surface-variant">Cant.</label>
+            <div class="flex items-center gap-[2px]">
+                <button type="button" data-accion="menos" data-index="${index}" class="${btnClase}" aria-label="Reducir cantidad">&minus;</button>
+                <input type="text" inputmode="decimal" data-campo="cantidad_receta" data-index="${index}"
+                    value="${cantidadMostrada}"
+                    class="w-12 bg-surface-container border border-outline-variant rounded-sm px-xs py-[2px] text-xs text-on-surface font-data-tabular text-center focus:border-primary-fixed-dim focus:outline-none">
+                <button type="button" data-accion="mas" data-index="${index}" class="${btnClase}" aria-label="Aumentar cantidad">+</button>
+                ${unidadReceta ? `<span class="text-[9px] font-label-mono uppercase tracking-widest text-on-surface-variant ml-[2px]">${escapeHtml(unidadReceta)}</span>` : ''}
+            </div>
         </div>
-        <div class="flex flex-col items-center shrink-0">
+        <div class="flex flex-col items-center shrink-0 gap-[2px]">
             <label class="text-[9px] font-label-mono uppercase tracking-widest text-on-surface-variant">WAC</label>
             <input type="number" min="0" step="0.0001" data-campo="wac_actual" data-index="${index}"
                 value="${Number(ingrediente.wac_actual ?? 0)}"
@@ -1895,13 +1951,40 @@ function pourCostCrearFilaIngrediente(ingrediente, index) {
 }
 
 if (pourCostModalIngredientes) {
+    // Botones [−] y [+]: ajustan cantidad_receta en pasos de 0,5.
+    pourCostModalIngredientes.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-accion]');
+        if (!btn || !pourCostSimulacion?.esCoctel) return;
+        const index = parseInt(btn.dataset.index, 10);
+        const ing = pourCostSimulacion.ingredientes[index];
+        if (!ing) return;
+        const actual = Number(ing.cantidad_receta) || 0;
+        const nueva = btn.dataset.accion === 'mas'
+            ? Math.round((actual + 0.5) * 100) / 100
+            : Math.max(0, Math.round((actual - 0.5) * 100) / 100);
+        ing.cantidad_receta = nueva;
+        const inputCantidad = pourCostModalIngredientes.querySelector(
+            `input[data-campo="cantidad_receta"][data-index="${index}"]`
+        );
+        if (inputCantidad) inputCantidad.value = pourCostFormatearCantidadReceta(nueva);
+        pourCostRecalcularSimulacion();
+    });
+
+    // Edición directa: cantidad_receta (texto con coma/punto) y wac_actual (número).
     pourCostModalIngredientes.addEventListener('input', (e) => {
         const input = e.target.closest('input[data-campo]');
-        if (!input || !pourCostSimulacion || !pourCostSimulacion.esCoctel) return;
+        if (!input || !pourCostSimulacion?.esCoctel) return;
         const index = parseInt(input.dataset.index, 10);
-        const valor = parseFloat(input.value);
-        if (pourCostSimulacion.ingredientes[index]) {
-            pourCostSimulacion.ingredientes[index][input.dataset.campo] = Number.isFinite(valor) ? valor : 0;
+        const ing = pourCostSimulacion.ingredientes[index];
+        if (!ing) return;
+        if (input.dataset.campo === 'cantidad_receta') {
+            const val = pourCostNormalizarCantidad(input.value);
+            if (val !== null) ing.cantidad_receta = val;
+            // Si val es null (vacío/inválido) no propagar al cálculo
+            else return;
+        } else if (input.dataset.campo === 'wac_actual') {
+            const val = parseFloat(input.value);
+            ing.wac_actual = Number.isFinite(val) && val >= 0 ? val : 0;
         }
         pourCostRecalcularSimulacion();
     });

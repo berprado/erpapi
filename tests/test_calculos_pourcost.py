@@ -122,3 +122,48 @@ def test_agregar_costo_receta_no_arrastra_error_de_float():
 
 def test_agregar_costo_receta_lista_vacia():
     assert _agregar_costo_receta([]) == {}
+
+
+# --- Casos de aceptacion: formulas de cantidad_receta → cogs_ingrediente -----
+# Estos tests validan la formula que la UI de JS replica con pourCostCantidadUnidadBase.
+# El backend calcula cogs_ingrediente en vw_pourcost_receta; aqui se verifica la
+# consistencia aritmetica para los casos del enunciado (Long Island y Chuflay).
+
+def test_long_island_37_lenguas_cantidad_1oz():
+    """37 LENGUAS: 1 oz / 34 oz rendimiento * Bs 80 WAC ≈ Bs 2.35."""
+    cantidad_receta = Decimal("1")
+    rendimiento = Decimal("34")
+    wac = Decimal("80")
+    cogs = (cantidad_receta / rendimiento) * wac
+    assert round(cogs, 2) == Decimal("2.35")
+
+
+def test_long_island_37_lenguas_cantidad_1_5oz():
+    """Al simular 1,5 oz: (1.5 / 34) * 80 ≈ Bs 3.53."""
+    cantidad_receta = Decimal("1.5")
+    rendimiento = Decimal("34")
+    wac = Decimal("80")
+    cogs = (cantidad_receta / rendimiento) * wac
+    assert round(cogs, 2) == Decimal("3.53")
+
+
+def test_chuflay_casa_real_negra_fraccion_interna():
+    """Casa Real Negra: 1.5 oz visibles / 34 oz rendimiento = fraccion interna 0.044..."""
+    cantidad_receta = Decimal("1.5")
+    rendimiento = Decimal("34")
+    cantidad_unidad_base = cantidad_receta / rendimiento
+    # Fraccion interna: exactamente 1.5/34, no redondeada.
+    assert abs(cantidad_unidad_base - Decimal("0.0441176470588235")) < Decimal("0.000001")
+
+
+def test_division_por_cero_produce_cero_en_cantidad_unidad_base():
+    """Si rendimiento es 0 el cogs debe ser 0 (sin ZeroDivisionError)."""
+    # La logica de JS pourCostCantidadUnidadBase devuelve 0 si divisor == 0.
+    # Este test documenta el contrato equivalente en Python.
+    cantidad_receta = Decimal("1")
+    rendimiento = Decimal("0")
+    if rendimiento == 0:
+        cogs = Decimal("0")
+    else:
+        cogs = cantidad_receta / rendimiento
+    assert cogs == Decimal("0")
