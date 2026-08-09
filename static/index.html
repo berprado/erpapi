@@ -1299,9 +1299,10 @@
                                 class="w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface font-data-tabular focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors">
                         </div>
 
-                        <!-- Sandbox: precio sugerido segun % objetivo -->
+                        <!-- Sandbox: calculadora bidireccional precio ↔ pour cost -->
                         <div class="pt-md border-t border-outline-variant">
-                            <h4 class="text-[10px] font-label-mono uppercase tracking-widest text-on-surface-variant mb-xs">Simular pour cost objetivo</h4>
+                            <h4 class="text-[10px] font-label-mono uppercase tracking-widest text-on-surface-variant mb-xs">Simular precio / pour cost</h4>
+                            <!-- Dirección A: % objetivo → precio sugerido -->
                             <div class="flex items-center gap-sm mb-sm">
                                 <input id="pourcost-modal-target" type="number" min="0.01" step="0.01" placeholder="Ej: 25"
                                     class="w-24 bg-surface border border-outline-variant rounded-md px-sm py-sm text-sm text-on-surface font-data-tabular focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors">
@@ -1315,6 +1316,17 @@
                                 <div>
                                     <p class="text-label-mono text-on-surface-variant tracking-widest uppercase text-[10px] mb-xs">Vs. precio actual</p>
                                     <p id="pourcost-modal-delta" class="text-sm font-semibold font-data-tabular">-</p>
+                                </div>
+                            </div>
+                            <!-- Dirección B: precio ingresado → % resultante -->
+                            <div class="mt-sm pt-sm border-t border-outline-variant/50 flex items-center gap-sm flex-wrap">
+                                <input id="pourcost-modal-precio-input" type="number" min="0.01" step="0.01" placeholder="Ej: 55"
+                                    class="w-24 bg-surface border border-outline-variant rounded-md px-sm py-sm text-sm text-on-surface font-data-tabular focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors">
+                                <span class="text-sm text-on-surface-variant">Bs precio</span>
+                                <span class="text-sm text-on-surface-variant">&rarr;</span>
+                                <div class="flex flex-col leading-tight">
+                                    <span class="text-[10px] font-label-mono uppercase tracking-widest text-on-surface-variant">Pour cost</span>
+                                    <span id="pourcost-modal-pct-resultado" class="text-sm font-semibold font-data-tabular">-</span>
                                 </div>
                             </div>
                         </div>
@@ -1398,7 +1410,7 @@
         </div>
     </div>
 
-    <script src="/assets/app.js?v=11.4"></script>
+    <script src="/assets/app.js?v=11.5"></script>
 
     <script>
         (function () {
@@ -1443,7 +1455,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/assets/sw.js?v=11.4')
+                navigator.serviceWorker.register('/assets/sw.js?v=11.5')
                     .then(reg => console.log('[PWA] Service Worker registrado:', reg.scope))
                     .catch(err => console.error('[PWA] Error al registrar SW:', err));
             });

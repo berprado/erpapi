@@ -1765,6 +1765,8 @@ const pourCostModalWacDirecto       = document.getElementById('pourcost-modal-wa
 const pourCostModalTarget           = document.getElementById('pourcost-modal-target');
 const pourCostModalSugerido         = document.getElementById('pourcost-modal-sugerido');
 const pourCostModalDelta            = document.getElementById('pourcost-modal-delta');
+const pourCostModalPrecioInput      = document.getElementById('pourcost-modal-precio-input');
+const pourCostModalPctResultado     = document.getElementById('pourcost-modal-pct-resultado');
 const pourCostModalBtnReset         = document.getElementById('pourcost-modal-btn-reset');
 
 // Estado de la simulación del item actualmente abierto (se descarta al cerrar
@@ -1846,6 +1848,7 @@ function pourCostPintarResumenCosto(costoTotal, precioVenta, pct) {
         pourCostModalPct.textContent = pourCostFormatearPct(pct);
         pourCostModalPct.style.color = pourCostColorTexto(pct);
     }
+    pourCostPintarResultadoPrecio(costoTotal);
 }
 
 /** Lee el % objetivo del input y pinta precio sugerido + delta vs precio
@@ -1866,6 +1869,22 @@ function pourCostPintarSugerido(costoTotal, precioVenta) {
             pourCostModalDelta.style.color = '';
         }
     }
+}
+
+/** Lee el precio ingresado manualmente y muestra el pour cost % resultante.
+ * Se llama desde pourCostPintarResumenCosto (al cambiar el costo) y desde
+ * el listener del input de precio (al editar el precio). */
+function pourCostPintarResultadoPrecio(costoTotal) {
+    if (!pourCostModalPctResultado) return;
+    const precio = pourCostModalPrecioInput ? parseFloat(pourCostModalPrecioInput.value) : NaN;
+    if (!Number.isFinite(precio) || precio <= 0) {
+        pourCostModalPctResultado.textContent = '-';
+        pourCostModalPctResultado.style.color = '';
+        return;
+    }
+    const pct = pourCostCalcularPct(costoTotal, precio);
+    pourCostModalPctResultado.textContent = pourCostFormatearPct(pct);
+    pourCostModalPctResultado.style.color = pourCostColorTexto(pct);
 }
 
 /** Recalcula costo total y pour cost % a partir del estado de simulación
@@ -2008,6 +2027,12 @@ if (pourCostModalTarget) {
     });
 }
 
+if (pourCostModalPrecioInput) {
+    pourCostModalPrecioInput.addEventListener('input', () => {
+        pourCostPintarResultadoPrecio(pourCostCostoActual);
+    });
+}
+
 function abrirModalPourCostReceta(combo) {
     if (!pourCostModal) return;
     pourCostUltimoItemAbierto = combo;
@@ -2029,6 +2054,7 @@ function abrirModalPourCostReceta(combo) {
     }
 
     if (pourCostModalTarget) pourCostModalTarget.value = '';
+    if (pourCostModalPrecioInput) pourCostModalPrecioInput.value = '';
     // Estado inicial: el valor tal cual lo calculó el backend (Decimal), no un
     // recomputo en JS -- ver comentario de pourCostPintarResumenCosto.
     pourCostPintarResumenCosto(combo.costo_total_receta, combo.precio_venta, combo.pour_cost_pct);
@@ -2053,6 +2079,7 @@ function abrirModalPourCostProducto(producto) {
     if (pourCostModalWacDirecto) pourCostModalWacDirecto.value = Number(producto.wac_unitario ?? 0);
 
     if (pourCostModalTarget) pourCostModalTarget.value = '';
+    if (pourCostModalPrecioInput) pourCostModalPrecioInput.value = '';
     // Estado inicial: costo = wac_unitario tal cual (no hay suma que recalcular
     // en productos sueltos, pero se mantiene el mismo patrón que recetas).
     pourCostPintarResumenCosto(producto.wac_unitario, producto.precio_venta, producto.pour_cost_pct);

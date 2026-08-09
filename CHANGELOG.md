@@ -4,7 +4,10 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
-## 11.4
+## 11.5
+- POUR COST: calculadora bidireccional en el modal. Además del campo "% objetivo → precio sugerido" ya existente, se añade la dirección inversa: ingresar un precio en Bs muestra el pour cost % resultante con semáforo de color. El % se actualiza en tiempo real si el costo simulado cambia (por edición de ingredientes/WAC).
+
+
 - POUR COST (modal COCTELES): refactorización de cantidades. La columna "CANT." ahora muestra `cantidad_receta` (la cantidad práctica de la receta: ej. "1 OZ") en vez de `cantidad_unidad_base` (la fracción del envase: ej. 0.029). Cada fila tiene controles `[−] [cantidad] [+] unidad` con paso 0,5; acepta coma o punto como separador decimal; normaliza y rechaza valores vacíos o negativos. La información de envase y rendimiento reemplaza el genérico "Presentación: ML" por "ENVASE: 750 ML · RENDIMIENTO: 34 OZ". `cantidad_unidad_base` se deriva internamente para el cálculo de costo. Se conservan `tipo_parte_combo` y `tipo_cantidad_combo` en el estado de simulación. Se agregan 4 pruebas unitarias para los casos de aceptación (Long Island, Chuflay).
 
 ## 11.3
