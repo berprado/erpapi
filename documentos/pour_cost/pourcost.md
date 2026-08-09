@@ -1,6 +1,6 @@
 # Módulo POUR COST — Diseño y Alcance (v1)
 
-Guía de referencia para implementar el módulo POUR COST: cálculo y simulación del costo de venta (pour cost) de combos/cócteles y productos sueltos comandados desde el POS. Es la versión revisada de la propuesta original del usuario, con el alcance de v1 ya acordado y los riesgos identificados antes de escribir código. Estado: **solo diseño, sin implementar** (rama `feature/pour-cost`).
+Guía de referencia del módulo POUR COST: cálculo y simulación del costo de venta (pour cost) de combos/cócteles y productos sueltos comandados desde el POS. Estado: **implementado** (rama `feature/pour-cost`, cache v11.4). Este documento se mantiene como fuente de verdad de las decisiones de diseño y debe actualizarse cuando cambie el comportamiento del módulo.
 
 ## 0. Qué resuelve
 
@@ -72,39 +72,42 @@ A diferencia de la oz (`redondeo_y_tolerancia.md`), acá **no hay una grilla fí
   - *Exacto:* `costo_total_receta / (target_pour_cost / 100)` sin redondear.
   - *Redondeado (el accionable):* HALF_UP a la unidad entera de moneda, con `Decimal`. Justificado con datos: **el 100% de los 1706 `precio_venta` HAB en test_pos son números enteros** (sin centavos, ni siquiera .50) — un precio sugerido con decimales no es una cifra que alguien vaya a teclear en el POS. Es una inferencia de los datos actuales, no una regla de negocio documentada; si el negocio empieza a usar precios fraccionarios habría que revisar esta regla.
 
-## 5. Endpoints propuestos (v1, todos `GET`, todos admin-only)
+## 5. Endpoints implementados (v1, todos `GET`, todos admin-only)
 
-Los datos se devuelven **agrupados por el backend**, no como passthrough crudo de las vistas — la propuesta original tenía al frontend agrupando filas planas de `vw_pourcost_receta`; mejor que el backend arme la estructura anidada (un objeto por combo con su lista de ingredientes) con un `schemas.py` real, igual que el resto de la API. Menos lógica duplicada en JS, y el agregado (suma de `cogs_ingrediente`, detección de `sin_wac`) queda testeable con pytest puro, sin navegador.
+Los datos se devuelven **agrupados por el backend** con un `schemas.py` real — la suma de `cogs_ingrediente` y la detección de `sin_wac` ocurren en Python, no en JS.
 
-Los tres primeros aceptan `id_dia` como **query param** (decidido en sección 8, punto 2 — selector manual en la UI, no inferido de la operativa activa), default `id_dia=1` (decisión sección 1; es además el único con datos históricos reales en test_pos hoy).
+Los tres primeros aceptan `id_dia` como query param (default `1`), ya que `vw_pourcost_receta` fija `id_dia=1` internamente; el precio se resuelve aparte contra `v9_menubackstage` y se cruza en Python por `id_combo_coctel`/`id_origen`.
 
 | Endpoint | Fuente | Devuelve |
 |---|---|---|
-| `GET /api/pourcost/menu?id_dia=1` | `v9_menubackstage`, filtrando `id_dia` | Lista plana: combos + productos sueltos, con `precio_venta` del horario elegido |
-| `GET /api/pourcost/recetas?id_dia=1` | `vw_combo_detalle_reload` + `vw_cache_wac_producto_detalle` (costo/receta, agrupado por `id_combo_coctel`) **+ `v9_menubackstage` filtrado por `id_dia`** (precio) | Un objeto por combo: costo total, `precio_venta` del `id_dia` pedido, pour cost, lista de ingredientes con su `cogs_ingrediente`, `cantidad_receta`, `cantidad_unidad_base`, `ind_tipo_producto` y `tipo_parte_combo` |
-| `GET /api/pourcost/productos?id_dia=1` | `v9_menubackstage` (`tipo='producto'`, filtrado por `id_dia`) + `v9_cache_wac_producto` | Un objeto por producto suelto: `wac_unitario`, `precio_venta` del horario elegido, pour cost directo |
-| `GET /api/pourcost/insumos` | `vw_alm_producto_con_nombres` | Catálogo completo para la simulación "agregar ingrediente" (no depende de `id_dia`) |
+| `GET /api/pourcost/menu?id_dia=1` | `v9_menubackstage`, filtrando `id_dia` | Lista plana: combos + productos sueltos con `precio_venta` del horario elegido |
+| `GET /api/pourcost/recetas?id_dia=1` | `vw_pourcost_receta` (costo/receta) + `v9_menubackstage` filtrado por `id_dia` (precio) | Un objeto por combo: costo total, `precio_venta`, pour cost %, lista de ingredientes con `cantidad_receta`, `tipo_cantidad_combo`, `tipo_parte_combo`, `unidad_base`, `medida_unidad_base`, `unidades_detalle_por_base`, `unidad_detalle`, `wac_actual`, `sin_wac`, `cantidad_unidad_base`, `cogs_ingrediente` |
+| `GET /api/pourcost/productos?id_dia=1` | `v9_menubackstage` (`tipo='producto'`) + `v9_cache_wac_producto` | Un objeto por producto suelto: `wac_unitario`, `precio_venta`, pour cost directo |
+| `GET /api/pourcost/insumos` | `vw_alm_producto_con_nombres` | Catálogo completo para la simulación "agregar ingrediente" |
 
-**Nota de implementación:** `recetas` ya no puede tomar `precio_venta` de `vw_pourcost_receta` tal cual (esa vista lo trae fijo a `id_dia=1`) — el costo/receta sí se puede seguir leyendo de `vw_pourcost_receta` (o de sus vistas base `vw_combo_detalle_reload` + `vw_cache_wac_producto_detalle`, ignorando su columna `precio_venta`), pero el precio hay que pedirlo aparte a `v9_menubackstage` con el `id_dia` recibido y cruzarlo en Python por `id_combo_coctel`/`id_origen`.
+**Nota sobre `ind_tipo_producto`:** `vw_pourcost_receta` no expone el ID numérico de `bar_detalle_combo_bar.ind_tipo_producto`; sí expone `tipo_parte_combo` (el nombre resuelto desde `parameter_table`, ej. `"PRINCIPAL"`, `"OPCIONAL"`). El schema `PourCostIngrediente` y el estado local de simulación usan `tipo_parte_combo` como campo semántico para distinguir ingredientes principales y opcionales — es equivalente y suficiente para la próxima tarea de opcionales.
 
-## 6. Sandbox de simulación (frontend, sin cambios de fondo respecto a la propuesta original)
+## 6. Sandbox de simulación (implementado, 100% en memoria del cliente)
 
 Toda la simulación corre en memoria del cliente, sin `POST`/`PUT` a `adminerp`:
 
 - **Simulación inversa:** el usuario ingresa un % objetivo → se despeja el precio sugerido con la fórmula de la sección 4.
-- **Alteración de WAC:** el usuario simula un cambio de costo de un insumo → recalcula `cogs_ingrediente` de esa línea y el total.
-- **Alteración de receta:** el usuario cambia la cantidad visible de un ingrediente en el modal (selector `[−] [cantidad] [+]`) → el frontend recalcula esa línea usando `cantidad_receta` como valor editable y `cantidad_unidad_base` como valor interno de costeo. Para líneas tipo `Detalle`, la edición se expresa en la unidad práctica de la receta y se convierte internamente a la fracción base para el cálculo. Para líneas tipo `Unidad`, el valor editado se usa directamente como base de costeo.
+- **Alteración de WAC:** el usuario edita el WAC de un ingrediente → recalcula `cogs_ingrediente` de esa línea y el total.
+- **Alteración de receta:** selector `[−] [cantidad] [+]` con paso 0,5 por ingrediente. El frontend edita `cantidad_receta` y deriva `cantidad_unidad_base` internamente (`pourCostCantidadUnidadBase`). Para `Detalle`: `cantidad_unidad_base = cantidad_receta / unidades_detalle_por_base`; para `Unidad`: `cantidad_unidad_base = cantidad_receta`.
+- **Reiniciar simulación:** restaura exactamente los valores originales del backend (cantidades, WAC, costos y % original).
 
-### 6.1 Consistencia del modal de ingredientes
+### 6.1 Consistencia del modal de ingredientes (implementada en v11.4)
 
-El modal de cócteles debe mantener una separación explícita entre los dos conceptos que usa el backend:
+El modal mantiene separación explícita entre:
 
-- `cantidad_receta`: cantidad visible y editada por el usuario en la unidad práctica de la receta.
-- `cantidad_unidad_base`: fracción interna usada para el cálculo de costo, derivada de `cantidad_receta` y de la vista de receta.
+- `cantidad_receta`: cantidad visible y editable (ej. `1 OZ`). Fuente de verdad para la edición.
+- `cantidad_unidad_base`: fracción interna de costeo, derivada de `cantidad_receta`. No se expone como campo editable.
 
-En la implementación, la edición debe afectar solo `cantidad_receta`; `cantidad_unidad_base` debe recalcularse internamente y no exponerse como campo editable. La normalización de entradas debe aceptar valores como `1`, `1.0`, `1,0` y `1,5`, rechazar vacíos, negativos o no numéricos, y evitar errores de punto flotante al calcular el costo. El contrato del endpoint debe conservar los campos `ind_tipo_producto` y `tipo_parte_combo` para no perder el contexto de ingredientes principales y opcionales en la simulación local.
+El estado local de simulación clona los campos `tipo_cantidad_combo`, `tipo_parte_combo`, `unidades_detalle_por_base`, `unidad_detalle`, `medida_unidad_base` y `unidad_base` para que `pourCostCantidadUnidadBase` pueda recalcular sin consultar al backend.
 
-Además, la UI debe reemplazar textos genéricos como `Presentación: ML` por una presentación estructurada de envase y rendimiento, por ejemplo: `ENVASE: 1000 ML · RENDIMIENTO: 34 OZ`.
+La normalización de entradas acepta coma o punto como separador decimal (`1`, `1.0`, `1,0`, `1,5`), rechaza vacíos, negativos y no numéricos, y evita errores de punto flotante con `Math.round(val * 100) / 100`.
+
+Cada fila muestra `ENVASE: {medida_unidad_base} {unidad_base} · RENDIMIENTO: {unidades_detalle_por_base} {unidad_detalle}` para ingredientes tipo `Detalle`.
 
 ## 7. Cierre del flujo — Fase 2, fuera de alcance v1
 
@@ -133,10 +136,10 @@ Las imágenes aportadas sirven como referencia visual del estado actual del moda
 - [long_island.png](./long_island.png)
 - [chuflay.png](./chuflay.png)
 
-## 10. Plan de pruebas (decidido, 2026-08-05)
+## 10. Pruebas
 
-- **Unitarias, sin DB** (como `tests/test_calculos_pesaje.py`): las fórmulas de pour cost, precio sugerido y agregación de `cogs_ingrediente` son Python puro — se pueden testear con datos de ejemplo sin tocar la base. Corren en la suite normal (`python -m pytest`).
-- **Sin integración automatizada en v1.** El desarrollo y la validación de los 4 `GET` se hacen a mano contra `test_pos` (`APP_ENV=test_pos` en `.env` al levantar `uvicorn` localmente, o directo contra el deploy de seenode) — `tests/conftest.py` exige `APP_ENV=test` a propósito y no se toca ese guard. Mismo nivel de cobertura que `POST /pesaje/perfiles` o los exports PDF hoy.
+- **Unitarias, sin DB** (`tests/test_calculos_pourcost.py`, 21 tests): cubren `_calcular_pour_cost_pct`, `_calcular_precio_sugerido`, `_agregar_costo_receta` y los casos de aceptación de la refactorización de cantidades (Long Island 1 oz → Bs 2,35; 1,5 oz → Bs 3,53; Chuflay fracción interna; división por cero → 0). Corren con `python -m pytest`.
+- **Sin integración automatizada en v1.** Los 4 `GET` se validan a mano contra `test_pos` vía `/docs` o la PWA en seenode — `tests/conftest.py` exige `APP_ENV=test` y no se toca ese guard.
 
 ---
 
