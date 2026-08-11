@@ -1267,24 +1267,28 @@
                             <span class="material-symbols-outlined text-base">close</span>
                         </button>
                     </div>
-                    <div class="px-md py-md overflow-y-auto flex-1">
+                    <div class="px-md pb-md overflow-y-auto flex-1">
 
-                        <!-- Estado real (recalculado en vivo con los valores simulados) -->
-                        <div class="grid grid-cols-3 gap-sm text-center mb-sm">
-                            <div>
-                                <p class="text-label-mono text-on-surface-variant tracking-widest uppercase text-[10px] mb-xs">Costo</p>
-                                <p id="pourcost-modal-costo" class="text-sm font-semibold text-on-surface font-data-tabular">-</p>
+                        <!-- Estado real (recalculado en vivo con los valores simulados). Fijo
+                             (sticky) al tope del área con scroll para que siga visible mientras
+                             se edita un ingrediente más abajo en recetas largas. -->
+                        <div class="sticky top-0 z-10 pt-md pb-sm bg-surface-container border-b border-outline-variant mb-md">
+                            <div class="grid grid-cols-3 gap-sm text-center mb-sm">
+                                <div>
+                                    <p class="text-label-mono text-on-surface-variant tracking-widest uppercase text-[10px] mb-xs">Costo</p>
+                                    <p id="pourcost-modal-costo" class="text-sm font-semibold text-on-surface font-data-tabular">-</p>
+                                </div>
+                                <div>
+                                    <p class="text-label-mono text-on-surface-variant tracking-widest uppercase text-[10px] mb-xs">Precio</p>
+                                    <p id="pourcost-modal-precio" class="text-sm font-semibold text-on-surface font-data-tabular">-</p>
+                                </div>
+                                <div>
+                                    <p class="text-label-mono text-on-surface-variant tracking-widest uppercase text-[10px] mb-xs">Pour Cost</p>
+                                    <p id="pourcost-modal-pct" class="text-headline-md font-semibold font-data-tabular">-</p>
+                                </div>
                             </div>
-                            <div>
-                                <p class="text-label-mono text-on-surface-variant tracking-widest uppercase text-[10px] mb-xs">Precio</p>
-                                <p id="pourcost-modal-precio" class="text-sm font-semibold text-on-surface font-data-tabular">-</p>
-                            </div>
-                            <div>
-                                <p class="text-label-mono text-on-surface-variant tracking-widest uppercase text-[10px] mb-xs">Pour Cost</p>
-                                <p id="pourcost-modal-pct" class="text-headline-md font-semibold font-data-tabular">-</p>
-                            </div>
+                            <p id="pourcost-modal-incompleto" class="hidden badge-info text-[10px] font-label-mono px-sm py-xs rounded uppercase tracking-widest inline-block">Costo incompleto: falta WAC de uno o más insumos</p>
                         </div>
-                        <p id="pourcost-modal-incompleto" class="hidden badge-info text-[10px] font-label-mono px-sm py-xs rounded uppercase tracking-widest mb-md inline-block">Costo incompleto: falta WAC de uno o más insumos</p>
 
                         <!-- Receta editable (solo cócteles) -->
                         <div id="pourcost-modal-ingredientes-wrap" class="hidden mb-md">
@@ -1303,9 +1307,11 @@
                         <div class="pt-md border-t border-outline-variant">
                             <h4 class="text-[10px] font-label-mono uppercase tracking-widest text-on-surface-variant mb-xs">Simular precio / pour cost</h4>
                             <!-- Dirección A: % objetivo → precio sugerido -->
-                            <div class="flex items-center gap-sm mb-sm">
+                            <div class="flex items-center gap-xs mb-sm">
+                                <button type="button" id="pourcost-modal-target-menos" class="w-7 h-7 flex items-center justify-center bg-surface-container border border-outline-variant rounded-sm text-sm leading-none text-on-surface select-none touch-manipulation hover:bg-surface-container-high active:bg-surface-container-highest" aria-label="Reducir % objetivo">&minus;</button>
                                 <input id="pourcost-modal-target" type="number" min="0.01" step="0.01" placeholder="Ej: 25"
-                                    class="w-24 bg-surface border border-outline-variant rounded-md px-sm py-sm text-sm text-on-surface font-data-tabular focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors">
+                                    class="w-20 bg-surface border border-outline-variant rounded-md px-sm py-sm text-sm text-on-surface font-data-tabular text-center focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors">
+                                <button type="button" id="pourcost-modal-target-mas" class="w-7 h-7 flex items-center justify-center bg-surface-container border border-outline-variant rounded-sm text-sm leading-none text-on-surface select-none touch-manipulation hover:bg-surface-container-high active:bg-surface-container-highest" aria-label="Aumentar % objetivo">+</button>
                                 <span class="text-sm text-on-surface-variant">% objetivo</span>
                             </div>
                             <div class="grid grid-cols-2 gap-sm text-center">
@@ -1319,9 +1325,11 @@
                                 </div>
                             </div>
                             <!-- Dirección B: precio ingresado → % resultante -->
-                            <div class="mt-sm pt-sm border-t border-outline-variant/50 flex items-center gap-sm flex-wrap">
+                            <div class="mt-sm pt-sm border-t border-outline-variant/50 flex items-center gap-xs flex-wrap">
+                                <button type="button" id="pourcost-modal-precio-menos" class="w-7 h-7 flex items-center justify-center bg-surface-container border border-outline-variant rounded-sm text-sm leading-none text-on-surface select-none touch-manipulation hover:bg-surface-container-high active:bg-surface-container-highest" aria-label="Reducir precio">&minus;</button>
                                 <input id="pourcost-modal-precio-input" type="number" min="0.01" step="0.01" placeholder="Ej: 55"
-                                    class="w-24 bg-surface border border-outline-variant rounded-md px-sm py-sm text-sm text-on-surface font-data-tabular focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors">
+                                    class="w-20 bg-surface border border-outline-variant rounded-md px-sm py-sm text-sm text-on-surface font-data-tabular text-center focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors">
+                                <button type="button" id="pourcost-modal-precio-mas" class="w-7 h-7 flex items-center justify-center bg-surface-container border border-outline-variant rounded-sm text-sm leading-none text-on-surface select-none touch-manipulation hover:bg-surface-container-high active:bg-surface-container-highest" aria-label="Aumentar precio">+</button>
                                 <span class="text-sm text-on-surface-variant">Bs precio</span>
                                 <span class="text-sm text-on-surface-variant">&rarr;</span>
                                 <div class="flex flex-col leading-tight">
@@ -1410,7 +1418,7 @@
         </div>
     </div>
 
-    <script src="/assets/app.js?v=11.8"></script>
+    <script src="/assets/app.js?v=11.9"></script>
 
     <script>
         (function () {
@@ -1455,7 +1463,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/assets/sw.js?v=11.8')
+                navigator.serviceWorker.register('/assets/sw.js?v=11.9')
                     .then(reg => console.log('[PWA] Service Worker registrado:', reg.scope))
                     .catch(err => console.error('[PWA] Error al registrar SW:', err));
             });

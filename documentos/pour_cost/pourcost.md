@@ -1,6 +1,6 @@
 # Módulo POUR COST — Diseño y Alcance (v1)
 
-Guía de referencia del módulo POUR COST: cálculo y simulación del costo de venta (pour cost) de combos/cócteles y productos sueltos comandados desde el POS. Estado: **implementado** (rama `feature/pour-cost`, cache v11.7). Este documento se mantiene como fuente de verdad de las decisiones de diseño y debe actualizarse cuando cambie el comportamiento del módulo.
+Guía de referencia del módulo POUR COST: cálculo y simulación del costo de venta (pour cost) de combos/cócteles y productos sueltos comandados desde el POS. Estado: **implementado** (rama `feature/pour-cost`, cache v11.9). Este documento se mantiene como fuente de verdad de las decisiones de diseño y debe actualizarse cuando cambie el comportamiento del módulo.
 
 ## 0. Qué resuelve
 
@@ -123,6 +123,18 @@ Flujo de datos:
 5. `static/app.js` clona ese valor al estado local de simulación (`pourCostClonarParaSimulacion`)
 
 Por diseño, el WAC visible corresponde al costo de la unidad base del producto. El costo de la línea se obtiene multiplicando ese WAC por `cantidad_unidad_base` (fracción realmente usada en la receta).
+
+### 6.3 Ajustes de UX (v11.9, tras auditoría del modal)
+
+Una revisión de código del modal (agosto 2026) encontró varias inconsistencias entre lo documentado/cableado y lo que el HTML realmente mostraba, más algunas oportunidades de UX. Cambios aplicados, todos en `static/index.html`/`static/app.js`, sin tocar los endpoints ni las fórmulas:
+
+- **Orden de ingredientes**: las filas ya no se muestran en el orden crudo de `vw_pourcost_receta`; se ordenan `PRINCIPAL` primero y luego `OPCIONAL`, alfabético dentro de cada grupo (`pourCostCompararIngredientes`). Es puramente de exhibición — no afecta la suma del costo, que es orden-independiente.
+- **Resumen sticky**: el bloque Costo/Precio/Pour Cost queda fijo al tope del área con scroll del modal, para seguir visible mientras se edita un ingrediente más abajo en recetas largas.
+- **Opcionales desmarcados**: sus controles de CANT./WAC y los botones `[−]/[+]` quedan `disabled` (antes seguían editables sin efecto sobre el costo). Se habilitan en vivo al tildar el checkbox (`pourCostActualizarHabilitadoFila`).
+- **Checkbox "Incluir ingrediente"**: pasó de 14px a un cuadro de 20px con área clickeable ampliada, pensado para uso táctil en barra.
+- **Escape cierra el modal**: el listener global de `keydown` (compartido con el resto de modales de la PWA) ahora también llama a `cerrarModalPourCost()`.
+- **Realimentación cruzada entre "% objetivo" y "Bs precio"**: mientras el usuario no haya tocado un campo a mano, se mantiene sincronizado con lo que calcula el otro (`pourCostTargetTocadoManualmente` / `pourCostPrecioTocadoManualmente`). En cuanto el usuario edita uno directamente, deja de sobreescribirse — evita que un valor autocompletado quede "congelado" y deje de reflejar cambios posteriores en el otro campo.
+- Los botones `[−][valor][+]` que esta sección ya describía para ambos campos existían cableados en `app.js` pero no en el HTML (código muerto): ahora también están en el markup, que es lo que este documento venía asumiendo.
 
 ## 7. Cierre del flujo — Fase 2, fuera de alcance v1
 
