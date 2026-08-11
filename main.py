@@ -2245,6 +2245,41 @@ def _calcular_precio_sugerido(costo_total: Decimal, target_pour_cost_pct) -> Opt
     return (_decimal2(exacto), redondeado)
 
 
+def _tipo_parte_combo_es_opcional(tipo_parte_combo) -> bool:
+    return str(tipo_parte_combo or "").strip().upper() == "OPCIONAL"
+
+
+def _cantidad_unidad_base_simulada(ingrediente: dict) -> Decimal:
+    receta = Decimal(str(ingrediente.get("cantidad_receta") or 0))
+    if ingrediente.get("tipo_cantidad_combo") == "Unidad":
+        return receta
+    divisor = Decimal(str(ingrediente.get("unidades_detalle_por_base") or 0))
+    if divisor <= 0:
+        return Decimal("0")
+    return receta / divisor
+
+
+def _ingrediente_simulado_esta_incluido(ingrediente: dict) -> bool:
+    if not _tipo_parte_combo_es_opcional(ingrediente.get("tipo_parte_combo")):
+        return True
+    return bool(ingrediente.get("incluido"))
+
+
+def _calcular_costo_receta_simulado_crudo(ingredientes) -> Decimal:
+    total = Decimal("0")
+    for ingrediente in ingredientes:
+        if not _ingrediente_simulado_esta_incluido(ingrediente):
+            continue
+        total += _cantidad_unidad_base_simulada(ingrediente) * Decimal(str(ingrediente.get("wac_actual") or 0))
+    return total
+
+
+def _calcular_costo_receta_simulado(ingredientes) -> Decimal:
+    """Espejo puro del cálculo del modal: suma todos los PRINCIPAL y solo los OPCIONAL marcados."""
+    total = _calcular_costo_receta_simulado_crudo(ingredientes)
+    return _decimal2(total)
+
+
 def _agregar_costo_receta(lineas) -> dict:
     """Agrupa lineas de vw_pourcost_receta (una fila por ingrediente) por id_combo_coctel, sumando
     cogs_ingrediente con Decimal para no arrastrar error de float. No toca precio_venta -- esa vista

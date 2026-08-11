@@ -1775,12 +1775,35 @@ let pourCostSimulacion = null;
 // Item original (sin modificar) del modal abierto, para poder "Reiniciar simulación".
 let pourCostUltimoItemAbierto = null;
 
+function pourCostNormalizarTipoParteCombo(tipoParteCombo) {
+    return String(tipoParteCombo || '').trim().toUpperCase();
+}
+
+function pourCostIngredienteEsOpcional(ingrediente) {
+    return pourCostNormalizarTipoParteCombo(ingrediente?.tipo_parte_combo) === 'OPCIONAL';
+}
+
+function pourCostIngredienteEsPrincipal(ingrediente) {
+    return !pourCostIngredienteEsOpcional(ingrediente);
+}
+
+function pourCostIngredienteEstaIncluido(ingrediente) {
+    if (pourCostIngredienteEsPrincipal(ingrediente)) return true;
+    return Boolean(ingrediente?.incluido);
+}
+
+function pourCostBuscarIngredientePorProducto(idProducto) {
+    if (!pourCostSimulacion?.esCoctel) return null;
+    return pourCostSimulacion.ingredientes.find((ing) => ing.id_producto === idProducto) || null;
+}
+
 function pourCostClonarParaSimulacion(item, esCoctel) {
     if (esCoctel) {
         return {
             esCoctel: true,
             precioVenta: item.precio_venta,
             ingredientes: (item.ingredientes || []).map((ing) => ({
+                id_producto: ing.id_producto,
                 nombre_producto: ing.nombre_producto,
                 tipo_cantidad_combo: ing.tipo_cantidad_combo,
                 tipo_parte_combo: ing.tipo_parte_combo,
@@ -1791,6 +1814,7 @@ function pourCostClonarParaSimulacion(item, esCoctel) {
                 cantidad_receta: ing.cantidad_receta,   // editable por el usuario
                 wac_actual: ing.wac_actual,
                 sin_wac: ing.sin_wac,
+                incluido: pourCostIngredienteEsPrincipal(ing),
             })),
         };
     }
@@ -1821,6 +1845,11 @@ function pourCostNormalizarCantidad(str) {
 function pourCostFormatearCantidadReceta(val) {
     if (val == null || !Number.isFinite(Number(val))) return '0';
     return parseFloat(Number(val).toFixed(2)).toString().replace('.', ',');
+}
+
+function pourCostFormatearWacVisible(val) {
+    if (val == null || !Number.isFinite(Number(val))) return '0';
+    return parseFloat(Number(val).toFixed(2)).toString();
 }
 
 // Costo/precio "vigentes" del modal abierto: el valor autoritativo del
@@ -1887,6 +1916,27 @@ function pourCostPintarResultadoPrecio(costoTotal) {
     pourCostModalPctResultado.style.color = pourCostColorTexto(pct);
 }
 
+function pourCostCalcularCostoSimuladoCrudo() {
+    if (!pourCostSimulacion) return 0;
+    if (!pourCostSimulacion.esCoctel) return Number(pourCostSimulacion.wac) || 0;
+
+    return pourCostSimulacion.ingredientes.reduce((acumulado, ing) => {
+        if (!pourCostIngredienteEstaIncluido(ing)) return acumulado;
+        return acumulado + pourCostCantidadUnidadBase(ing) * (Number(ing.wac_actual) || 0);
+    }, 0);
+}
+
+function pourCostCalcularTotalesSimulacion() {
+    if (!pourCostSimulacion) return { costoTotal: 0, pct: null };
+
+    const costoTotalCrudo = pourCostCalcularCostoSimuladoCrudo();
+    const costoTotal = pourCostRedondearHalfUp(costoTotalCrudo, 2);
+    return {
+        costoTotal,
+        pct: pourCostCalcularPct(costoTotalCrudo, pourCostSimulacion.precioVenta),
+    };
+}
+
 /** Recalcula costo total y pour cost % a partir del estado de simulación
  * actual (cantidades/WAC editados) y repinta todo el resumen del modal. Se
  * llama en cada edición para que la UI reaccione en vivo -- a diferencia de
@@ -1895,27 +1945,24 @@ function pourCostPintarResultadoPrecio(costoTotal) {
 function pourCostRecalcularSimulacion() {
     if (!pourCostSimulacion) return;
 
-    let costoTotal;
-    if (pourCostSimulacion.esCoctel) {
-        // Usar pourCostCantidadUnidadBase para derivar la fracción internamente;
-        // NO redondear antes de multiplicar para preservar precisión decimal.
-        costoTotal = pourCostSimulacion.ingredientes.reduce(
-            (acumulado, ing) => acumulado + pourCostCantidadUnidadBase(ing) * (Number(ing.wac_actual) || 0),
-            0
-        );
-    } else {
-        costoTotal = Number(pourCostSimulacion.wac) || 0;
-    }
-    costoTotal = pourCostRedondearHalfUp(costoTotal, 2);
-
-    const pct = pourCostCalcularPct(costoTotal, pourCostSimulacion.precioVenta);
+    const { costoTotal, pct } = pourCostCalcularTotalesSimulacion();
     pourCostPintarResumenCosto(costoTotal, pourCostSimulacion.precioVenta, pct);
     pourCostPintarSugerido(costoTotal, pourCostSimulacion.precioVenta);
 }
 
 function pourCostCrearFilaIngrediente(ingrediente, index) {
     const div = document.createElement('div');
-    div.className = 'flex items-center gap-xs p-sm bg-surface border border-outline-variant rounded-md';
+    const esOpcional = pourCostIngredienteEsOpcional(ingrediente);
+    const tipoIngrediente = esOpcional ? 'OPCIONAL' : 'PRINCIPAL';
+    const claseTarjeta = esOpcional
+        ? 'bg-surface border-outline-variant'
+        : 'bg-surface-container-low';
+
+    div.className = `flex flex-col gap-sm p-sm border rounded-md ${claseTarjeta}`;
+    if (!esOpcional) {
+        div.style.borderColor = 'color-mix(in srgb, var(--semantic-action) 55%, var(--outline-variant))';
+        div.style.background = 'color-mix(in srgb, var(--semantic-action) 10%, var(--surface-container-low))';
+    }
 
     // Unidad práctica de la receta: OZ para Detalle, unidad_base para Unidad.
     const esDetalle = ingrediente.tipo_cantidad_combo !== 'Unidad';
@@ -1923,47 +1970,57 @@ function pourCostCrearFilaIngrediente(ingrediente, index) {
         ? (ingrediente.unidad_detalle || '')
         : (ingrediente.unidad_base || '');
 
-    // Información de envase y rendimiento para ingredientes tipo Detalle.
-    let envaseRendimiento = '';
+    // Información de rendimiento para ingredientes tipo Detalle.
+    let rendimientoTexto = '';
     if (esDetalle) {
-        const envase = (ingrediente.medida_unidad_base != null && ingrediente.unidad_base)
-            ? `${pourCostFormatearCantidadReceta(ingrediente.medida_unidad_base)} ${escapeHtml(ingrediente.unidad_base)}`
-            : '';
         const rendimiento = (ingrediente.unidades_detalle_por_base != null && ingrediente.unidad_detalle)
             ? `${pourCostFormatearCantidadReceta(ingrediente.unidades_detalle_por_base)} ${escapeHtml(ingrediente.unidad_detalle)}`
             : '';
-        if (envase && rendimiento) envaseRendimiento = `ENVASE: ${envase} &middot; RENDIMIENTO: ${rendimiento}`;
-        else if (envase) envaseRendimiento = `ENVASE: ${envase}`;
-        else if (rendimiento) envaseRendimiento = `RENDIMIENTO: ${rendimiento}`;
+        if (rendimiento) rendimientoTexto = `REND: ${rendimiento}.`;
     } else if (ingrediente.unidad_base) {
-        envaseRendimiento = escapeHtml(ingrediente.unidad_base);
+        rendimientoTexto = `REND: ${escapeHtml(ingrediente.unidad_base)}.`;
     }
 
     const cantidadMostrada = pourCostFormatearCantidadReceta(ingrediente.cantidad_receta);
     const btnClase = 'w-7 h-7 flex items-center justify-center bg-surface-container border border-outline-variant rounded-sm text-sm leading-none text-on-surface select-none touch-manipulation hover:bg-surface-container-high active:bg-surface-container-highest';
+    const checkboxId = `pourcost-ingrediente-${ingrediente.id_producto}`;
+    const estadoSeleccion = esOpcional
+        ? `<label for="${checkboxId}" class="inline-flex items-center gap-xs text-[9px] font-label-mono uppercase tracking-widest text-on-surface-variant cursor-pointer">
+                <input id="${checkboxId}" type="checkbox" data-campo="incluido" data-id-producto="${ingrediente.id_producto}" ${ingrediente.incluido ? 'checked' : ''}
+                    class="h-3.5 w-3.5 rounded border border-outline-variant bg-surface accent-[var(--semantic-info)] cursor-pointer">
+                <span>Incluir ingrediente</span>
+            </label>`
+        : '<span class="text-[9px] font-label-mono uppercase tracking-widest" style="color:var(--semantic-action)">Incluido siempre</span>';
 
     div.innerHTML = `
-        <div class="flex-1 min-w-0">
-            <p class="text-xs text-on-surface truncate">${escapeHtml(ingrediente.nombre_producto)}</p>
-            ${envaseRendimiento ? `<p class="text-[9px] font-label-mono uppercase tracking-widest text-on-surface-variant">${envaseRendimiento}</p>` : ''}
-            ${ingrediente.sin_wac ? '<p class="text-[9px] font-label-mono uppercase tracking-widest" style="color:var(--semantic-warning)">Sin WAC cacheado</p>' : ''}
-        </div>
-        <div class="flex flex-col items-end shrink-0 gap-[2px]">
-            <label class="text-[9px] font-label-mono uppercase tracking-widest text-on-surface-variant">Cant.</label>
-            <div class="flex items-center gap-[2px]">
-                <button type="button" data-accion="menos" data-index="${index}" class="${btnClase}" aria-label="Reducir cantidad">&minus;</button>
-                <input type="text" inputmode="decimal" data-campo="cantidad_receta" data-index="${index}"
-                    value="${cantidadMostrada}"
-                    class="w-12 bg-surface-container border border-outline-variant rounded-sm px-xs py-[2px] text-xs text-on-surface font-data-tabular text-center focus:border-primary-fixed-dim focus:outline-none">
-                <button type="button" data-accion="mas" data-index="${index}" class="${btnClase}" aria-label="Aumentar cantidad">+</button>
-                ${unidadReceta ? `<span class="text-[9px] font-label-mono uppercase tracking-widest text-on-surface-variant ml-[2px]">${escapeHtml(unidadReceta)}</span>` : ''}
+        <div class="flex items-start justify-between gap-sm">
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-xs flex-wrap mb-[2px]">
+                    <span class="${esOpcional ? 'badge-info' : 'badge-ok'} text-[9px] font-label-mono px-xs py-[1px] rounded uppercase tracking-widest font-semibold">${tipoIngrediente}</span>
+                    ${estadoSeleccion}
+                </div>
+                <p class="text-xs text-on-surface truncate">${escapeHtml(ingrediente.nombre_producto)}</p>
+                ${rendimientoTexto ? `<p class="text-[9px] font-label-mono uppercase tracking-widest text-on-surface-variant">${rendimientoTexto}</p>` : ''}
+            </div>
+            <div class="flex flex-col items-center shrink-0 gap-[2px]">
+                <label class="text-[9px] font-label-mono uppercase tracking-widest text-on-surface-variant">WAC</label>
+                <input type="number" min="0" step="0.0001" data-campo="wac_actual" data-index="${index}"
+                    value="${pourCostFormatearWacVisible(ingrediente.wac_actual)}"
+                    class="w-16 bg-surface-container border border-outline-variant rounded-sm px-xs py-[2px] text-xs text-on-surface font-data-tabular text-center focus:border-primary-fixed-dim focus:outline-none">
             </div>
         </div>
-        <div class="flex flex-col items-center shrink-0 gap-[2px]">
-            <label class="text-[9px] font-label-mono uppercase tracking-widest text-on-surface-variant">WAC</label>
-            <input type="number" min="0" step="0.0001" data-campo="wac_actual" data-index="${index}"
-                value="${Number(ingrediente.wac_actual ?? 0)}"
-                class="w-16 bg-surface-container border border-outline-variant rounded-sm px-xs py-[2px] text-xs text-on-surface font-data-tabular text-center focus:border-primary-fixed-dim focus:outline-none">
+        <div class="flex items-end justify-between gap-sm">
+            ${ingrediente.sin_wac ? '<p class="text-[9px] font-label-mono uppercase tracking-widest" style="color:var(--semantic-warning)">Sin WAC cacheado</p>' : ''}
+            <div class="flex items-end gap-[2px] shrink-0 ml-auto">
+                <button type="button" data-accion="menos" data-index="${index}" class="${btnClase}" aria-label="Reducir cantidad">&minus;</button>
+                <div class="flex flex-col items-center gap-[2px]">
+                    <label class="text-[9px] font-label-mono uppercase tracking-widest text-on-surface-variant">CANT.${unidadReceta ? ` ${escapeHtml(unidadReceta)}` : ''}</label>
+                    <input type="text" inputmode="decimal" data-campo="cantidad_receta" data-index="${index}"
+                        value="${cantidadMostrada}"
+                        class="w-12 bg-surface-container border border-outline-variant rounded-sm px-xs py-[2px] text-xs text-on-surface font-data-tabular text-center focus:border-primary-fixed-dim focus:outline-none">
+                </div>
+                <button type="button" data-accion="mas" data-index="${index}" class="${btnClase}" aria-label="Aumentar cantidad">+</button>
+            </div>
         </div>
     `;
     return div;
@@ -1989,6 +2046,17 @@ if (pourCostModalIngredientes) {
         pourCostRecalcularSimulacion();
     });
 
+    pourCostModalIngredientes.addEventListener('change', (e) => {
+        const checkbox = e.target.closest('input[data-campo="incluido"]');
+        if (!checkbox || !pourCostSimulacion?.esCoctel) return;
+        const idProducto = parseInt(checkbox.dataset.idProducto, 10);
+        if (Number.isNaN(idProducto)) return;
+        const ing = pourCostBuscarIngredientePorProducto(idProducto);
+        if (!ing || pourCostIngredienteEsPrincipal(ing)) return;
+        ing.incluido = checkbox.checked;
+        pourCostRecalcularSimulacion();
+    });
+
     // Edición directa: cantidad_receta (texto con coma/punto) y wac_actual (número).
     pourCostModalIngredientes.addEventListener('input', (e) => {
         const input = e.target.closest('input[data-campo]');
@@ -2007,6 +2075,23 @@ if (pourCostModalIngredientes) {
         }
         pourCostRecalcularSimulacion();
     });
+
+    pourCostModalIngredientes.addEventListener('blur', (e) => {
+        const input = e.target.closest('input[data-campo]');
+        if (!input || !pourCostSimulacion?.esCoctel) return;
+        const index = parseInt(input.dataset.index, 10);
+        const ing = Number.isNaN(index) ? null : pourCostSimulacion.ingredientes[index];
+        if (!ing) return;
+
+        if (input.dataset.campo === 'cantidad_receta') {
+            input.value = pourCostFormatearCantidadReceta(ing.cantidad_receta);
+            return;
+        }
+
+        if (input.dataset.campo === 'wac_actual') {
+            input.value = pourCostFormatearWacVisible(ing.wac_actual);
+        }
+    }, true);
 }
 
 if (pourCostModalWacDirecto) {
@@ -2091,10 +2176,16 @@ function abrirModalPourCostReceta(combo) {
 
     if (pourCostModalTarget) pourCostModalTarget.value = '';
     if (pourCostModalPrecioInput) pourCostModalPrecioInput.value = '';
-    // Estado inicial: el valor tal cual lo calculó el backend (Decimal), no un
-    // recomputo en JS -- ver comentario de pourCostPintarResumenCosto.
-    pourCostPintarResumenCosto(combo.costo_total_receta, combo.precio_venta, combo.pour_cost_pct);
-    pourCostPintarSugerido(combo.costo_total_receta, combo.precio_venta);
+
+    const tieneOpcionales = pourCostSimulacion.ingredientes.some((ing) => pourCostIngredienteEsOpcional(ing));
+    if (tieneOpcionales) {
+        pourCostRecalcularSimulacion();
+    } else {
+        // Si no hay opcionales, conserva el valor autoritativo del backend para
+        // evitar diferencias de una centésima al abrir el modal sin editar nada.
+        pourCostPintarResumenCosto(combo.costo_total_receta, combo.precio_venta, combo.pour_cost_pct);
+        pourCostPintarSugerido(combo.costo_total_receta, combo.precio_venta);
+    }
 
     pourCostModal.classList.remove('hidden');
     pourCostModal.setAttribute('aria-hidden', 'false');

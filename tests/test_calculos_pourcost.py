@@ -9,6 +9,8 @@ from decimal import Decimal
 import pytest
 
 from main import (
+    _calcular_costo_receta_simulado,
+    _calcular_costo_receta_simulado_crudo,
     _agregar_costo_receta,
     _calcular_pour_cost_pct,
     _calcular_precio_sugerido,
@@ -167,3 +169,90 @@ def test_division_por_cero_produce_cero_en_cantidad_unidad_base():
     else:
         cogs = cantidad_receta / rendimiento
     assert cogs == Decimal("0")
+
+
+def _ingrediente_simulado(id_producto, *, cantidad, wac, tipo_parte='PRINCIPAL', incluido=True, divisor='1', tipo_cantidad='Detalle'):
+    return {
+        'id_producto': id_producto,
+        'cantidad_receta': cantidad,
+        'wac_actual': wac,
+        'tipo_parte_combo': tipo_parte,
+        'incluido': incluido,
+        'tipo_cantidad_combo': tipo_cantidad,
+        'unidades_detalle_por_base': divisor,
+    }
+
+
+def test_costo_simulado_chuflay_inicial_solo_principal():
+    ingredientes = [
+        _ingrediente_simulado(1, cantidad='1.5', wac='100', divisor='34', tipo_parte='PRINCIPAL'),
+        _ingrediente_simulado(2, cantidad='4', wac='6', divisor='67.5', tipo_parte='OPCIONAL', incluido=False),
+        _ingrediente_simulado(3, cantidad='4', wac='9', divisor='34', tipo_parte='OPCIONAL', incluido=False),
+        _ingrediente_simulado(4, cantidad='4', wac='15', divisor='67.5', tipo_parte='OPCIONAL', incluido=False),
+        _ingrediente_simulado(5, cantidad='4', wac='18.58', divisor='101.5', tipo_parte='OPCIONAL', incluido=False),
+    ]
+
+    costo = _calcular_costo_receta_simulado(ingredientes)
+    pct = _calcular_pour_cost_pct(_calcular_costo_receta_simulado_crudo(ingredientes), Decimal('35'))
+
+    assert costo == Decimal('4.41')
+    assert pct == Decimal('12.61')
+
+
+def test_costo_simulado_chuflay_con_todos_los_opcionales():
+    ingredientes = [
+        _ingrediente_simulado(1, cantidad='1.5', wac='100', divisor='34', tipo_parte='PRINCIPAL'),
+        _ingrediente_simulado(2, cantidad='1', wac='0.50', divisor='1', tipo_parte='OPCIONAL', incluido=True, tipo_cantidad='Unidad'),
+        _ingrediente_simulado(3, cantidad='1', wac='0.60', divisor='1', tipo_parte='OPCIONAL', incluido=True, tipo_cantidad='Unidad'),
+        _ingrediente_simulado(4, cantidad='1', wac='0.70', divisor='1', tipo_parte='OPCIONAL', incluido=True, tipo_cantidad='Unidad'),
+        _ingrediente_simulado(5, cantidad='1', wac='0.938236', divisor='1', tipo_parte='OPCIONAL', incluido=True, tipo_cantidad='Unidad'),
+    ]
+
+    costo = _calcular_costo_receta_simulado(ingredientes)
+    pct = _calcular_pour_cost_pct(_calcular_costo_receta_simulado_crudo(ingredientes), Decimal('35'))
+
+    assert costo == Decimal('7.15')
+    assert pct == Decimal('20.43')
+
+
+def test_cambio_en_opcional_no_seleccionado_no_modifica_total():
+    base = [
+        _ingrediente_simulado(1, cantidad='1.5', wac='100', divisor='34', tipo_parte='PRINCIPAL'),
+        _ingrediente_simulado(2, cantidad='4', wac='18.58', divisor='101.5', tipo_parte='OPCIONAL', incluido=False),
+    ]
+    modificado = [
+        _ingrediente_simulado(1, cantidad='1.5', wac='100', divisor='34', tipo_parte='PRINCIPAL'),
+        _ingrediente_simulado(2, cantidad='8', wac='999', divisor='101.5', tipo_parte='OPCIONAL', incluido=False),
+    ]
+
+    assert _calcular_costo_receta_simulado(base) == Decimal('4.41')
+    assert _calcular_costo_receta_simulado(modificado) == Decimal('4.41')
+
+
+def test_costo_simulado_permita_varios_principales_y_solo_opcionales_marcados():
+    ingredientes = [
+        _ingrediente_simulado(1, cantidad='1', wac='34', divisor='34', tipo_parte='PRINCIPAL'),
+        _ingrediente_simulado(2, cantidad='2', wac='50', divisor='25', tipo_parte='PRINCIPAL'),
+        _ingrediente_simulado(3, cantidad='1', wac='10', divisor='10', tipo_parte='OPCIONAL', incluido=False),
+        _ingrediente_simulado(4, cantidad='1', wac='5', divisor='5', tipo_parte='OPCIONAL', incluido=True),
+    ]
+
+    assert _calcular_costo_receta_simulado(ingredientes) == Decimal('6.00')
+
+
+def test_costo_simulado_sin_opcionales_mantiene_comportamiento_previo():
+    ingredientes = [
+        _ingrediente_simulado(1, cantidad='1', wac='80', divisor='34', tipo_parte='PRINCIPAL'),
+        _ingrediente_simulado(2, cantidad='4', wac='20', divisor='100', tipo_parte='PRINCIPAL'),
+    ]
+
+    assert _calcular_costo_receta_simulado(ingredientes) == Decimal('3.15')
+
+
+def test_costo_simulado_evita_division_por_cero_en_ingrediente_seleccionado():
+    ingredientes = [
+        _ingrediente_simulado(1, cantidad='1', wac='80', divisor='0', tipo_parte='PRINCIPAL'),
+        _ingrediente_simulado(2, cantidad='1', wac='10', divisor='10', tipo_parte='OPCIONAL', incluido=True),
+    ]
+
+    assert _calcular_costo_receta_simulado(ingredientes) == Decimal('1.00')

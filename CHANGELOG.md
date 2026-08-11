@@ -4,6 +4,10 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 11.7
+- POUR COST (modal COCTELES): el cálculo inicial ya no suma ingredientes opcionales por defecto. La simulación local incluye siempre los `PRINCIPAL` y solo agrega los `OPCIONAL` marcados por el usuario usando `tipo_parte_combo` e `id_producto` como fuente de verdad.
+- POUR COST (modal COCTELES): cada ingrediente ahora muestra etiqueta `PRINCIPAL` u `OPCIONAL`, checkbox accesible para opcionales, `REND:` abreviado, `CANT. + unidad` centrado sobre el input y WAC visible con máximo 2 decimales sin ceros innecesarios. Se amplían las pruebas unitarias del cálculo simulado y del caso de referencia Chuflay.
+
 ## 11.6
 - POUR COST: botones [−][+] en los dos inputs del simulador. % objetivo: paso 0,5 (ej. 25 → 25,5 → 26), mínimo 0,5. Precio Bs: paso 1, mínimo 1 Bs (acorde con que los precios reales son enteros). Ambos actualizan sus resultados en tiempo real al hacer clic.
 

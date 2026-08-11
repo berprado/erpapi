@@ -1,6 +1,6 @@
 # Módulo POUR COST — Diseño y Alcance (v1)
 
-Guía de referencia del módulo POUR COST: cálculo y simulación del costo de venta (pour cost) de combos/cócteles y productos sueltos comandados desde el POS. Estado: **implementado** (rama `feature/pour-cost`, cache v11.6). Este documento se mantiene como fuente de verdad de las decisiones de diseño y debe actualizarse cuando cambie el comportamiento del módulo.
+Guía de referencia del módulo POUR COST: cálculo y simulación del costo de venta (pour cost) de combos/cócteles y productos sueltos comandados desde el POS. Estado: **implementado** (rama `feature/pour-cost`, cache v11.7). Este documento se mantiene como fuente de verdad de las decisiones de diseño y debe actualizarse cuando cambie el comportamiento del módulo.
 
 ## 0. Qué resuelve
 
@@ -92,6 +92,7 @@ Los tres primeros aceptan `id_dia` como query param (default `1`), ya que `vw_po
 Toda la simulación corre en memoria del cliente, sin `POST`/`PUT` a `adminerp`:
 
 - **Simulación inversa (bidireccional):** el usuario puede ingresar un **% objetivo** para obtener el precio sugerido (`costo / (% / 100)`), o bien ingresar un **precio en Bs** para obtener el pour cost % resultante (`costo / precio × 100`). Ambos campos tienen controles `[−][valor][+]`: % con paso 0,5 (mínimo 0,5), precio con paso 1 Bs (mínimo 1). Ambas direcciones reaccionan en tiempo real si el costo simulado cambia por edición de cantidades/WAC.
+- **Selección de opcionales:** al abrir el modal, todos los ingredientes `PRINCIPAL` entran al cálculo automáticamente y los `OPCIONAL` arrancan desmarcados. El frontend usa `tipo_parte_combo` para distinguirlos e `id_producto` como identificador estable del checkbox local; marcar o desmarcar un opcional actualiza en vivo costo, pour cost, precio sugerido y porcentaje resultante.
 - **Alteración de WAC:** el usuario edita el WAC de un ingrediente → recalcula `cogs_ingrediente` de esa línea y el total.
 - **Alteración de receta:** selector `[−] [cantidad] [+]` con paso 0,5 por ingrediente. El frontend edita `cantidad_receta` y deriva `cantidad_unidad_base` internamente (`pourCostCantidadUnidadBase`). Para `Detalle`: `cantidad_unidad_base = cantidad_receta / unidades_detalle_por_base`; para `Unidad`: `cantidad_unidad_base = cantidad_receta`.
 - **Reiniciar simulación:** restaura exactamente los valores originales del backend (cantidades, WAC, costos y % original).
@@ -103,11 +104,11 @@ El modal mantiene separación explícita entre:
 - `cantidad_receta`: cantidad visible y editable (ej. `1 OZ`). Fuente de verdad para la edición.
 - `cantidad_unidad_base`: fracción interna de costeo, derivada de `cantidad_receta`. No se expone como campo editable.
 
-El estado local de simulación clona los campos `tipo_cantidad_combo`, `tipo_parte_combo`, `unidades_detalle_por_base`, `unidad_detalle`, `medida_unidad_base` y `unidad_base` para que `pourCostCantidadUnidadBase` pueda recalcular sin consultar al backend.
+El estado local de simulación clona los campos `id_producto`, `tipo_cantidad_combo`, `tipo_parte_combo`, `unidades_detalle_por_base`, `unidad_detalle`, `medida_unidad_base` y `unidad_base` para que `pourCostCantidadUnidadBase` pueda recalcular sin consultar al backend y para que los checkboxes de opcionales mantengan identidad estable.
 
 La normalización de entradas acepta coma o punto como separador decimal (`1`, `1.0`, `1,0`, `1,5`), rechaza vacíos, negativos y no numéricos, y evita errores de punto flotante con `Math.round(val * 100) / 100`.
 
-Cada fila muestra `ENVASE: {medida_unidad_base} {unidad_base} · RENDIMIENTO: {unidades_detalle_por_base} {unidad_detalle}` para ingredientes tipo `Detalle`.
+Cada fila muestra una etiqueta visible `PRINCIPAL` u `OPCIONAL`, resalta los principales con acento verde del sistema BackStage, usa `REND: {unidades_detalle_por_base} {unidad_detalle}.` para ingredientes tipo `Detalle`, centra la etiqueta `CANT. {unidad}` sobre el input editable y formatea el WAC visible con un máximo de 2 decimales sin ceros innecesarios.
 
 ## 7. Cierre del flujo — Fase 2, fuera de alcance v1
 
@@ -138,7 +139,7 @@ Las imágenes aportadas sirven como referencia visual del estado actual del moda
 
 ## 10. Pruebas
 
-- **Unitarias, sin DB** (`tests/test_calculos_pourcost.py`, 21 tests): cubren `_calcular_pour_cost_pct`, `_calcular_precio_sugerido`, `_agregar_costo_receta` y los casos de aceptación de la refactorización de cantidades (Long Island 1 oz → Bs 2,35; 1,5 oz → Bs 3,53; Chuflay fracción interna; división por cero → 0). Corren con `python -m pytest`.
+- **Unitarias, sin DB** (`tests/test_calculos_pourcost.py`, 27 tests): cubren `_calcular_pour_cost_pct`, `_calcular_precio_sugerido`, `_agregar_costo_receta`, el espejo puro del cálculo simulado con opcionales (`_calcular_costo_receta_simulado`) y los casos de aceptación de cantidades/opcionales (Long Island 1 oz → Bs 2,35; 1,5 oz → Bs 3,53; Chuflay inicial 4,41 / 12,61; Chuflay con opcionales 7,15 / 20,43; división por cero → 0). Corren con `python -m pytest`.
 - **Sin integración automatizada en v1.** Los 4 `GET` se validan a mano contra `test_pos` vía `/docs` o la PWA en seenode — `tests/conftest.py` exige `APP_ENV=test` y no se toca ese guard.
 
 ---
