@@ -110,6 +110,20 @@ La normalización de entradas acepta coma o punto como separador decimal (`1`, `
 
 Cada fila muestra una etiqueta visible `PRINCIPAL` u `OPCIONAL`, resalta los principales con acento verde del sistema BackStage, usa `REND: {unidades_detalle_por_base} {unidad_detalle}.` para ingredientes tipo `Detalle`, centra la etiqueta `CANT. {unidad}` sobre el input editable y formatea el WAC visible con un máximo de 2 decimales sin ceros innecesarios.
 
+### 6.2 Origen del WAC mostrado en el modal
+
+El valor de `WAC` que se muestra por ingrediente en COCTELES no se calcula en el frontend: llega ya resuelto desde base de datos.
+
+Flujo de datos:
+
+1. `cache_wac_producto.wac_actual` (tabla base de costos)
+2. `vw_cache_wac_producto_detalle.wac_actual`
+3. `vw_pourcost_receta.wac_actual` (join por `id_producto` + `id_almacen=1`, con `coalesce(..., 0)`)
+4. `GET /api/pourcost/recetas` serializa el campo en `PourCostIngrediente.wac_actual`
+5. `static/app.js` clona ese valor al estado local de simulación (`pourCostClonarParaSimulacion`)
+
+Por diseño, el WAC visible corresponde al costo de la unidad base del producto. El costo de la línea se obtiene multiplicando ese WAC por `cantidad_unidad_base` (fracción realmente usada en la receta).
+
 ## 7. Cierre del flujo — Fase 2, fuera de alcance v1
 
 Botón "Aplicar Precio" → `INSERT` en `ope_precio_venta`. Queda **explícitamente fuera de v1** (decisión de la sección 1). Cuando se diseñe: rol admin, confirmación explícita (no un solo clic), y algún registro de auditoría — mismo criterio que ya se aplicó a login (`app_login_auditoria_api`) para escrituras sensibles.
