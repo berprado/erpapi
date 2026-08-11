@@ -1852,6 +1852,19 @@ function pourCostFormatearWacVisible(val) {
     return parseFloat(Number(val).toFixed(2)).toString();
 }
 
+function pourCostCalcularCogsIngrediente(ingrediente) {
+    return pourCostCantidadUnidadBase(ingrediente) * (Number(ingrediente.wac_actual) || 0);
+}
+
+function pourCostTextoCogsIngrediente(ingrediente) {
+    const incluido = pourCostIngredienteEstaIncluido(ingrediente);
+    const cogsCrudo = incluido ? pourCostCalcularCogsIngrediente(ingrediente) : 0;
+    const cogsTexto = pourCostFormatearMoneda(pourCostRedondearHalfUp(cogsCrudo, 2));
+    return incluido
+        ? `COGS: ${cogsTexto} Bs`
+        : `COGS: ${cogsTexto} Bs (no incluido)`;
+}
+
 // Costo/precio "vigentes" del modal abierto: el valor autoritativo del
 // backend hasta que el usuario edite un ingrediente/WAC, momento en el que
 // pasan a ser el recalculo en cliente. El campo "% objetivo" LEE de aca en
@@ -1937,6 +1950,14 @@ function pourCostCalcularTotalesSimulacion() {
     };
 }
 
+function pourCostRefrescarCogsIngredientesUI() {
+    if (!pourCostModalIngredientes || !pourCostSimulacion?.esCoctel) return;
+    pourCostSimulacion.ingredientes.forEach((ing, index) => {
+        const cogsEl = pourCostModalIngredientes.querySelector(`[data-campo="cogs"][data-index="${index}"]`);
+        if (cogsEl) cogsEl.textContent = pourCostTextoCogsIngrediente(ing);
+    });
+}
+
 /** Recalcula costo total y pour cost % a partir del estado de simulación
  * actual (cantidades/WAC editados) y repinta todo el resumen del modal. Se
  * llama en cada edición para que la UI reaccione en vivo -- a diferencia de
@@ -1948,6 +1969,7 @@ function pourCostRecalcularSimulacion() {
     const { costoTotal, pct } = pourCostCalcularTotalesSimulacion();
     pourCostPintarResumenCosto(costoTotal, pourCostSimulacion.precioVenta, pct);
     pourCostPintarSugerido(costoTotal, pourCostSimulacion.precioVenta);
+    pourCostRefrescarCogsIngredientesUI();
 }
 
 function pourCostCrearFilaIngrediente(ingrediente, index) {
@@ -2001,6 +2023,7 @@ function pourCostCrearFilaIngrediente(ingrediente, index) {
                 </div>
                 <p class="text-xs text-on-surface truncate">${escapeHtml(ingrediente.nombre_producto)}</p>
                 ${rendimientoTexto ? `<p class="text-[9px] font-label-mono uppercase tracking-widest text-on-surface-variant">${rendimientoTexto}</p>` : ''}
+                <p data-campo="cogs" data-index="${index}" class="text-[9px] font-label-mono uppercase tracking-widest text-on-surface-variant">${pourCostTextoCogsIngrediente(ingrediente)}</p>
             </div>
             <div class="flex flex-col items-center shrink-0 gap-[2px]">
                 <label class="text-[9px] font-label-mono uppercase tracking-widest text-on-surface-variant">WAC</label>

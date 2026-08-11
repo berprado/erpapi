@@ -108,7 +108,7 @@ El estado local de simulación clona los campos `id_producto`, `tipo_cantidad_co
 
 La normalización de entradas acepta coma o punto como separador decimal (`1`, `1.0`, `1,0`, `1,5`), rechaza vacíos, negativos y no numéricos, y evita errores de punto flotante con `Math.round(val * 100) / 100`.
 
-Cada fila muestra una etiqueta visible `PRINCIPAL` u `OPCIONAL`, resalta los principales con acento verde del sistema BackStage, usa `REND: {unidades_detalle_por_base} {unidad_detalle}.` para ingredientes tipo `Detalle`, centra la etiqueta `CANT. {unidad}` sobre el input editable y formatea el WAC visible con un máximo de 2 decimales sin ceros innecesarios.
+Cada fila muestra una etiqueta visible `PRINCIPAL` u `OPCIONAL`, resalta los principales con acento verde del sistema BackStage, usa `REND: {unidades_detalle_por_base} {unidad_detalle}.` para ingredientes tipo `Detalle`, muestra debajo el `COGS` de la porción usada (si el opcional no está seleccionado aporta `0` al total), centra la etiqueta `CANT. {unidad}` sobre el input editable y formatea el WAC visible con un máximo de 2 decimales sin ceros innecesarios.
 
 ### 6.2 Origen del WAC mostrado en el modal
 
