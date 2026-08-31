@@ -1451,6 +1451,900 @@ if (pesajeFiltroNoPesablesBtn) {
 }
 
 // ==========================================
+// MÓDULO POUR COST (solo lectura + simulación en memoria)
+// Ver documentos/pour_cost/pourcost.md para el diseño completo. A diferencia
+// de PESAJE, nada de lo editable en este módulo se envía al backend: el
+// "sandbox" (% objetivo, WAC/cantidad simulados) vive solo en el estado local
+// del modal y se descarta al cerrarlo o reabrir con otro item.
+// ==========================================
+
+// Cortes de negocio para el semáforo de pour cost (definidos por el usuario,
+// no un estándar de industria): <=28% ok, 28-35% atención, >35% alto.
+const POURCOST_UMBRAL_OK = 28;
+const POURCOST_UMBRAL_CAUTION = 35;
+
+const pourCostEstado = {
+    tipo: 'cocteles',       // 'cocteles' (con receta, vw_pourcost_receta) | 'productos' (WAC directo)
+    idDia: 1,               // 1 = "Precios A", 2 = "Precios B" (horario de precio, ver pourcost.md sección 8.2)
+    idCategoria: '',
+    nombre: '',
+    recetas: [],
+    productos: [],
+};
+
+const pourCostTipoCoctelesBtn  = document.getElementById('pourcost-tipo-cocteles');
+const pourCostTipoProductosBtn = document.getElementById('pourcost-tipo-productos');
+const pourCostHorarioABtn      = document.getElementById('pourcost-horario-a');
+const pourCostHorarioBBtn      = document.getElementById('pourcost-horario-b');
+const pourCostCategoriaSel     = document.getElementById('pourcost-categoria');
+const pourCostList             = document.getElementById('pourcost-list');
+const pourCostEmptyState       = document.getElementById('pourcost-empty-state');
+
+// --- Fórmulas: espejo de _calcular_pour_cost_pct / _calcular_precio_sugerido
+// (main.py) y de la convención de redondeo de documentos/pour_cost/pourcost.md
+// sección 4. Math.round() NO es HALF_UP en negativos (ver redondearOnzasOperativas
+// más arriba) -- se reutiliza el mismo truco de escalar + floor/ceil + epsilon. ---
+
+function pourCostRedondearHalfUp(valor, decimales) {
+    if (valor == null || Number.isNaN(Number(valor))) return null;
+    const factor = Math.pow(10, decimales);
+    const numero = Number(valor) * factor;
+    const epsilon = 1e-9;
+    const entero = numero >= 0
+        ? Math.floor(numero + 0.5 + epsilon)
+        : Math.ceil(numero - 0.5 - epsilon);
+    return entero / factor;
+}
+
+/** Pour cost % = costo/precio*100, HALF_UP a 2 decimales. null si no hay
+ * precio válido (evita división por cero) -- espejo de _calcular_pour_cost_pct. */
+function pourCostCalcularPct(costoTotal, precioVenta) {
+    if (precioVenta == null || Number(precioVenta) <= 0) return null;
+    return pourCostRedondearHalfUp((Number(costoTotal) / Number(precioVenta)) * 100, 2);
+}
+
+/** Precio sugerido = costo/(target/100): exacto + redondeado a unidad entera
+ * (el negocio no usa centavos, ver pourcost.md sección 4). null si el target
+ * no es un % válido -- espejo de _calcular_precio_sugerido. */
+function pourCostCalcularPrecioSugerido(costoTotal, targetPct) {
+    if (targetPct == null || Number(targetPct) <= 0) return null;
+    const exacto = Number(costoTotal) / (Number(targetPct) / 100);
+    return {
+        exacto: pourCostRedondearHalfUp(exacto, 2),
+        redondeado: pourCostRedondearHalfUp(exacto, 0),
+    };
+}
+
+function pourCostNivel(pct) {
+    if (pct == null) return null;
+    if (pct <= POURCOST_UMBRAL_OK) return 'ok';
+    if (pct <= POURCOST_UMBRAL_CAUTION) return 'caution';
+    return 'danger';
+}
+
+function pourCostClaseBadge(pct) {
+    const nivel = pourCostNivel(pct);
+    if (nivel === 'ok') return 'badge-ok';
+    if (nivel === 'caution') return 'badge-caution';
+    if (nivel === 'danger') return 'badge-danger';
+    return 'badge-info'; // sin precio para este horario: neutro, no es "bueno" ni "malo"
+}
+
+function pourCostColorTexto(pct) {
+    const nivel = pourCostNivel(pct);
+    if (nivel === 'ok') return 'var(--semantic-action)';
+    if (nivel === 'caution') return 'var(--semantic-warning)';
+    if (nivel === 'danger') return 'var(--semantic-danger)';
+    return '';
+}
+
+function pourCostFormatearMoneda(valor) {
+    if (valor == null || Number.isNaN(Number(valor))) return '-';
+    return Number(valor).toFixed(2);
+}
+
+function pourCostFormatearPct(valor) {
+    if (valor == null || Number.isNaN(Number(valor))) return '-';
+    return `${Number(valor).toFixed(2)}%`;
+}
+
+// --- Carga y filtros ---
+
+function actualizarUIFiltrosPourCost() {
+    const grupos = [
+        { btn: pourCostTipoCoctelesBtn, activo: pourCostEstado.tipo === 'cocteles' },
+        { btn: pourCostTipoProductosBtn, activo: pourCostEstado.tipo === 'productos' },
+        { btn: pourCostHorarioABtn, activo: pourCostEstado.idDia === 1 },
+        { btn: pourCostHorarioBBtn, activo: pourCostEstado.idDia === 2 },
+    ];
+    grupos.forEach(({ btn, activo }) => {
+        if (!btn) return;
+        btn.classList.toggle('bg-primary-container', activo);
+        btn.classList.toggle('text-black', activo);
+        btn.classList.toggle('border-primary-fixed-dim', activo);
+        btn.classList.toggle('bg-surface', !activo);
+        btn.classList.toggle('text-on-surface', !activo);
+        btn.classList.toggle('border-outline-variant', !activo);
+    });
+}
+
+/** Repuebla el filtro de categoría a partir de los datos ya cargados -- POUR
+ * COST no tiene endpoint propio de categorías, se deriva del dataset activo
+ * (cambia con el tipo cócteles/productos). */
+function actualizarCategoriasPourCost() {
+    if (!pourCostCategoriaSel) return;
+    const valorPrevio = pourCostCategoriaSel.value;
+    const esCocteles = pourCostEstado.tipo === 'cocteles';
+    const items = esCocteles ? pourCostEstado.recetas : pourCostEstado.productos;
+    const campoCategoria = esCocteles ? 'nombre_categoria_combo' : 'nombre_categoria';
+
+    const categorias = Array.from(new Set(items.map((item) => item[campoCategoria]).filter(Boolean))).sort();
+
+    pourCostCategoriaSel.querySelectorAll('option[data-pourcost-categoria="1"]').forEach((opt) => opt.remove());
+    categorias.forEach((nombre) => {
+        const option = document.createElement('option');
+        option.value = nombre;
+        option.textContent = nombre;
+        option.dataset.pourcostCategoria = '1';
+        pourCostCategoriaSel.appendChild(option);
+    });
+
+    pourCostCategoriaSel.value = (valorPrevio && categorias.includes(valorPrevio)) ? valorPrevio : '';
+}
+
+function mostrarCargandoPourCost() {
+    if (pourCostEmptyState) pourCostEmptyState.classList.add('hidden');
+    if (!pourCostList) return;
+    pourCostList.innerHTML = `
+        <div class="col-span-full flex items-center justify-center gap-sm py-lg text-on-surface-variant font-label-mono uppercase tracking-widest text-[11px]" aria-live="polite" style="grid-column: 1 / -1;">
+            ${renderCriticalIcon('refresh', 'ui-icon animate-spin-ccw')}
+            Cargando...
+        </div>`;
+}
+
+async function cargarPourCost() {
+    if (!pourCostList) return;
+    mostrarCargandoPourCost();
+    actualizarUIFiltrosPourCost();
+
+    const endpoint = pourCostEstado.tipo === 'cocteles' ? 'recetas' : 'productos';
+    const params = new URLSearchParams();
+    params.set('id_dia', String(pourCostEstado.idDia));
+
+    try {
+        const response = await fetchAutenticado(`${API_BASE}/pourcost/${endpoint}?${params.toString()}`);
+        if (response.status === 403) {
+            pourCostList.innerHTML = '';
+            pourCostEmptyState.textContent = 'No tienes permisos para acceder a este módulo.';
+            pourCostEmptyState.classList.remove('hidden');
+            return;
+        }
+        const datos = response.ok ? await response.json() : [];
+        if (pourCostEstado.tipo === 'cocteles') pourCostEstado.recetas = datos;
+        else pourCostEstado.productos = datos;
+    } catch (error) {
+        if (error instanceof SesionExpiradaError) return;
+        if (pourCostEstado.tipo === 'cocteles') pourCostEstado.recetas = [];
+        else pourCostEstado.productos = [];
+    }
+
+    actualizarCategoriasPourCost();
+    renderizarPourCost();
+}
+
+/** Filtro de categoría/búsqueda: 100% en cliente sobre los datos ya cargados
+ * (no requiere ida y vuelta al backend, a diferencia de PESAJE). */
+function renderizarPourCost() {
+    if (!pourCostList) return;
+    pourCostList.innerHTML = '';
+
+    const esCocteles = pourCostEstado.tipo === 'cocteles';
+    let items = esCocteles ? pourCostEstado.recetas : pourCostEstado.productos;
+
+    if (pourCostEstado.idCategoria) {
+        const campoCategoria = esCocteles ? 'nombre_categoria_combo' : 'nombre_categoria';
+        items = items.filter((item) => item[campoCategoria] === pourCostEstado.idCategoria);
+    }
+    if (pourCostEstado.nombre) {
+        const query = pourCostEstado.nombre.toLowerCase();
+        const campoNombre = esCocteles ? 'nombre_combo' : 'nombre';
+        items = items.filter((item) => (item[campoNombre] || '').toLowerCase().includes(query));
+    }
+
+    if (pourCostEmptyState) pourCostEmptyState.classList.toggle('hidden', items.length > 0);
+
+    items.forEach((item) => {
+        pourCostList.appendChild(esCocteles ? crearTarjetaPourCostReceta(item) : crearTarjetaPourCostProducto(item));
+    });
+}
+
+function filtrarPourCost(query) {
+    pourCostEstado.nombre = query.trim();
+    renderizarPourCost();
+}
+
+if (pourCostTipoCoctelesBtn) {
+    pourCostTipoCoctelesBtn.addEventListener('click', () => {
+        pourCostEstado.tipo = 'cocteles';
+        pourCostEstado.idCategoria = '';
+        cargarPourCost();
+    });
+}
+if (pourCostTipoProductosBtn) {
+    pourCostTipoProductosBtn.addEventListener('click', () => {
+        pourCostEstado.tipo = 'productos';
+        pourCostEstado.idCategoria = '';
+        cargarPourCost();
+    });
+}
+if (pourCostHorarioABtn) {
+    pourCostHorarioABtn.addEventListener('click', () => {
+        pourCostEstado.idDia = 1;
+        cargarPourCost();
+    });
+}
+if (pourCostHorarioBBtn) {
+    pourCostHorarioBBtn.addEventListener('click', () => {
+        pourCostEstado.idDia = 2;
+        cargarPourCost();
+    });
+}
+if (pourCostCategoriaSel) {
+    pourCostCategoriaSel.addEventListener('change', () => {
+        pourCostEstado.idCategoria = pourCostCategoriaSel.value;
+        renderizarPourCost();
+    });
+}
+
+// --- Tarjetas ---
+
+function crearTarjetaPourCostReceta(combo) {
+    const div = document.createElement('div');
+    div.className = 'bg-surface-container border border-outline-variant rounded-md p-md shadow-lg transition-colors flex flex-col gap-xs cursor-pointer hover:border-primary-fixed-dim';
+
+    div.innerHTML = `
+        <div class="text-[11px] text-on-surface-variant font-label-mono uppercase tracking-wider mb-xs flex items-center flex-wrap gap-xs">
+            ${combo.nombre_categoria_combo ? `<span>${escapeHtml(combo.nombre_categoria_combo)}</span>` : ''}
+            <span class="${combo.nombre_categoria_combo ? 'border-l border-outline-variant pl-xs' : ''}">COD ${escapeHtml(combo.codigo_combo)}</span>
+        </div>
+        <p class="text-sm font-semibold text-on-surface leading-tight mb-xs">${escapeHtml(combo.nombre_combo)}</p>
+        <div class="flex flex-wrap gap-xs text-[10px] font-label-mono text-on-surface-variant mb-xs">
+            <span class="bg-surface-container-low px-xs py-[1px] rounded">Precio ${pourCostFormatearMoneda(combo.precio_venta)}</span>
+            <span class="bg-surface-container-low px-xs py-[1px] rounded">Costo ${pourCostFormatearMoneda(combo.costo_total_receta)}</span>
+        </div>
+        <div class="flex flex-wrap gap-xs items-center mb-sm">
+            <span class="${pourCostClaseBadge(combo.pour_cost_pct)} text-[10px] font-label-mono px-sm py-[2px] rounded uppercase tracking-widest font-semibold">${pourCostFormatearPct(combo.pour_cost_pct)}</span>
+            ${combo.costo_incompleto ? '<span class="badge-info text-[9px] font-label-mono px-xs py-[1px] rounded uppercase tracking-widest">Costo incompleto</span>' : ''}
+        </div>
+    `;
+
+    div.addEventListener('click', () => abrirModalPourCostReceta(combo));
+    return div;
+}
+
+function crearTarjetaPourCostProducto(producto) {
+    const div = document.createElement('div');
+    div.className = 'bg-surface-container border border-outline-variant rounded-md p-md shadow-lg transition-colors flex flex-col gap-xs cursor-pointer hover:border-primary-fixed-dim';
+
+    div.innerHTML = `
+        <div class="text-[11px] text-on-surface-variant font-label-mono uppercase tracking-wider mb-xs flex items-center flex-wrap gap-xs">
+            ${producto.nombre_categoria ? `<span>${escapeHtml(producto.nombre_categoria)}</span>` : ''}
+            <span class="${producto.nombre_categoria ? 'border-l border-outline-variant pl-xs' : ''}">COD ${escapeHtml(producto.codigo)}</span>
+        </div>
+        <p class="text-sm font-semibold text-on-surface leading-tight mb-xs">${escapeHtml(producto.nombre)}</p>
+        <div class="flex flex-wrap gap-xs text-[10px] font-label-mono text-on-surface-variant mb-xs">
+            <span class="bg-surface-container-low px-xs py-[1px] rounded">Precio ${pourCostFormatearMoneda(producto.precio_venta)}</span>
+            <span class="bg-surface-container-low px-xs py-[1px] rounded">WAC ${pourCostFormatearMoneda(producto.wac_unitario)}</span>
+        </div>
+        <div class="flex flex-wrap gap-xs items-center mb-sm">
+            <span class="${pourCostClaseBadge(producto.pour_cost_pct)} text-[10px] font-label-mono px-sm py-[2px] rounded uppercase tracking-widest font-semibold">${pourCostFormatearPct(producto.pour_cost_pct)}</span>
+            ${producto.sin_wac ? '<span class="badge-info text-[9px] font-label-mono px-xs py-[1px] rounded uppercase tracking-widest">Sin WAC</span>' : ''}
+        </div>
+    `;
+
+    div.addEventListener('click', () => abrirModalPourCostProducto(producto));
+    return div;
+}
+
+// --- Modal: detalle + sandbox de simulación (solo en memoria, ver header de sección) ---
+
+const pourCostModal                 = document.getElementById('pourcost-modal');
+const pourCostModalOverlay          = document.getElementById('pourcost-modal-overlay');
+const btnClosePourCostModal         = document.getElementById('btn-close-pourcost-modal');
+const pourCostModalCategoria        = document.getElementById('pourcost-modal-categoria');
+const pourCostModalCodigo           = document.getElementById('pourcost-modal-codigo');
+const pourCostModalNombre           = document.getElementById('pourcost-modal-nombre');
+const pourCostModalCosto            = document.getElementById('pourcost-modal-costo');
+const pourCostModalPrecio           = document.getElementById('pourcost-modal-precio');
+const pourCostModalPct              = document.getElementById('pourcost-modal-pct');
+const pourCostModalIncompleto       = document.getElementById('pourcost-modal-incompleto');
+const pourCostModalIngredientesWrap = document.getElementById('pourcost-modal-ingredientes-wrap');
+const pourCostModalIngredientes     = document.getElementById('pourcost-modal-ingredientes');
+const pourCostModalWacDirectoWrap   = document.getElementById('pourcost-modal-wac-directo-wrap');
+const pourCostModalWacDirecto       = document.getElementById('pourcost-modal-wac-directo');
+const pourCostModalTarget           = document.getElementById('pourcost-modal-target');
+const pourCostModalSugerido         = document.getElementById('pourcost-modal-sugerido');
+const pourCostModalDelta            = document.getElementById('pourcost-modal-delta');
+const pourCostModalPrecioInput      = document.getElementById('pourcost-modal-precio-input');
+const pourCostModalPctResultado     = document.getElementById('pourcost-modal-pct-resultado');
+const pourCostModalBtnReset         = document.getElementById('pourcost-modal-btn-reset');
+
+// Estado de la simulación del item actualmente abierto (se descarta al cerrar
+// o reabrir con otro item -- nunca se envía al backend).
+let pourCostSimulacion = null;
+// Item original (sin modificar) del modal abierto, para poder "Reiniciar simulación".
+let pourCostUltimoItemAbierto = null;
+// Referencias cacheadas (por índice) al nodo [data-campo="cogs"] de cada fila
+// de ingrediente, para no repetir querySelector en cada tecla de simulación
+// (ver pourCostRefrescarCogsIngredientesUI). Se repuebla al abrir el modal.
+let pourCostCogsElements = [];
+
+function pourCostNormalizarTipoParteCombo(tipoParteCombo) {
+    return String(tipoParteCombo || '').trim().toUpperCase();
+}
+
+function pourCostIngredienteEsOpcional(ingrediente) {
+    return pourCostNormalizarTipoParteCombo(ingrediente?.tipo_parte_combo) === 'OPCIONAL';
+}
+
+function pourCostIngredienteEsPrincipal(ingrediente) {
+    return !pourCostIngredienteEsOpcional(ingrediente);
+}
+
+function pourCostIngredienteEstaIncluido(ingrediente) {
+    if (pourCostIngredienteEsPrincipal(ingrediente)) return true;
+    return Boolean(ingrediente?.incluido);
+}
+
+function pourCostBuscarIngredientePorProducto(idProducto) {
+    if (!pourCostSimulacion?.esCoctel) return null;
+    return pourCostSimulacion.ingredientes.find((ing) => ing.id_producto === idProducto) || null;
+}
+
+/** Orden de exhibición en el modal: Principal antes que Opcional, y
+ * alfabético (es, sin distinguir mayúsculas/acentos) dentro de cada grupo.
+ * No afecta el cálculo del total (es orden-independiente), solo la lectura. */
+function pourCostCompararIngredientes(a, b) {
+    const aOpcional = pourCostIngredienteEsOpcional(a);
+    const bOpcional = pourCostIngredienteEsOpcional(b);
+    if (aOpcional !== bOpcional) return aOpcional ? 1 : -1;
+    return String(a.nombre_producto || '').localeCompare(String(b.nombre_producto || ''), 'es', { sensitivity: 'base' });
+}
+
+function pourCostClonarParaSimulacion(item, esCoctel) {
+    if (esCoctel) {
+        const ingredientes = (item.ingredientes || []).map((ing) => ({
+            id_producto: ing.id_producto,
+            nombre_producto: ing.nombre_producto,
+            tipo_cantidad_combo: ing.tipo_cantidad_combo,
+            tipo_parte_combo: ing.tipo_parte_combo,
+            unidad_base: ing.unidad_base,
+            medida_unidad_base: ing.medida_unidad_base,
+            unidades_detalle_por_base: ing.unidades_detalle_por_base,
+            unidad_detalle: ing.unidad_detalle,
+            cantidad_receta: ing.cantidad_receta,   // editable por el usuario
+            wac_actual: ing.wac_actual,
+            sin_wac: ing.sin_wac,
+            incluido: pourCostIngredienteEsPrincipal(ing),
+        }));
+        ingredientes.sort(pourCostCompararIngredientes);
+        return { esCoctel: true, precioVenta: item.precio_venta, ingredientes };
+    }
+    return { esCoctel: false, precioVenta: item.precio_venta, wac: item.wac_unitario };
+}
+
+/** Deriva cantidad_unidad_base (fracción de envase) a partir de cantidad_receta.
+ * Espejo de la fórmula en vw_pourcost_receta (ver querys/create_views_pourcost.sql).
+ * No redondear aquí: el resultado se usa directamente en cálculo de costo. */
+function pourCostCantidadUnidadBase(ing) {
+    const receta = Number(ing.cantidad_receta) || 0;
+    if (ing.tipo_cantidad_combo === 'Unidad') return receta;
+    const divisor = Number(ing.unidades_detalle_por_base);
+    if (!Number.isFinite(divisor) || divisor === 0) return 0;
+    return receta / divisor;
+}
+
+/** Normaliza entrada decimal (acepta coma o punto) para cantidad_receta.
+ * Devuelve null si la cadena no representa un número finito no negativo. */
+function pourCostNormalizarCantidad(str) {
+    const val = parseFloat(String(str).replace(',', '.').trim());
+    if (!Number.isFinite(val) || val < 0) return null;
+    return Math.round(val * 100) / 100;
+}
+
+/** Formatea una cantidad de receta para mostrar: sin decimales innecesarios,
+ * usa coma como separador decimal (convención en español). */
+function pourCostFormatearCantidadReceta(val) {
+    if (val == null || !Number.isFinite(Number(val))) return '0';
+    return parseFloat(Number(val).toFixed(2)).toString().replace('.', ',');
+}
+
+function pourCostFormatearWacVisible(val) {
+    if (val == null || !Number.isFinite(Number(val))) return '0';
+    return parseFloat(Number(val).toFixed(2)).toString();
+}
+
+function pourCostCalcularCogsIngrediente(ingrediente) {
+    return pourCostCantidadUnidadBase(ingrediente) * (Number(ingrediente.wac_actual) || 0);
+}
+
+function pourCostTextoCogsIngrediente(ingrediente) {
+    const incluido = pourCostIngredienteEstaIncluido(ingrediente);
+    const cogsCrudo = incluido ? pourCostCalcularCogsIngrediente(ingrediente) : 0;
+    const cogsTexto = pourCostFormatearMoneda(pourCostRedondearHalfUp(cogsCrudo, 2));
+    return incluido
+        ? `COGS: ${cogsTexto} Bs`
+        : `COGS: ${cogsTexto} Bs (no incluido)`;
+}
+
+// Costo/precio "vigentes" del modal abierto: el valor autoritativo del
+// backend hasta que el usuario edite un ingrediente/WAC, momento en el que
+// pasan a ser el recalculo en cliente. El campo "% objetivo" LEE de aca en
+// vez de recalcular por su cuenta -- typear un target no debe mover el costo
+// ni el pour cost real, solo el precio sugerido (ver pourCostPintarSugerido).
+let pourCostCostoActual = null;
+let pourCostPrecioActual = null;
+
+// Marca si "% objetivo" / "Bs precio" fueron editados a mano por el usuario
+// (tecleando o con sus propios steppers) -- se reinician al abrir el modal.
+// Mientras un campo NO esté tocado, la realimentación cruzada (ver
+// pourCostPintarSugerido / pourCostPintarResultadoPrecio) lo sigue
+// actualizando en cada recálculo; en cuanto el usuario lo toca, deja de
+// pisarlo. Sin esto, un campo autocompletado una vez quedaba "congelado"
+// y el otro dejaba de refrescarlo en cálculos posteriores.
+let pourCostTargetTocadoManualmente = false;
+let pourCostPrecioTocadoManualmente = false;
+
+/** Pinta Costo/Precio/Pour Cost tal cual llegan (sin recalcular nada). Se usa
+ * al abrir el modal para mostrar el valor *autoritativo* del backend (Decimal
+ * en Python) en vez del recomputo en cliente (float de JS) -- summar muchas
+ * líneas en cada aritmética puede diferir en el último decimal (mismo tipo de
+ * deriva que documenta redondeo_y_tolerancia.md para la grilla de oz). Sin
+ * esto, el modal podía mostrar un % distinto al de la tarjeta con solo
+ * abrirlo, antes de que el usuario tocara nada. */
+function pourCostPintarResumenCosto(costoTotal, precioVenta, pct) {
+    pourCostCostoActual = costoTotal;
+    pourCostPrecioActual = precioVenta;
+
+    if (pourCostModalCosto) pourCostModalCosto.textContent = pourCostFormatearMoneda(costoTotal);
+    if (pourCostModalPrecio) pourCostModalPrecio.textContent = pourCostFormatearMoneda(precioVenta);
+    if (pourCostModalPct) {
+        pourCostModalPct.textContent = pourCostFormatearPct(pct);
+        pourCostModalPct.style.color = pourCostColorTexto(pct);
+    }
+    pourCostPintarResultadoPrecio(costoTotal);
+}
+
+/** Lee el % objetivo del input y pinta precio sugerido + delta vs precio
+ * actual. Depende de `costoTotal` explícito (no de pourCostSimulacion) para
+ * poder usarse tanto con el valor autoritativo inicial como con el simulado. */
+function pourCostPintarSugerido(costoTotal, precioVenta) {
+    const target = pourCostModalTarget ? parseFloat(pourCostModalTarget.value) : NaN;
+    const sugerido = Number.isFinite(target) && target > 0 ? pourCostCalcularPrecioSugerido(costoTotal, target) : null;
+
+    if (pourCostModalSugerido) pourCostModalSugerido.textContent = sugerido ? pourCostFormatearMoneda(sugerido.redondeado) : '-';
+    if (pourCostModalDelta) {
+        if (sugerido && precioVenta != null) {
+            const delta = sugerido.redondeado - Number(precioVenta);
+            pourCostModalDelta.textContent = `${delta > 0 ? '+' : ''}${delta.toFixed(2)}`;
+            pourCostModalDelta.style.color = delta > 0 ? 'var(--semantic-warning)' : delta < 0 ? 'var(--semantic-action)' : '';
+        } else {
+            pourCostModalDelta.textContent = '-';
+            pourCostModalDelta.style.color = '';
+        }
+    }
+
+    // Realimentación opcional hacia la dirección B (ver pourcost.md sección 6):
+    // mientras "Bs precio" no lo haya tocado el usuario a mano, se mantiene
+    // reflejando ahí el precio sugerido vigente (incluye reescribirlo en cada
+    // cambio de "% objetivo", no solo la primera vez). Deja de escribirse en
+    // cuanto el usuario edita ese campo, así nunca pisa una edición manual.
+    if (sugerido && pourCostModalPrecioInput && !pourCostPrecioTocadoManualmente) {
+        pourCostModalPrecioInput.value = sugerido.redondeado;
+        pourCostPintarResultadoPrecio(costoTotal);
+    }
+}
+
+/** Lee el precio ingresado manualmente y muestra el pour cost % resultante.
+ * Se llama desde pourCostPintarResumenCosto (al cambiar el costo) y desde
+ * el listener del input de precio (al editar el precio). */
+function pourCostPintarResultadoPrecio(costoTotal) {
+    if (!pourCostModalPctResultado) return;
+    const precio = pourCostModalPrecioInput ? parseFloat(pourCostModalPrecioInput.value) : NaN;
+    if (!Number.isFinite(precio) || precio <= 0) {
+        pourCostModalPctResultado.textContent = '-';
+        pourCostModalPctResultado.style.color = '';
+        return;
+    }
+    const pct = pourCostCalcularPct(costoTotal, precio);
+    pourCostModalPctResultado.textContent = pourCostFormatearPct(pct);
+    pourCostModalPctResultado.style.color = pourCostColorTexto(pct);
+
+    // Realimentación simétrica hacia la dirección A: mientras "% objetivo" no
+    // lo haya tocado el usuario a mano, reflejar ahí el % que arroja este
+    // precio (misma regla que en pourCostPintarSugerido, para no pisar
+    // ediciones manuales).
+    if (pct != null && pourCostModalTarget && !pourCostTargetTocadoManualmente) {
+        pourCostModalTarget.value = pct.toFixed(2);
+        pourCostPintarSugerido(costoTotal, pourCostPrecioActual);
+    }
+}
+
+function pourCostCalcularCostoSimuladoCrudo() {
+    if (!pourCostSimulacion) return 0;
+    if (!pourCostSimulacion.esCoctel) return Number(pourCostSimulacion.wac) || 0;
+
+    return pourCostSimulacion.ingredientes.reduce((acumulado, ing) => {
+        if (!pourCostIngredienteEstaIncluido(ing)) return acumulado;
+        return acumulado + pourCostCantidadUnidadBase(ing) * (Number(ing.wac_actual) || 0);
+    }, 0);
+}
+
+function pourCostCalcularTotalesSimulacion() {
+    if (!pourCostSimulacion) return { costoTotal: 0, pct: null };
+
+    const costoTotalCrudo = pourCostCalcularCostoSimuladoCrudo();
+    const costoTotal = pourCostRedondearHalfUp(costoTotalCrudo, 2);
+    return {
+        costoTotal,
+        pct: pourCostCalcularPct(costoTotalCrudo, pourCostSimulacion.precioVenta),
+    };
+}
+
+function pourCostRefrescarCogsIngredientesUI() {
+    if (!pourCostSimulacion?.esCoctel) return;
+    pourCostSimulacion.ingredientes.forEach((ing, index) => {
+        const cogsEl = pourCostCogsElements[index];
+        if (cogsEl) cogsEl.textContent = pourCostTextoCogsIngrediente(ing);
+    });
+}
+
+/** Recalcula costo total y pour cost % a partir del estado de simulación
+ * actual (cantidades/WAC editados) y repinta todo el resumen del modal. Se
+ * llama en cada edición para que la UI reaccione en vivo -- a diferencia de
+ * pourCostPintarResumenCosto, esto SÍ hace la suma en JS porque ya no hay un
+ * valor autoritativo del backend que refleje la simulación en curso. */
+function pourCostRecalcularSimulacion() {
+    if (!pourCostSimulacion) return;
+
+    const { costoTotal, pct } = pourCostCalcularTotalesSimulacion();
+    pourCostPintarResumenCosto(costoTotal, pourCostSimulacion.precioVenta, pct);
+    pourCostPintarSugerido(costoTotal, pourCostSimulacion.precioVenta);
+    pourCostRefrescarCogsIngredientesUI();
+}
+
+/** Habilita/deshabilita en vivo los controles de CANT./WAC de una fila de
+ * opcional al (des)marcar su checkbox "Incluir ingrediente" -- evita que
+ * queden editables sin efecto sobre el costo (ver pourCostCrearFilaIngrediente). */
+function pourCostActualizarHabilitadoFila(index, habilitado) {
+    if (!pourCostModalIngredientes) return;
+    const sufijo = `[data-index="${index}"]`;
+    const controles = [
+        pourCostModalIngredientes.querySelector(`input[data-campo="wac_actual"]${sufijo}`),
+        pourCostModalIngredientes.querySelector(`input[data-campo="cantidad_receta"]${sufijo}`),
+        pourCostModalIngredientes.querySelector(`button[data-accion="menos"]${sufijo}`),
+        pourCostModalIngredientes.querySelector(`button[data-accion="mas"]${sufijo}`),
+    ];
+    controles.forEach((el) => {
+        if (!el) return;
+        el.disabled = !habilitado;
+        el.classList.toggle('opacity-40', !habilitado);
+        el.classList.toggle('cursor-not-allowed', !habilitado);
+    });
+}
+
+function pourCostCrearFilaIngrediente(ingrediente, index) {
+    const div = document.createElement('div');
+    const esOpcional = pourCostIngredienteEsOpcional(ingrediente);
+    const tipoIngrediente = esOpcional ? 'OPCIONAL' : 'PRINCIPAL';
+    const claseTarjeta = esOpcional
+        ? 'bg-surface border-outline-variant'
+        : 'bg-surface-container-low';
+
+    div.className = `flex flex-col gap-sm p-sm border rounded-md ${claseTarjeta}`;
+    if (!esOpcional) {
+        div.style.borderColor = 'color-mix(in srgb, var(--semantic-action) 55%, var(--outline-variant))';
+        div.style.background = 'color-mix(in srgb, var(--semantic-action) 10%, var(--surface-container-low))';
+    }
+
+    // Unidad práctica de la receta: OZ para Detalle, unidad_base para Unidad.
+    const esDetalle = ingrediente.tipo_cantidad_combo !== 'Unidad';
+    const unidadReceta = esDetalle
+        ? (ingrediente.unidad_detalle || '')
+        : (ingrediente.unidad_base || '');
+
+    // Información de rendimiento para ingredientes tipo Detalle.
+    let rendimientoTexto = '';
+    if (esDetalle) {
+        const rendimiento = (ingrediente.unidades_detalle_por_base != null && ingrediente.unidad_detalle)
+            ? `${pourCostFormatearCantidadReceta(ingrediente.unidades_detalle_por_base)} ${escapeHtml(ingrediente.unidad_detalle)}`
+            : '';
+        if (rendimiento) rendimientoTexto = `REND: ${rendimiento}.`;
+    } else if (ingrediente.unidad_base) {
+        rendimientoTexto = `REND: ${escapeHtml(ingrediente.unidad_base)}.`;
+    }
+
+    const cantidadMostrada = pourCostFormatearCantidadReceta(ingrediente.cantidad_receta);
+    // Opcional sin marcar: sus controles de cantidad/WAC no aportan al costo
+    // (ver pourCostTextoCogsIngrediente) -- se deshabilitan visualmente para
+    // no dar la impresión de que editarlos tiene efecto.
+    const deshabilitado = esOpcional && !ingrediente.incluido;
+    const disabledAttr = deshabilitado ? 'disabled' : '';
+    const disabledClase = deshabilitado ? ' opacity-40 cursor-not-allowed' : '';
+    const btnClase = `w-7 h-7 flex items-center justify-center bg-surface-container border border-outline-variant rounded-sm text-sm leading-none text-on-surface select-none touch-manipulation hover:bg-surface-container-high active:bg-surface-container-highest${disabledClase}`;
+    const checkboxId = `pourcost-ingrediente-${ingrediente.id_producto}`;
+    // Área clickeable ampliada (padding + margen negativo compensando) para
+    // un objetivo táctil más cómodo que el cuadro de 14px por sí solo.
+    const estadoSeleccion = esOpcional
+        ? `<label for="${checkboxId}" class="inline-flex items-center gap-xs text-[9px] font-label-mono uppercase tracking-widest text-on-surface-variant cursor-pointer -m-xs p-xs">
+                <input id="${checkboxId}" type="checkbox" data-campo="incluido" data-id-producto="${ingrediente.id_producto}" data-index="${index}" ${ingrediente.incluido ? 'checked' : ''}
+                    class="h-5 w-5 rounded border border-outline-variant bg-surface accent-[var(--semantic-info)] cursor-pointer">
+                <span>Incluir ingrediente</span>
+            </label>`
+        : '<span class="text-[9px] font-label-mono uppercase tracking-widest" style="color:var(--semantic-action)">Incluido siempre</span>';
+
+    div.innerHTML = `
+        <div class="flex items-start justify-between gap-sm">
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-xs flex-wrap mb-[2px]">
+                    <span class="${esOpcional ? 'badge-info' : 'badge-ok'} text-[9px] font-label-mono px-xs py-[1px] rounded uppercase tracking-widest font-semibold">${tipoIngrediente}</span>
+                    ${estadoSeleccion}
+                </div>
+                <p class="text-xs text-on-surface truncate">${escapeHtml(ingrediente.nombre_producto)}</p>
+                ${rendimientoTexto ? `<p class="text-[9px] font-label-mono uppercase tracking-widest text-on-surface-variant">${rendimientoTexto}</p>` : ''}
+                <p data-campo="cogs" data-index="${index}" class="text-[9px] font-label-mono uppercase tracking-widest text-on-surface-variant">${pourCostTextoCogsIngrediente(ingrediente)}</p>
+            </div>
+            <div class="flex flex-col items-center shrink-0 gap-[2px]">
+                <label class="text-[9px] font-label-mono uppercase tracking-widest text-on-surface-variant">WAC</label>
+                <input type="number" min="0" step="0.0001" data-campo="wac_actual" data-index="${index}" ${disabledAttr}
+                    value="${pourCostFormatearWacVisible(ingrediente.wac_actual)}"
+                    class="w-16 bg-surface-container border border-outline-variant rounded-sm px-xs py-[2px] text-xs text-on-surface font-data-tabular text-center focus:border-primary-fixed-dim focus:outline-none${disabledClase}">
+            </div>
+        </div>
+        <div class="flex items-end justify-between gap-sm">
+            ${ingrediente.sin_wac ? '<p class="text-[9px] font-label-mono uppercase tracking-widest" style="color:var(--semantic-warning)">Sin WAC cacheado</p>' : ''}
+            <div class="flex items-end gap-[2px] shrink-0 ml-auto">
+                <button type="button" data-accion="menos" data-index="${index}" class="${btnClase}" aria-label="Reducir cantidad" ${disabledAttr}>&minus;</button>
+                <div class="flex flex-col items-center gap-[2px]">
+                    <label class="text-[9px] font-label-mono uppercase tracking-widest text-on-surface-variant">CANT.${unidadReceta ? ` ${escapeHtml(unidadReceta)}` : ''}</label>
+                    <input type="text" inputmode="decimal" data-campo="cantidad_receta" data-index="${index}" ${disabledAttr}
+                        value="${cantidadMostrada}"
+                        class="w-12 bg-surface-container border border-outline-variant rounded-sm px-xs py-[2px] text-xs text-on-surface font-data-tabular text-center focus:border-primary-fixed-dim focus:outline-none${disabledClase}">
+                </div>
+                <button type="button" data-accion="mas" data-index="${index}" class="${btnClase}" aria-label="Aumentar cantidad" ${disabledAttr}>+</button>
+            </div>
+        </div>
+    `;
+    return div;
+}
+
+if (pourCostModalIngredientes) {
+    // Botones [−] y [+]: ajustan cantidad_receta en pasos de 0,5.
+    pourCostModalIngredientes.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-accion]');
+        if (!btn || !pourCostSimulacion?.esCoctel) return;
+        const index = parseInt(btn.dataset.index, 10);
+        const ing = pourCostSimulacion.ingredientes[index];
+        if (!ing) return;
+        const actual = Number(ing.cantidad_receta) || 0;
+        const nueva = btn.dataset.accion === 'mas'
+            ? Math.round((actual + 0.5) * 100) / 100
+            : Math.max(0, Math.round((actual - 0.5) * 100) / 100);
+        ing.cantidad_receta = nueva;
+        const inputCantidad = pourCostModalIngredientes.querySelector(
+            `input[data-campo="cantidad_receta"][data-index="${index}"]`
+        );
+        if (inputCantidad) inputCantidad.value = pourCostFormatearCantidadReceta(nueva);
+        pourCostRecalcularSimulacion();
+    });
+
+    pourCostModalIngredientes.addEventListener('change', (e) => {
+        const checkbox = e.target.closest('input[data-campo="incluido"]');
+        if (!checkbox || !pourCostSimulacion?.esCoctel) return;
+        const idProducto = parseInt(checkbox.dataset.idProducto, 10);
+        if (Number.isNaN(idProducto)) return;
+        const ing = pourCostBuscarIngredientePorProducto(idProducto);
+        if (!ing || pourCostIngredienteEsPrincipal(ing)) return;
+        ing.incluido = checkbox.checked;
+        const index = parseInt(checkbox.dataset.index, 10);
+        if (!Number.isNaN(index)) pourCostActualizarHabilitadoFila(index, ing.incluido);
+        pourCostRecalcularSimulacion();
+    });
+
+    // Edición directa: cantidad_receta (texto con coma/punto) y wac_actual (número).
+    pourCostModalIngredientes.addEventListener('input', (e) => {
+        const input = e.target.closest('input[data-campo]');
+        if (!input || !pourCostSimulacion?.esCoctel) return;
+        const index = parseInt(input.dataset.index, 10);
+        const ing = pourCostSimulacion.ingredientes[index];
+        if (!ing) return;
+        if (input.dataset.campo === 'cantidad_receta') {
+            const val = pourCostNormalizarCantidad(input.value);
+            if (val !== null) ing.cantidad_receta = val;
+            // Si val es null (vacío/inválido) no propagar al cálculo
+            else return;
+        } else if (input.dataset.campo === 'wac_actual') {
+            const val = parseFloat(input.value);
+            ing.wac_actual = Number.isFinite(val) && val >= 0 ? val : 0;
+        }
+        pourCostRecalcularSimulacion();
+    });
+
+    pourCostModalIngredientes.addEventListener('blur', (e) => {
+        const input = e.target.closest('input[data-campo]');
+        if (!input || !pourCostSimulacion?.esCoctel) return;
+        const index = parseInt(input.dataset.index, 10);
+        const ing = Number.isNaN(index) ? null : pourCostSimulacion.ingredientes[index];
+        if (!ing) return;
+
+        if (input.dataset.campo === 'cantidad_receta') {
+            input.value = pourCostFormatearCantidadReceta(ing.cantidad_receta);
+            return;
+        }
+
+        if (input.dataset.campo === 'wac_actual') {
+            input.value = pourCostFormatearWacVisible(ing.wac_actual);
+        }
+    }, true);
+}
+
+if (pourCostModalWacDirecto) {
+    pourCostModalWacDirecto.addEventListener('input', () => {
+        if (!pourCostSimulacion || pourCostSimulacion.esCoctel) return;
+        const valor = parseFloat(pourCostModalWacDirecto.value);
+        pourCostSimulacion.wac = Number.isFinite(valor) ? valor : 0;
+        pourCostRecalcularSimulacion();
+    });
+}
+
+if (pourCostModalTarget) {
+    // Solo repinta precio sugerido/delta a partir del costo vigente -- NO
+    // dispara pourCostRecalcularSimulacion(): escribir un % objetivo no debe
+    // mover el Costo/Pour Cost real que se ve arriba (ver pourCostCostoActual).
+    pourCostModalTarget.addEventListener('input', () => {
+        pourCostTargetTocadoManualmente = true;
+        pourCostPintarSugerido(pourCostCostoActual, pourCostPrecioActual);
+    });
+}
+
+// Botones [−][+] para % objetivo (paso 0,5).
+const pourCostTargetMenos = document.getElementById('pourcost-modal-target-menos');
+const pourCostTargetMas   = document.getElementById('pourcost-modal-target-mas');
+if (pourCostTargetMenos && pourCostModalTarget) {
+    pourCostTargetMenos.addEventListener('click', () => {
+        pourCostTargetTocadoManualmente = true;
+        const actual = parseFloat(pourCostModalTarget.value) || 0;
+        pourCostModalTarget.value = Math.max(0.5, Math.round((actual - 0.5) * 10) / 10);
+        pourCostPintarSugerido(pourCostCostoActual, pourCostPrecioActual);
+    });
+}
+if (pourCostTargetMas && pourCostModalTarget) {
+    pourCostTargetMas.addEventListener('click', () => {
+        pourCostTargetTocadoManualmente = true;
+        const actual = parseFloat(pourCostModalTarget.value) || 0;
+        pourCostModalTarget.value = Math.round((actual + 0.5) * 10) / 10;
+        pourCostPintarSugerido(pourCostCostoActual, pourCostPrecioActual);
+    });
+}
+
+if (pourCostModalPrecioInput) {
+    pourCostModalPrecioInput.addEventListener('input', () => {
+        pourCostPrecioTocadoManualmente = true;
+        pourCostPintarResultadoPrecio(pourCostCostoActual);
+    });
+}
+
+// Botones [−][+] para precio Bs (paso 1).
+const pourCostPrecioMenos = document.getElementById('pourcost-modal-precio-menos');
+const pourCostPrecioMas   = document.getElementById('pourcost-modal-precio-mas');
+if (pourCostPrecioMenos && pourCostModalPrecioInput) {
+    pourCostPrecioMenos.addEventListener('click', () => {
+        pourCostPrecioTocadoManualmente = true;
+        const actual = Math.round(parseFloat(pourCostModalPrecioInput.value) || 0);
+        pourCostModalPrecioInput.value = Math.max(1, actual - 1);
+        pourCostPintarResultadoPrecio(pourCostCostoActual);
+    });
+}
+if (pourCostPrecioMas && pourCostModalPrecioInput) {
+    pourCostPrecioMas.addEventListener('click', () => {
+        pourCostPrecioTocadoManualmente = true;
+        const actual = Math.round(parseFloat(pourCostModalPrecioInput.value) || 0);
+        pourCostModalPrecioInput.value = actual + 1;
+        pourCostPintarResultadoPrecio(pourCostCostoActual);
+    });
+}
+
+function abrirModalPourCostReceta(combo) {
+    if (!pourCostModal) return;
+    pourCostUltimoItemAbierto = combo;
+    pourCostSimulacion = pourCostClonarParaSimulacion(combo, true);
+
+    if (pourCostModalCategoria) pourCostModalCategoria.textContent = combo.nombre_categoria_combo || '';
+    if (pourCostModalCodigo) pourCostModalCodigo.textContent = `COD ${combo.codigo_combo}`;
+    if (pourCostModalNombre) pourCostModalNombre.textContent = combo.nombre_combo;
+    if (pourCostModalIncompleto) pourCostModalIncompleto.classList.toggle('hidden', !combo.costo_incompleto);
+
+    if (pourCostModalIngredientesWrap) pourCostModalIngredientesWrap.classList.remove('hidden');
+    if (pourCostModalWacDirectoWrap) pourCostModalWacDirectoWrap.classList.add('hidden');
+
+    if (pourCostModalIngredientes) {
+        pourCostModalIngredientes.innerHTML = '';
+        pourCostCogsElements = [];
+        pourCostSimulacion.ingredientes.forEach((ing, index) => {
+            const fila = pourCostCrearFilaIngrediente(ing, index);
+            pourCostModalIngredientes.appendChild(fila);
+            pourCostCogsElements[index] = fila.querySelector('[data-campo="cogs"]');
+        });
+    }
+
+    if (pourCostModalTarget) pourCostModalTarget.value = '';
+    if (pourCostModalPrecioInput) pourCostModalPrecioInput.value = '';
+    pourCostTargetTocadoManualmente = false;
+    pourCostPrecioTocadoManualmente = false;
+
+    const tieneOpcionales = pourCostSimulacion.ingredientes.some((ing) => pourCostIngredienteEsOpcional(ing));
+    if (tieneOpcionales) {
+        pourCostRecalcularSimulacion();
+    } else {
+        // Si no hay opcionales, conserva el valor autoritativo del backend para
+        // evitar diferencias de una centésima al abrir el modal sin editar nada.
+        pourCostPintarResumenCosto(combo.costo_total_receta, combo.precio_venta, combo.pour_cost_pct);
+        pourCostPintarSugerido(combo.costo_total_receta, combo.precio_venta);
+    }
+
+    pourCostModal.classList.remove('hidden');
+    pourCostModal.setAttribute('aria-hidden', 'false');
+}
+
+function abrirModalPourCostProducto(producto) {
+    if (!pourCostModal) return;
+    pourCostUltimoItemAbierto = producto;
+    pourCostSimulacion = pourCostClonarParaSimulacion(producto, false);
+    pourCostCogsElements = [];
+
+    if (pourCostModalCategoria) pourCostModalCategoria.textContent = producto.nombre_categoria || '';
+    if (pourCostModalCodigo) pourCostModalCodigo.textContent = `COD ${producto.codigo}`;
+    if (pourCostModalNombre) pourCostModalNombre.textContent = producto.nombre;
+    if (pourCostModalIncompleto) pourCostModalIncompleto.classList.toggle('hidden', !producto.sin_wac);
+
+    if (pourCostModalIngredientesWrap) pourCostModalIngredientesWrap.classList.add('hidden');
+    if (pourCostModalWacDirectoWrap) pourCostModalWacDirectoWrap.classList.remove('hidden');
+    if (pourCostModalWacDirecto) pourCostModalWacDirecto.value = Number(producto.wac_unitario ?? 0);
+
+    if (pourCostModalTarget) pourCostModalTarget.value = '';
+    if (pourCostModalPrecioInput) pourCostModalPrecioInput.value = '';
+    pourCostTargetTocadoManualmente = false;
+    pourCostPrecioTocadoManualmente = false;
+    // Estado inicial: costo = wac_unitario tal cual (no hay suma que recalcular
+    // en productos sueltos, pero se mantiene el mismo patrón que recetas).
+    pourCostPintarResumenCosto(producto.wac_unitario, producto.precio_venta, producto.pour_cost_pct);
+    pourCostPintarSugerido(producto.wac_unitario, producto.precio_venta);
+
+    pourCostModal.classList.remove('hidden');
+    pourCostModal.setAttribute('aria-hidden', 'false');
+}
+
+function cerrarModalPourCost() {
+    if (!pourCostModal) return;
+    pourCostSimulacion = null;
+    pourCostUltimoItemAbierto = null;
+    pourCostCogsElements = [];
+    pourCostModal.classList.add('hidden');
+    pourCostModal.setAttribute('aria-hidden', 'true');
+}
+
+if (btnClosePourCostModal) btnClosePourCostModal.addEventListener('click', cerrarModalPourCost);
+if (pourCostModalOverlay) pourCostModalOverlay.addEventListener('click', cerrarModalPourCost);
+
+if (pourCostModalBtnReset) {
+    pourCostModalBtnReset.addEventListener('click', () => {
+        if (!pourCostUltimoItemAbierto) return;
+        if (pourCostSimulacion?.esCoctel) abrirModalPourCostReceta(pourCostUltimoItemAbierto);
+        else abrirModalPourCostProducto(pourCostUltimoItemAbierto);
+    });
+}
+
+// ==========================================
 // CALCULADORA PESO -> ONZAS (ex-módulo CONVERSOR, ahora integrada en las
 // tarjetas de PESAJE vía el botón CALCULAR). Sin estado de operativa ni
 // persistencia; calcula todo en cliente reutilizando redondearOnzasOperativas()
@@ -1616,6 +2510,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     inicializarFabScrollTop('pesaje-fab-scroll-top', 'panel-pesaje');
+    inicializarFabScrollTop('pourcost-fab-scroll-top', 'panel-pourcost');
     inicializarFabScrollTop('inventario-fab-scroll-top', 'panel-inventario');
     inicializarFabScrollTop('stock-fab-scroll-top', 'panel-stock');
     inicializarFabScrollTop('scan-fab-scroll-top', 'panel-scan');
@@ -1672,6 +2567,7 @@ document.addEventListener('DOMContentLoaded', () => {
             cerrarMenuFlotanteTopbar();
             cerrarContenidoDummy();
             cerrarModalConversor();
+            cerrarModalPourCost();
         }
     });
 
@@ -1812,6 +2708,8 @@ async function mostrarPantallaApp() {
     document.getElementById('user-display').textContent = localStorage.getItem('nombres');
     const menuItemPesaje = document.getElementById('menu-item-pesaje');
     if (menuItemPesaje) menuItemPesaje.classList.toggle('hidden', !esUsuarioAdministrador());
+    const menuItemPourCost = document.getElementById('menu-item-pourcost');
+    if (menuItemPourCost) menuItemPourCost.classList.toggle('hidden', !esUsuarioAdministrador());
     await cargarConfiguracionPublica();
     // Asegurar que el panel de inventario sea el visible al entrar a la app
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
@@ -3267,6 +4165,7 @@ const TAB_PANEL_MAP = {
     scan:       'panel-scan',
     logs:       'panel-logs',
     pesaje:     'panel-pesaje',
+    pourcost:   'panel-pourcost',
 };
 
 // ==========================================
@@ -3293,6 +4192,7 @@ const BUSQUEDA_POR_TAB = {
     logs:       { placeholder: 'Buscar producto para saltar a su tarjeta...', handler: buscarYNavegarCaptura, permiteAgregarCatalogo: true },
     stock:      { placeholder: 'Buscar por ID, código o nombre...', handler: filtrarStockPaloteo3, permiteAgregarCatalogo: true },
     pesaje:     { placeholder: 'Buscar por nombre de producto...', handler: filtrarPesaje },
+    pourcost:   { placeholder: 'Buscar por nombre...', handler: filtrarPourCost },
 };
 
 let busquedaTopbarAbierta = false;
@@ -3748,6 +4648,10 @@ function navegarATab(tabName) {
 
     if (tabName === 'pesaje') {
         cargarPesaje();
+    }
+
+    if (tabName === 'pourcost') {
+        cargarPourCost();
     }
 
     // Actualizar estado visual de tabs (excepto btn-guardar que tiene su propio estado)

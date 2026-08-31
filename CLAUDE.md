@@ -36,7 +36,7 @@ There is a pytest suite (`pytest.ini` sets `testpaths = tests`; install with `pi
 - `schemas.py` — Pydantic request/response models, including field validators for business rules (no negative weights, unique `id_producto` per payload, etc).
 - `config.py` — `pydantic-settings` `Settings` loaded from `.env`. Selects DB credentials based on `APP_ENV` (`test` = WAMP local, `production` = remote) via `settings.database_url`. Also owns paloteo "barra operativa" config (`PALOTEO_DEFAULT_BARRA_ID`, `PALOTEO_SELECTOR_ENABLED`, `PALOTEO_ALLOWED_BARRAS`).
 - `database.py` — SQLAlchemy engine/session setup and the `get_db()` FastAPI dependency.
-- `static/` — the PWA frontend (vanilla JS, Tailwind, service worker). Served at `/` with assets under `/assets`. Views: PALOTEO 1/2/3, REPORTE, PESAJE (admin-only). `sw.js` caches static assets cache-first and `/api/*` network-first.
+- `static/` — the PWA frontend (vanilla JS, Tailwind, service worker). Served at `/` with assets under `/assets`. Views: PALOTEO 1/2/3, REPORTE, PESAJE (admin-only), POUR COST (admin-only, read-only + in-memory simulation sandbox — see `documentos/pour_cost/pourcost.md`). `sw.js` caches static assets cache-first and `/api/*` network-first.
 - `querys/` — mostly ad-hoc SQL dumps/snapshots, not application code; also holds versioned DDL that must be applied manually per environment (DB triggers, one-off data fixes — e.g. `fix_trigger_alm_producto_after_insert.sql`, `fix_trigger_alm_producto_after_update.sql`).
 - `documentos/` — design notes and process docs for specific features (paloteo storage, ajustes flow, etc).
 

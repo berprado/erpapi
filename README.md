@@ -310,6 +310,26 @@ Reglas:
 
 ---
 
+### POUR COST (requiere JWT + rol administrador)
+
+Modulo de solo lectura: calcula el costo de receta (WAC) y el pour cost % de combos/cocteles y productos sueltos comandables desde el POS. No escribe nada en `adminerp`; la simulacion (cambiar precio objetivo, WAC o receta) vive en el frontend, en memoria. Diseño completo en `documentos/pour_cost/pourcost.md`.
+
+| Metodo | Ruta | Descripcion |
+|---|---|---|
+| `GET` | `/api/pourcost/menu?id_dia=1` | Menu activo (combos + productos sueltos) con su `precio_venta` para el `id_dia` pedido |
+| `GET` | `/api/pourcost/recetas?id_dia=1` | Combos agregados desde `vw_pourcost_receta`: costo total de receta, `precio_venta` del `id_dia` pedido, pour cost % y la lista de ingredientes con su `cogs_ingrediente` |
+| `GET` | `/api/pourcost/productos?id_dia=1` | Productos sueltos comandables (sin receta): costo = su WAC directo (`v9_cache_wac_producto`), sin agregacion de lineas |
+| `GET` | `/api/pourcost/insumos` | Catalogo completo de insumos (`vw_alm_producto_con_nombres` + WAC) para la simulacion "agregar ingrediente" del frontend |
+
+Reglas:
+
+1. `id_dia` es un "horario de precio" (ej. jueves-sabado vs. domingo-lunes con tarifa distinta), no un dia calendario 1:1 — se selecciona manualmente en la UI, default `1`. Las vistas fuente traen su propio `precio_venta` fijo a `id_dia=1`; los endpoints lo ignoran y resuelven el precio aparte contra `v9_menubackstage` filtrando por el `id_dia` recibido.
+2. `sin_wac`/`costo_incompleto` marcan ingredientes sin WAC cacheado (`cache_wac_producto` vacio) — no se ocultan ni se tratan como costo cero silencioso.
+3. Las vistas fuente (`v9_menubackstage`, `vw_pourcost_receta`, `vw_alm_producto_con_nombres`, `v9_cache_wac_producto`) viven en MySQL, no en el ORM de este repo — mismo patron que los triggers de `alm_producto`. DDL versionado en `querys/create_views_pourcost.sql`; ya existen en `test_pos`, que es el entorno de desarrollo/validacion de este modulo (ver `documentos/pour_cost/pourcost.md`, seccion 2).
+4. Sin `Aplicar Precio` (escritura en `ope_precio_venta`) todavia — explicitamente fuera de alcance de esta fase.
+
+---
+
 ## Validaciones Activas (Frontend + Backend)
 
 En el flujo de inventario fisico/paloteo se aplican estas validaciones clave:
@@ -404,6 +424,7 @@ Flujo actual de navegacion:
 - PALOTEO 3 (captura ciega)
 - AJUSTES (diferencias, exportacion PDF y, solo administradores, aplicar el ajuste definitivo contra `bar_inventario`)
 - PESAJE (CRUD de modelos de botella y codigos de barra; solo visible/accesible para usuarios con rol `ROLE_ADMIN`). Cada tarjeta de producto pesable ofrece dos acciones: EDITAR (modal de modelos/codigos de barra) y CALCULAR (calculadora de peso a onzas integrada; ex-modulo CONVERSOR). CALCULAR solo aparece en productos pesables con todos sus perfiles completos.
+- POUR COST (solo lectura + simulacion; solo visible/accesible para `ROLE_ADMIN`). Costo de receta/WAC y pour cost % de cocteles y productos sueltos, con un sandbox de simulacion en memoria (precio objetivo, WAC/cantidad) que nunca escribe en el backend.
 
 Sincronizacion entre modulos:
 
@@ -489,9 +510,18 @@ sincronizada entre ambos modulos porque comparten el mismo origen de datos.
 - Dentro de la modal se pueden agregar varias "botellas" (una fila por cada una), cada una con su propio selector de modelo si el producto tiene mas de un perfil (`resolverPerfilSeleccionado()`, reutilizado de PALOTEO). El calculo (`peso_liquido = max(0, peso - tara)`, `onzas = peso_liquido / gramos_por_oz`, redondeo HALF_UP con `redondearOnzasOperativas()`) se ejecuta en cliente y muestra tanto el total exacto como el redondeado POS.
 - Cerrar la modal reinicia el estado (no hay boton "Limpiar" separado), ya que no persiste nada entre aperturas.
 
+### Modulo POUR COST: detalles de UI
+
+- Mismo patron visual/estructural que PESAJE (tarjetas + modal de detalle), pero de solo lectura + simulacion: no hay accion "Guardar" en ningun lado del modulo. Solo visible/accesible para `ROLE_ADMIN`, igual criterio que PESAJE.
+- Toggle **Cocteles / Productos sueltos** (`pourCostEstado.tipo`) determina que endpoint se consulta (`/api/pourcost/recetas` o `/api/pourcost/productos`) — son datasets y formas de tarjeta distintas, no un filtro sobre los mismos datos.
+- Selector **Precios A / Precios B** (`pourCostEstado.idDia`, query param `id_dia`) es una eleccion manual del usuario, no se infiere de la operativa activa (decision de diseno, ver `documentos/pour_cost/pourcost.md` seccion 8.2) — cambiarlo vuelve a pedir datos al backend porque el precio depende del horario elegido.
+- El filtro de categoria se llena en cliente a partir del dataset ya cargado (no hay endpoint `/api/pourcost/categorias`); cambia junto con el toggle de tipo.
+- Cada tarjeta muestra el pour cost % en un badge coloreado: verde (`badge-ok`, <=28%), ambar (`badge-caution`, 28-35%) o rojo (`badge-danger`, >35%) — cortes definidos por el negocio, no un estandar generico. `badge-caution` es una clase nueva porque `badge-warning` ya estaba tomada por el rojo de diferencias de PALOTEO/AJUSTES.
+- Al hacer click en una tarjeta se abre `#pourcost-modal` con el desglose real (receta con `cogs_ingrediente` por linea, o WAC directo en productos sueltos) y el sandbox de simulacion: cantidad/WAC editables por ingrediente y un campo de % objetivo que calcula el precio sugerido (exacto + redondeado a unidad entera) y su diferencia contra el precio actual. Todo el calculo (`pourCostCalcularPct`, `pourCostCalcularPrecioSugerido`, `pourCostRedondearHalfUp`) es JS puro que espeja exactamente las funciones de `main.py` (mismo HALF_UP manual que `redondearOnzasOperativas`, no `Math.round`) — nunca se envia nada al backend, "Reiniciar simulacion" descarta los cambios volviendo a clonar el item original.
+
 ### FAB "volver al inicio"
 
-Boton flotante reutilizable (clase `fab-scroll-top` + funcion `inicializarFabScrollTop(fabId, panelId)` en `app.js`) presente en PALOTEO 1, PALOTEO 3, AJUSTES y PESAJE. Aparece al hacer scroll mas alla de un umbral y solo si su panel esta activo; al hacer click hace scroll suave al inicio de la pagina. Para agregarlo a un nuevo modulo: insertar un boton con esa clase dentro del panel y llamar a la funcion con sus ids.
+Boton flotante reutilizable (clase `fab-scroll-top` + funcion `inicializarFabScrollTop(fabId, panelId)` en `app.js`) presente en PALOTEO 1, PALOTEO 3, AJUSTES, PESAJE y POUR COST. Aparece al hacer scroll mas alla de un umbral y solo si su panel esta activo; al hacer click hace scroll suave al inicio de la pagina. Para agregarlo a un nuevo modulo: insertar un boton con esa clase dentro del panel y llamar a la funcion con sus ids.
 
 Service Worker:
 

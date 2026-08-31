@@ -4,6 +4,41 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 12.0
+- Mantenimiento de entrega: se normalizan espacios finales en documentación e instrucciones de POUR COST.
+
+## 11.9
+- POUR COST (modal COCTELES): auditoría de UX con ingredientes ordenados por tipo, resumen de costo fijo, controles de opcionales bloqueados hasta incluirlos y sincronización coherente entre precio y porcentaje objetivo.
+
+## 11.8
+- POUR COST (modal COCTELES): cada ingrediente ahora muestra `COGS` debajo de `REND`, calculado como costo de la porción usada a partir de `cantidad_unidad_base x wac_actual`.
+- El `COGS` se recalcula en vivo con la misma fuente central del modal cuando cambia cantidad, WAC o selección de opcionales; si un opcional no está incluido, aporta `0` al total y se indica en la línea `COGS`.
+
+## 11.7
+- POUR COST (modal COCTELES): el cálculo inicial ya no suma ingredientes opcionales por defecto. La simulación local incluye siempre los `PRINCIPAL` y solo agrega los `OPCIONAL` marcados por el usuario usando `tipo_parte_combo` e `id_producto` como fuente de verdad.
+- POUR COST (modal COCTELES): cada ingrediente ahora muestra etiqueta `PRINCIPAL` u `OPCIONAL`, checkbox accesible para opcionales, `REND:` abreviado, `CANT. + unidad` centrado sobre el input y WAC visible con máximo 2 decimales sin ceros innecesarios. Se amplían las pruebas unitarias del cálculo simulado y del caso de referencia Chuflay.
+
+## 11.6
+- POUR COST: botones [−][+] en los dos inputs del simulador. % objetivo: paso 0,5 (ej. 25 → 25,5 → 26), mínimo 0,5. Precio Bs: paso 1, mínimo 1 Bs (acorde con que los precios reales son enteros). Ambos actualizan sus resultados en tiempo real al hacer clic.
+
+
+- POUR COST: calculadora bidireccional en el modal. Además del campo "% objetivo → precio sugerido" ya existente, se añade la dirección inversa: ingresar un precio en Bs muestra el pour cost % resultante con semáforo de color. El % se actualiza en tiempo real si el costo simulado cambia (por edición de ingredientes/WAC).
+
+
+- POUR COST (modal COCTELES): refactorización de cantidades. La columna "CANT." ahora muestra `cantidad_receta` (la cantidad práctica de la receta: ej. "1 OZ") en vez de `cantidad_unidad_base` (la fracción del envase: ej. 0.029). Cada fila tiene controles `[−] [cantidad] [+] unidad` con paso 0,5; acepta coma o punto como separador decimal; normaliza y rechaza valores vacíos o negativos. La información de envase y rendimiento reemplaza el genérico "Presentación: ML" por "ENVASE: 750 ML · RENDIMIENTO: 34 OZ". `cantidad_unidad_base` se deriva internamente para el cálculo de costo. Se conservan `tipo_parte_combo` y `tipo_cantidad_combo` en el estado de simulación. Se agregan 4 pruebas unitarias para los casos de aceptación (Long Island, Chuflay).
+
+## 11.3
+- POUR COST: corrige un tercer efecto de la misma raíz que v11.2 -- el listener del campo "% objetivo" llamaba a `pourCostRecalcularSimulacion()` completo, que recalcula Costo/Pour Cost sumando en `float` de JS aunque el usuario no hubiera tocado ningún ingrediente. Al escribir el % solo, el Pour Cost real caía de 23.97% a 23.98% igual que antes de v11.2. Ahora el costo/precio "vigentes" del modal se guardan en `pourCostCostoActual`/`pourCostPrecioActual` (el valor del backend hasta que se edite un ingrediente/WAC) y el campo "% objetivo" solo repinta precio sugerido/delta a partir de ese valor, sin tocar el Costo/Pour Cost mostrado arriba.
+
+## 11.2
+- POUR COST: corrige dos hallazgos de la primera prueba visual contra datos reales de test_pos (via seenode). (1) El modal de simulación recalculaba en cliente (`float` de JS) desde el momento en que se abría, mostrando un pour cost % con una centésima de diferencia respecto al de la tarjeta (`Decimal` del backend) sin que el usuario editara nada — ahora pinta el valor autoritativo del backend al abrir (`pourCostPintarResumenCosto`) y solo recalcula en cliente a partir de una edición real. (2) La cantidad editable de cada ingrediente mostraba la unidad de presentación del insumo (ej. "ML") como si fuera la unidad de esa cantidad, cuando en realidad es una fracción de esa presentación (ej. 0.059 de una botella de 2L) — la etiqueta del input pasa a "Cant." genérico y la presentación se muestra aparte, como referencia.
+
+## 11.1
+- Nuevo módulo POUR COST (PWA, frontend): vista admin-only accesible desde el menú hamburguesa, siguiendo el mismo patrón visual/estructural que PESAJE (tarjetas + modal de detalle). Toggle Cócteles/Productos sueltos, selector de horario de precio "Precios A" / "Precios B" (`id_dia`), filtro de categoría derivado del dataset cargado y búsqueda por nombre. Cada tarjeta muestra el pour cost % con semáforo de color (verde <=28%, ámbar 28-35%, rojo >35%, cortes definidos por el negocio) vía la nueva clase `.badge-caution`. Al hacer click se abre un modal con el desglose real (receta/WAC) y un sandbox de simulación 100% en memoria (cantidad/WAC por ingrediente, % objetivo -> precio sugerido con su delta vs. el precio actual) que nunca escribe en el backend. Las fórmulas de JS espejan exactamente `_calcular_pour_cost_pct`/`_calcular_precio_sugerido` de `main.py` (mismo redondeo HALF_UP manual que `redondearOnzasOperativas`, no `Math.round`).
+
+## 11.0
+- Nuevo modulo POUR COST (backend, solo lectura): 4 endpoints admin-only (`GET /api/pourcost/menu`, `/recetas`, `/productos`, `/insumos`) que calculan el costo de receta (WAC) y el pour cost % de combos/cocteles y productos sueltos comandables, consultando las vistas `v9_menubackstage`, `vw_pourcost_receta`, `v9_cache_wac_producto` y `vw_alm_producto_con_nombres` (ya existentes en `test_pos`). `id_dia` (horario de precio) es un query param manual, default `1`. Sin escritura ni simulacion todavia -- eso vive en el frontend (fase siguiente, ver `documentos/pour_cost/pourcost.md`). DDL de las vistas versionado en `querys/create_views_pourcost.sql`.
+
 ## 10.99
 - Documentacion: auditoria de consistencia del modulo PESAJE tras v10.93-v10.98. Corrige contenido desactualizado en `documentos/DOCUMENTACION_ALMACENAMIENTO_PALOTEO.md` (reglas de `PUT /api/pesaje/config/{id}` reescritas para "promover", umbral de INCOMPLETOS con `<=0`, `tolerancia_oz` per-categoria stale desde v10.39, excepcion VINOS agregada) y en `README.md` ("Modulo PESAJE: detalles de UI" — NO PESABLES y el modal ya reflejan "promover"). Sin cambios de codigo.
 
