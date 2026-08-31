@@ -1,8 +1,8 @@
 # Documento maestro del motor financiero V9: WAC, COGS, márgenes y snapshots
 
-**Sistema:** POS BackStage / AdminERP  
-**Base de datos:** MySQL 5.6.12  
-**Estado documental:** Consolidación técnica basada en código y objetos reales revisados  
+**Sistema:** POS BackStage / AdminERP
+**Base de datos:** MySQL 5.6.12
+**Estado documental:** Consolidación técnica basada en código y objetos reales revisados
 **Fecha de consolidación:** 2026-07-13
 
 ---

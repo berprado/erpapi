@@ -4,6 +4,12 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 12.0
+- Mantenimiento de entrega: se normalizan espacios finales en documentación e instrucciones de POUR COST.
+
+## 11.9
+- POUR COST (modal COCTELES): auditoría de UX con ingredientes ordenados por tipo, resumen de costo fijo, controles de opcionales bloqueados hasta incluirlos y sincronización coherente entre precio y porcentaje objetivo.
+
 ## 11.8
 - POUR COST (modal COCTELES): cada ingrediente ahora muestra `COGS` debajo de `REND`, calculado como costo de la porción usada a partir de `cantidad_unidad_base x wac_actual`.
 - El `COGS` se recalcula en vivo con la misma fuente central del modal cuando cambia cantidad, WAC o selección de opcionales; si un opcional no está incluido, aporta `0` al total y se indica en la línea `COGS`.

@@ -5,7 +5,7 @@ applyTo: "**"
 ---
 Necesito refactorizar la representación y edición de cantidades de los ingredientes en la ventana modal de la pestaña **COCTELES** del módulo **POUR COST**.
 
-Esta tarea debe limitarse a mostrar las cantidades en la unidad práctica de la receta y permitir modificarlas en intervalos de `0,5`. 
+Esta tarea debe limitarse a mostrar las cantidades en la unidad práctica de la receta y permitir modificarlas en intervalos de `0,5`.
 
 ## Fuentes de contexto
 

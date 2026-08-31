@@ -1,9 +1,9 @@
 # Guía de decisión e implementación del snapshot WAC al cierre de operativa
 
-**Sistema:** POS BackStage / Motor Financiero V9  
-**Base de datos:** MySQL 5.6.12  
-**Decisión recomendada:** Opción B — congelamiento del WAC al cierre definitivo de la operativa  
-**Fecha:** 2026-07-14  
+**Sistema:** POS BackStage / Motor Financiero V9
+**Base de datos:** MySQL 5.6.12
+**Decisión recomendada:** Opción B — congelamiento del WAC al cierre definitivo de la operativa
+**Fecha:** 2026-07-14
 **Estado:** Guía de decisión y base funcional para implementación
 
 ---
