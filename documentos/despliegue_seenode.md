@@ -90,6 +90,7 @@ Cargar al menos estas variables (segun `config.py`):
 
 ```env
 APP_ENV=production
+BRAND_ID=backstage
 SECRET_KEY=<clave_larga_de_32+_caracteres>
 
 TEST_DB_HOST=<valor>
@@ -109,6 +110,26 @@ Recomendacion:
 
 - Si `APP_ENV=production`, validar que los `PROD_DB_*` apunten al destino real.
 - Evitar dejar secretos en el repositorio.
+
+### 6.3.1 Multi-sucursal: un Web Service por instancia, mismo repo/rama
+
+Para una sucursal nueva (misma BD, mismo esquema, otro local físico): **no**
+se clona el repo ni se crea una rama por sucursal. Se crea un segundo Web
+Service en Seenode apuntando al mismo repo y a la misma rama `main`, con su
+propio set de variables de entorno:
+
+- `PROD_DB_*` apuntando al túnel LocalToNet de esa sucursal (no al de casa
+  matriz).
+- `SECRET_KEY` propia (no reutilizar la de otra instancia).
+- `BRAND_ID` con el identificador de la marca de esa sucursal (definida en
+  `branding.py` — ver "Marca (branding) por instancia" en `README.md`); si
+  no se setea, usa la marca por defecto (`backstage`).
+- Revisar `PALOTEO_DEFAULT_BARRA_ID` / `PALOTEO_ALLOWED_BARRAS` contra la
+  `alm_barra` real de esa base — los IDs de barra no tienen por qué
+  coincidir con los de casa matriz aunque el esquema sea idéntico.
+
+Así, un fix de lógica de negocio (redondeo, tolerancia, etc.) llega a todas
+las instancias en su próximo deploy sin portarlo a mano.
 
 ## 7. Conexion a BD por tunel: que debes considerar
 

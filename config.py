@@ -2,6 +2,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import field_validator
 import logging
 
+from branding import BRAND_IDS, DEFAULT_BRAND_ID
+
 logger = logging.getLogger(__name__)
 
 class Settings(BaseSettings):
@@ -9,6 +11,10 @@ class Settings(BaseSettings):
 
     APP_ENV: str = "test"
     SECRET_KEY: str  # Clave para firma de tokens JWT
+
+    # Piel visual (logo/paleta) de esta instancia desplegada. Cada sucursal
+    # corre el mismo código y solo cambia esta variable — ver branding.py.
+    BRAND_ID: str = DEFAULT_BRAND_ID
     PALOTEO_DEFAULT_BARRA_ID: int = 1
     PALOTEO_SELECTOR_ENABLED: bool = False
     PALOTEO_ALLOWED_BARRAS: str = "1"
@@ -40,6 +46,14 @@ class Settings(BaseSettings):
         valor = (v or "").strip().lower()
         if valor not in permitidos:
             raise ValueError(f"APP_ENV debe ser uno de: {', '.join(sorted(permitidos))}")
+        return valor
+
+    @field_validator('BRAND_ID')
+    @classmethod
+    def validar_brand_id(cls, v: str) -> str:
+        valor = (v or "").strip().lower()
+        if valor not in BRAND_IDS:
+            raise ValueError(f"BRAND_ID debe ser uno de: {', '.join(sorted(BRAND_IDS))}")
         return valor
 
     @field_validator('PALOTEO_DEFAULT_BARRA_ID')

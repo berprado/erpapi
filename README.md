@@ -45,19 +45,24 @@ erpapi/
 |- schemas.py
 |- database.py
 |- config.py
+|- branding.py
 |- static/
-|  |- index.html
+|  |- index.html          (plantilla: placeholders __BRAND_*__, ver "Marca")
 |  |- app.js
 |  |- sw.js
-|  |- manifest.json
 |  |- cellar-sync-tokens.css
+|  |- brands/              (override de colores por marca, uno por BRAND_ID)
 |  |- imgs/
+|  |  |- brands/            (logos por marca)
 |  |- icons/
+|  |  |- brands/            (favicons/iconos por marca)
 |  |- pdfs/
 |- querys/
 |- documentos/
 |- TODO.md
 ```
+
+`static/manifest.json` ya no existe como archivo: `/assets/manifest.json` lo genera `main.py` en runtime según la marca activa (ver "Marca (branding) por instancia").
 
 ---
 
@@ -83,6 +88,10 @@ Crear un archivo `.env` en la raiz:
 
 ```env
 APP_ENV=test
+
+# Marca visual de esta instancia (logo/paleta). Ver "Marca (branding) por
+# instancia" mas abajo. Valores validos: los definidos en branding.py.
+BRAND_ID=backstage
 
 # JWT (minimo 32 caracteres)
 SECRET_KEY=tu_clave_secreta_muy_larga_y_aleatoria
@@ -416,6 +425,40 @@ Excepción operativa en VINOS (`id_categoria=6`):
 ## PWA Frontend
 
 La PWA se sirve desde `/` y assets desde `/assets`.
+
+### Marca (branding) por instancia
+
+Cada instancia desplegada (casa matriz, cada sucursal) corre el mismo
+código — mismo repo, misma rama `main` — y elige su piel visual (logo,
+paleta, título, favicons) con una sola variable de entorno, `BRAND_ID`,
+igual que `APP_ENV` elige la base de datos. No se crean ramas ni copias del
+repo por marca; ver `documentos/despliegue_seenode.md`.
+
+- `branding.py` define el diccionario `BRANDS`: por marca, título, nombre
+  de app, `theme_color`, carpeta de íconos, rutas de logo (login/navbar
+  completo/navbar colapsado) y si el efecto glitch del login está activo.
+- Los **colores** no viven en `branding.py` sino como CSS custom
+  properties: `static/cellar-sync-tokens.css` define los valores por
+  defecto (marca `backstage`) y `static/brands/<BRAND_ID>.css` los
+  sobreescribe por cascada (el `<link>` de la marca se carga después). El
+  `tailwind.config` embebido en `index.html` lee esas mismas variables
+  (`var(--primary-container)`, etc.) en vez de hex propios, para que no
+  existan dos paletas hardcodeadas por separado.
+- `index.html` es una plantilla con placeholders `__BRAND_TITLE__`,
+  `__BRAND_APP_NAME__`, `__BRAND_THEME_COLOR__`, `__BRAND_ICON_DIR__`,
+  `__BRAND_CSS_HREF__`, `__BRAND_LOGO_LOGIN__`,
+  `__BRAND_LOGO_NAVBAR_FULL__`, `__BRAND_LOGO_NAVBAR_ISOTIPO__` y
+  `__BRAND_GLITCH_ENABLED__`, que `GET /` (`main.py`) completa con la marca
+  activa antes de responder. `GET /assets/manifest.json` se genera igual
+  en runtime (`branding.build_manifest`) en vez de ser un archivo estático.
+- Colores funcionales (error/warning/info/success) **no** varían por
+  marca a propósito: son lenguaje semántico de UI, no identidad visual.
+
+Para dar de alta una marca nueva: agregar sus assets en
+`static/imgs/brands/<id>/` y `static/icons/brands/<id>/`, crear
+`static/brands/<id>.css` con el override de colores, agregar la entrada en
+`branding.py` y setear `BRAND_ID=<id>` en las env vars de esa instancia de
+Seenode.
 
 Flujo actual de navegacion:
 

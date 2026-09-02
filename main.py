@@ -18,8 +18,13 @@ from decimal import Decimal, ROUND_HALF_UP
 logger = logging.getLogger(__name__)
 from config import settings
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
+from branding import get_brand, build_manifest
+
+# Marca visual de esta instancia desplegada (logo/paleta). No cambia en
+# runtime: una instancia = una BRAND_ID = una marca (ver branding.py).
+_brand_activa = get_brand(settings.BRAND_ID)
 
 app = FastAPI(
     title="API Inventario POS",
@@ -2508,15 +2513,53 @@ def listar_pourcost_insumos(
 
 
 # --- SERVIDOR DE ARCHIVOS ESTÁTICOS (FRONTEND) ---
+
+# icon_dir de la marca activa es una ruta URL bajo /assets (p.ej.
+# "/assets/icons/brands/beer_garden"); esta la traduce a su carpeta real en
+# disco ("static/icons/brands/beer_garden") para FileResponse.
+_brand_icon_fs_dir = "static" + _brand_activa["icon_dir"][len("/assets"):]
+
+# manifest.json depende de la marca activa (nombre, ícono, theme_color), así
+# que se genera en runtime en vez de servirse como archivo estático. Debe
+# registrarse ANTES del mount de /assets: FastAPI prueba las rutas en el
+# orden en que se agregan, así esta ruta puntual gana por sobre el catch-all
+# del mount para ese path exacto.
+@app.get("/assets/manifest.json", include_in_schema=False)
+def serve_manifest():
+    return JSONResponse(build_manifest(_brand_activa))
+
 # Montamos una carpeta llamada 'static' donde vivirá el HTML, CSS y JS
 app.mount("/assets", StaticFiles(directory="static"), name="assets")
 
-# Favicon canónico: se sirve desde static/icons sin duplicar archivos en la raíz
+# Favicon canónico de la marca activa: se sirve desde static/icons(/brands/<id>)
+# sin duplicar archivos en la raíz.
 @app.get("/favicon.ico", include_in_schema=False)
 def serve_favicon():
-    return FileResponse("static/icons/favicon.ico")
+    return FileResponse(f"{_brand_icon_fs_dir}/favicon.ico")
 
-# Ruta principal que devuelve la página web
+# Ruta principal que devuelve la página web. index.html es una plantilla con
+# un puñado de placeholders __BRAND_*__ (título, favicons, logos, glitch on/
+# off, hoja de estilos de override) que se completan acá según BRAND_ID —
+# los colores en sí NO se inyectan por texto: viven como CSS custom
+# properties y el override de marca los pisa por cascada
+# (static/brands/<id>.css, enlazado vía __BRAND_CSS_HREF__).
 @app.get("/")
 def serve_frontend():
-    return FileResponse("static/index.html")
+    with open("static/index.html", "r", encoding="utf-8") as f:
+        html = f.read()
+
+    reemplazos = {
+        "__BRAND_TITLE__": _brand_activa["title"],
+        "__BRAND_APP_NAME__": _brand_activa["app_name"],
+        "__BRAND_THEME_COLOR__": _brand_activa["theme_color"],
+        "__BRAND_ICON_DIR__": _brand_activa["icon_dir"],
+        "__BRAND_CSS_HREF__": _brand_activa["css_href"],
+        "__BRAND_LOGO_LOGIN__": _brand_activa["logo_login"],
+        "__BRAND_LOGO_NAVBAR_FULL__": _brand_activa["logo_navbar_full"],
+        "__BRAND_LOGO_NAVBAR_ISOTIPO__": _brand_activa["logo_navbar_isotipo"],
+        "__BRAND_GLITCH_ENABLED__": "true" if _brand_activa["glitch_enabled"] else "false",
+    }
+    for placeholder, valor in reemplazos.items():
+        html = html.replace(placeholder, valor)
+
+    return HTMLResponse(html)

@@ -1,0 +1,83 @@
+/* ============================================
+   BEER GARDEN - Override de marca (sucursal)
+   Redefine solo las CSS custom properties de cellar-sync-tokens.css;
+   se carga DESPUES de ese archivo así que estas reglas ganan por cascada.
+   Fuente: documentos/implementacion_sucursal/paleta_colores_beer_garden.md
+   ============================================ */
+:root {
+  /* ===== SURFACE & BACKGROUND (negro / carbon) =====
+     #2F3030 (carbón) y #353636 (variante elevada) son literalmente los
+     valores que el doc de marca pide para tarjetas y su variante elevada,
+     así que van en surface-container-highest / surface-bright. El resto de
+     la rampa se interpola entre negro y carbón. */
+  --surface: #050505;
+  --surface-dim: #050505;
+  --surface-bright: #353636;
+  --surface-container-lowest: #020202;
+  --surface-container-low: #121211;
+  --surface-container: #1c1c1a;
+  --surface-container-high: #262624;
+  --surface-container-highest: #2f3030;
+  --background: #050505;
+  --surface-variant: #2f3030;
+
+  /* ===== PRIMARY (Dorado) ===== */
+  --primary: #f3e9d2;
+  --primary-container: #c5a674;
+  --primary-fixed: #c5a674;
+  --primary-fixed-dim: #8c7755;
+  --on-primary: #050505;
+  --on-primary-container: #050505;
+  --on-primary-fixed: #050505;
+  --on-primary-fixed-variant: #655c49;
+  /* Canal RGB del dorado principal, usado por los efectos glow de abajo. */
+  --primary-glow-rgb: 197, 166, 116;
+
+  /* ===== SECONDARY (neutros calidos: champagne / taupe) ===== */
+  --secondary: #e5e1d7;
+  --secondary-container: #3f3d34;
+  --secondary-fixed: #e5e1d7;
+  --secondary-fixed-dim: #b4b0a2;
+  --on-secondary: #050505;
+  --on-secondary-container: #e5e1d7;
+  --on-secondary-fixed: #050505;
+  --on-secondary-fixed-variant: #655c49;
+
+  /* ===== TERTIARY (verde oliva, acento discreto) ===== */
+  --tertiary: #e8ebdd;
+  --tertiary-container: #596044;
+  --tertiary-fixed: #9ca47f;
+  --tertiary-fixed-dim: #454a36;
+  --on-tertiary: #fefefd;
+  --on-tertiary-container: #fefefd;
+  --on-tertiary-fixed: #1c1f14;
+  --on-tertiary-fixed-variant: #3a3e2b;
+
+  /* ===== TEXT ===== */
+  --on-surface: #fefefd;
+  --on-surface-variant: #b4b0a2;
+  --on-background: #fefefd;
+  --inverse-surface: #fefefd;
+  --inverse-on-surface: #1c1c1a;
+
+  /* ===== OUTLINE & BORDERS (taupe) ===== */
+  --outline: #655c49;
+  --outline-variant: #3a3730;
+
+  /* ===== MISC ===== */
+  --surface-tint: #c5a674;
+  --inverse-primary: #8c7755;
+
+  /* ===== EFFECTS =====
+     "Recolorear + suavizar": un solo halo, menos opacidad/blur que el
+     glow neon de casa matriz (evita el aspecto cyberpunk sobre un
+     isotipo tipo escudo/badge artesanal). */
+  --glow-cyan: 0 0 10px rgba(var(--primary-glow-rgb), 0.22);
+  --glow-cyan-intense: 0 0 12px rgba(var(--primary-glow-rgb), 0.3), inset 0 0 4px rgba(var(--primary-glow-rgb), 0.12);
+  --glow-cyan-focus: 0 2px 6px -2px rgba(var(--primary-glow-rgb), 0.35);
+  --glow-secondary: 0 0 10px rgba(101, 92, 73, 0.25);
+}
+
+/* Nota: los colores funcionales (error/warning/info/success) NO se
+   redefinen a propósito — son lenguaje semántico de UI, no identidad de
+   marca, y deben leerse igual en toda sucursal. */

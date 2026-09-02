@@ -4,19 +4,18 @@
 //             Network First para llamadas a la API.
 // ============================================================
 
-const CACHE_NAME = 'backstage-v12.0';
+const CACHE_NAME = 'backstage-v12.1';
 
-// Archivos que se pre-cachean al instalar la PWA
+// Archivos que se pre-cachean al instalar la PWA. Sin rutas de logo/ícono
+// hardcodeadas a una marca: este mismo sw.js sirve a cualquier instancia
+// (BRAND_ID), y las rutas de logo/favicon/manifest ahora dependen de la
+// marca activa (ver branding.py). Cache First igual las cachea al vuelo en
+// el primer fetch real (la propia carga de index.html las pide de
+// inmediato), solo que no quedan pre-calentadas desde el install.
 const ASSETS_TO_CACHE = [
     '/',
     '/assets/app.js',
     '/assets/manifest.json',
-    '/assets/icons/favicon.ico',
-    '/assets/icons/android-icon-192x192.png',
-    '/assets/icons/android-icon-512x512.png',
-    '/assets/icons/apple-icon-180x180.png',
-    '/assets/imgs/login_transp.png',
-    '/assets/imgs/backstage_horizontal_banner.png',
 ];
 
 // ── INSTALL: pre-cachear assets esenciales ──────────────────

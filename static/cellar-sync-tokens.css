@@ -25,6 +25,11 @@
   --on-primary-container: #006970;
   --on-primary-fixed: #002022;
   --on-primary-fixed-variant: #004f54;
+  /* Canal RGB del "glow" de marca (sin alpha), reutilizado por los efectos
+     neon/scanline/grid de abajo. Una marca solo necesita redefinir esta
+     variable (y opcionalmente --glow-cyan*) para recolorear todos los
+     efectos sin tocar cada regla una por una. */
+  --primary-glow-rgb: 0, 219, 233;
 
   /* ===== SECONDARY (Deep Blue) ===== */
   --secondary: #bcc7de;
@@ -109,9 +114,9 @@
 
   /* ===== EFFECTS ===== */
   /* Cyan Glow: primary indicator for active/focused states */
-  --glow-cyan: 0 0 15px rgba(0, 219, 233, 0.3), 0 0 30px rgba(0, 219, 233, 0.1);
-  --glow-cyan-intense: 0 0 15px rgba(0, 219, 233, 0.5), inset 0 0 5px rgba(0, 219, 233, 0.2);
-  --glow-cyan-focus: 0 4px 10px -4px rgba(0, 219, 233, 0.5);
+  --glow-cyan: 0 0 15px rgba(var(--primary-glow-rgb), 0.3), 0 0 30px rgba(var(--primary-glow-rgb), 0.1);
+  --glow-cyan-intense: 0 0 15px rgba(var(--primary-glow-rgb), 0.5), inset 0 0 5px rgba(var(--primary-glow-rgb), 0.2);
+  --glow-cyan-focus: 0 4px 10px -4px rgba(var(--primary-glow-rgb), 0.5);
 
   /* Secondary Glow */
   --glow-secondary: 0 0 15px rgba(188, 199, 222, 0.3), inset 0 0 5px rgba(188, 199, 222, 0.2);
@@ -146,7 +151,7 @@
 }
 
 .neon-text-primary {
-  text-shadow: 0 0 8px rgba(0, 219, 233, 0.8);
+  text-shadow: 0 0 8px rgba(var(--primary-glow-rgb), 0.8);
 }
 
 .neon-text-secondary {
@@ -174,7 +179,7 @@
 .scanline {
   width: 100%;
   height: 2px;
-  background: rgba(0, 219, 233, 0.05);
+  background: rgba(var(--primary-glow-rgb), 0.05);
   position: absolute;
   z-index: 10;
   pointer-events: none;
@@ -238,9 +243,9 @@ button:active {
 
 body.with-grid-bg {
   background-color: var(--background);
-  background-image: 
-    linear-gradient(rgba(0, 219, 233, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 219, 233, 0.03) 1px, transparent 1px);
+  background-image:
+    linear-gradient(rgba(var(--primary-glow-rgb), 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(var(--primary-glow-rgb), 0.03) 1px, transparent 1px);
   background-size: 32px 32px;
 }
 
@@ -260,11 +265,11 @@ body.with-grid-bg {
   color: var(--primary-fixed);
   border-bottom-color: var(--primary-fixed);
   box-shadow: inset 0 -4px 0 0 var(--primary-fixed);
-  text-shadow: 0 0 8px rgba(0, 219, 233, 0.6);
+  text-shadow: 0 0 8px rgba(var(--primary-glow-rgb), 0.6);
 }
 
 .active-tab .material-symbols-outlined {
-  filter: drop-shadow(0 0 8px rgba(0, 219, 233, 0.8));
+  filter: drop-shadow(0 0 8px rgba(var(--primary-glow-rgb), 0.8));
 }
 
 button[data-tab]:hover {
@@ -277,10 +282,10 @@ button[data-tab]:hover {
 
 @keyframes glow-pulse {
   0%, 100% {
-    box-shadow: inset 0 -4px 0 0 var(--primary-fixed), 0 0 8px rgba(0, 219, 233, 0.4);
+    box-shadow: inset 0 -4px 0 0 var(--primary-fixed), 0 0 8px rgba(var(--primary-glow-rgb), 0.4);
   }
   50% {
-    box-shadow: inset 0 -4px 0 0 var(--primary-fixed), 0 0 12px rgba(0, 219, 233, 0.8);
+    box-shadow: inset 0 -4px 0 0 var(--primary-fixed), 0 0 12px rgba(var(--primary-glow-rgb), 0.8);
   }
 }
 

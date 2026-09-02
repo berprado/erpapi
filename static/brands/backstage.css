@@ -1,0 +1,4 @@
+/* Marca por defecto (casa matriz). No redefine nada: los valores base ya
+   viven en cellar-sync-tokens.css. Este archivo existe solo para que /
+   siempre pueda enlazar un <link> de override sin tener que condicionar
+   su presencia según la marca activa. */

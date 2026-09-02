@@ -3,20 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>BackStage | Live Dashboard</title>
+    <title>__BRAND_TITLE__</title>
 
     <!-- PWA -->
     <link rel="manifest" href="/assets/manifest.json">
-    <link rel="icon" type="image/x-icon" href="/assets/icons/favicon.ico">
-    <link rel="shortcut icon" href="/assets/icons/favicon.ico">
-    <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
-    <link rel="icon" type="image/png" sizes="96x96" href="/assets/icons/favicon-96x96.png">
-    <meta name="theme-color" content="#39ff14">
+    <link rel="icon" type="image/x-icon" href="__BRAND_ICON_DIR__/favicon.ico">
+    <link rel="shortcut icon" href="__BRAND_ICON_DIR__/favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="__BRAND_ICON_DIR__/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="__BRAND_ICON_DIR__/favicon-16x16.png">
+    <link rel="icon" type="image/png" sizes="96x96" href="__BRAND_ICON_DIR__/favicon-96x96.png">
+    <meta name="theme-color" content="__BRAND_THEME_COLOR__">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="BackStage">
-    <link rel="apple-touch-icon" href="/assets/icons/apple-icon-180x180.png">
+    <meta name="apple-mobile-web-app-title" content="__BRAND_APP_NAME__">
+    <link rel="apple-touch-icon" href="__BRAND_ICON_DIR__/apple-icon-180x180.png">
 
     <!-- Performance: acelerar descarga de fuentes externas -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -34,6 +34,11 @@
     <!-- Design Tokens CSS -->
     <link rel="stylesheet" href="/assets/cellar-sync-tokens.css">
 
+    <!-- Override de marca (sucursal): redefine solo las CSS custom
+         properties que cambian por marca (colores, glow). Para la marca por
+         defecto es un archivo vacio/comentado, así que no cambia nada. -->
+    <link rel="stylesheet" href="__BRAND_CSS_HREF__">
+
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
 
@@ -44,66 +49,71 @@
             theme: {
                 extend: {
                     colors: {
+                        // Los valores viven como CSS custom properties en
+                        // cellar-sync-tokens.css (+ override de marca en
+                        // /assets/brands/*.css) para que Tailwind y el CSS a
+                        // mano compartan una unica fuente de verdad por marca
+                        // en vez de dos paletas hardcodeadas por separado.
                         // Surface & Background
-                        'surface': '#0d1515',
-                        'surface-dim': '#0d1515',
-                        'surface-bright': '#333b3b',
-                        'surface-container-lowest': '#080f10',
-                        'surface-container-low': '#151d1e',
-                        'surface-container': '#192122',
-                        'surface-container-high': '#232b2c',
-                        'surface-container-highest': '#2e3637',
-                        'background': '#0d1515',
-                        'surface-variant': '#2e3637',
-                        
-                        // Primary (Electric Cyan)
-                        'primary': '#dbfcff',
-                        'primary-container': '#00f0ff',
-                        'primary-fixed': '#7df4ff',
-                        'primary-fixed-dim': '#00dbe9',
-                        'on-primary': '#00363a',
-                        'on-primary-container': '#006970',
-                        'on-primary-fixed': '#002022',
-                        'on-primary-fixed-variant': '#004f54',
-                        
-                        // Secondary (Deep Blue)
-                        'secondary': '#bcc7de',
-                        'secondary-container': '#3e495d',
-                        'secondary-fixed': '#d8e3fb',
-                        'secondary-fixed-dim': '#bcc7de',
-                        'on-secondary': '#263143',
-                        'on-secondary-container': '#aeb9d0',
-                        'on-secondary-fixed': '#111c2d',
-                        'on-secondary-fixed-variant': '#3c475a',
-                        
-                        // Tertiary (Amber/Gold)
-                        'tertiary': '#fff5de',
-                        'tertiary-container': '#fed639',
-                        'tertiary-fixed': '#ffe179',
-                        'tertiary-fixed-dim': '#eac324',
-                        'on-tertiary': '#3b2f00',
-                        'on-tertiary-container': '#715d00',
-                        'on-tertiary-fixed': '#231b00',
-                        'on-tertiary-fixed-variant': '#554500',
-                        
+                        'surface': 'var(--surface)',
+                        'surface-dim': 'var(--surface-dim)',
+                        'surface-bright': 'var(--surface-bright)',
+                        'surface-container-lowest': 'var(--surface-container-lowest)',
+                        'surface-container-low': 'var(--surface-container-low)',
+                        'surface-container': 'var(--surface-container)',
+                        'surface-container-high': 'var(--surface-container-high)',
+                        'surface-container-highest': 'var(--surface-container-highest)',
+                        'background': 'var(--background)',
+                        'surface-variant': 'var(--surface-variant)',
+
+                        // Primary (color de marca)
+                        'primary': 'var(--primary)',
+                        'primary-container': 'var(--primary-container)',
+                        'primary-fixed': 'var(--primary-fixed)',
+                        'primary-fixed-dim': 'var(--primary-fixed-dim)',
+                        'on-primary': 'var(--on-primary)',
+                        'on-primary-container': 'var(--on-primary-container)',
+                        'on-primary-fixed': 'var(--on-primary-fixed)',
+                        'on-primary-fixed-variant': 'var(--on-primary-fixed-variant)',
+
+                        // Secondary
+                        'secondary': 'var(--secondary)',
+                        'secondary-container': 'var(--secondary-container)',
+                        'secondary-fixed': 'var(--secondary-fixed)',
+                        'secondary-fixed-dim': 'var(--secondary-fixed-dim)',
+                        'on-secondary': 'var(--on-secondary)',
+                        'on-secondary-container': 'var(--on-secondary-container)',
+                        'on-secondary-fixed': 'var(--on-secondary-fixed)',
+                        'on-secondary-fixed-variant': 'var(--on-secondary-fixed-variant)',
+
+                        // Tertiary (acento decorativo)
+                        'tertiary': 'var(--tertiary)',
+                        'tertiary-container': 'var(--tertiary-container)',
+                        'tertiary-fixed': 'var(--tertiary-fixed)',
+                        'tertiary-fixed-dim': 'var(--tertiary-fixed-dim)',
+                        'on-tertiary': 'var(--on-tertiary)',
+                        'on-tertiary-container': 'var(--on-tertiary-container)',
+                        'on-tertiary-fixed': 'var(--on-tertiary-fixed)',
+                        'on-tertiary-fixed-variant': 'var(--on-tertiary-fixed-variant)',
+
                         // Text
-                        'on-surface': '#dce4e5',
-                        'on-surface-variant': '#b9cacb',
-                        'on-background': '#dce4e5',
-                        'inverse-surface': '#dce4e5',
-                        'inverse-on-surface': '#2a3233',
-                        
+                        'on-surface': 'var(--on-surface)',
+                        'on-surface-variant': 'var(--on-surface-variant)',
+                        'on-background': 'var(--on-background)',
+                        'inverse-surface': 'var(--inverse-surface)',
+                        'inverse-on-surface': 'var(--inverse-on-surface)',
+
                         // Outline & Borders
-                        'outline': '#849495',
-                        'outline-variant': '#3b494b',
-                        
-                        // Functional
-                        'error': '#ffb4ab',
-                        'on-error': '#690005',
-                        'error-container': '#93000a',
-                        'on-error-container': '#ffdad6',
-                        'surface-tint': '#00dbe9',
-                        'inverse-primary': '#006970',
+                        'outline': 'var(--outline)',
+                        'outline-variant': 'var(--outline-variant)',
+
+                        // Functional (semanticos: no varian por marca)
+                        'error': 'var(--error)',
+                        'on-error': 'var(--on-error)',
+                        'error-container': 'var(--error-container)',
+                        'on-error-container': 'var(--on-error-container)',
+                        'surface-tint': 'var(--surface-tint)',
+                        'inverse-primary': 'var(--inverse-primary)',
                     },
                     fontFamily: {
                         'display-lg': ['Space Grotesk', 'monospace'],
@@ -133,10 +143,12 @@
                         'xl': '40px',
                     },
                     boxShadow: {
-                        'cyan-glow': '0 0 15px rgba(0, 219, 233, 0.3), 0 0 30px rgba(0, 219, 233, 0.1)',
-                        'cyan-glow-intense': '0 0 15px rgba(0, 219, 233, 0.5), inset 0 0 5px rgba(0, 219, 233, 0.2)',
-                        'cyan-glow-focus': '0 4px 10px -4px rgba(0, 219, 233, 0.5)',
-                        'secondary-glow': '0 0 15px rgba(188, 199, 222, 0.3), inset 0 0 5px rgba(188, 199, 222, 0.2)',
+                        // Nombres historicos ("cyan-glow"); el color real lo
+                        // decide --glow-cyan*/--glow-secondary por marca.
+                        'cyan-glow': 'var(--glow-cyan)',
+                        'cyan-glow-intense': 'var(--glow-cyan-intense)',
+                        'cyan-glow-focus': 'var(--glow-cyan-focus)',
+                        'secondary-glow': 'var(--glow-secondary)',
                     },
                 }
             }
@@ -638,7 +650,7 @@
                     <div class="text-center flex flex-col items-center">
                         <div class="logo-wrapper">
                             <!-- Capa principal: glow permanente -->
-                            <img alt="BackStage Login" class="logo-main" src="/assets/imgs/login_transp.png">
+                            <img alt="__BRAND_APP_NAME__ Login" class="logo-main" src="__BRAND_LOGO_LOGIN__">
                             <!-- Capa glitch magenta -->
                             <img alt="" class="glitch-layer glitch-red" src="/assets/imgs/login_transp.png" aria-hidden="true">
                             <!-- Capa glitch cyan -->
@@ -709,13 +721,13 @@
             <div class="flex items-center gap-md min-w-0 flex-1">
                 <!-- Logo con Glitch (se oculta mientras el buscador esta expandido) -->
                 <div id="navbar-logo-full" class="logo-wrapper-nav min-w-0">
-                    <img alt="BackStage" class="logo-main" src="/assets/imgs/backstage_horizontal_banner.png">
+                    <img alt="__BRAND_APP_NAME__" class="logo-main" src="__BRAND_LOGO_NAVBAR_FULL__">
                     <img alt="" class="glitch-layer glitch-red" src="/assets/imgs/backstage_horizontal_banner.png" aria-hidden="true">
                     <img alt="" class="glitch-layer glitch-cyan" src="/assets/imgs/backstage_horizontal_banner.png" aria-hidden="true">
                     <div class="scanlines"></div>
                 </div>
                 <!-- Isotipo compacto: visible solo mientras el buscador esta expandido (deja mas espacio en movil) -->
-                <img id="navbar-logo-isotipo" alt="BackStage" src="/assets/imgs/isotipo.png" class="hidden w-9 h-9 shrink-0">
+                <img id="navbar-logo-isotipo" alt="__BRAND_APP_NAME__" src="__BRAND_LOGO_NAVBAR_ISOTIPO__" class="hidden w-9 h-9 shrink-0">
 
                 <!-- Buscador unico: oculto/colapsado por defecto, se expande con btn-topbar-search-toggle (ver app.js) -->
                 <div id="topbar-search-container" class="hidden flex-1 min-w-0">
@@ -1418,7 +1430,7 @@
         </div>
     </div>
 
-    <script src="/assets/app.js?v=12.0"></script>
+    <script src="/assets/app.js?v=12.1"></script>
 
     <script>
         (function () {
@@ -1441,9 +1453,13 @@
         })();
     </script>
 
-    <!-- Trigger aleatorio del Glitch -->
+    <!-- Trigger aleatorio del Glitch (algunas marcas lo desactivan: un
+         logo tipo escudo/badge no combina con el parpadeo RGB pensado para
+         el isotipo cian original). -->
     <script>
         (function() {
+            if (!__BRAND_GLITCH_ENABLED__) return;
+
             function triggerGlitch() {
                 const delay = Math.random() * 2000 + 1000; // 1-3 segundos entre glitches
                 setTimeout(function() {
@@ -1463,7 +1479,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/assets/sw.js?v=12.0')
+                navigator.serviceWorker.register('/assets/sw.js?v=12.1')
                     .then(reg => console.log('[PWA] Service Worker registrado:', reg.scope))
                     .catch(err => console.error('[PWA] Error al registrar SW:', err));
             });
