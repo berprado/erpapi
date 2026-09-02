@@ -121,6 +121,19 @@
   - Ojo al reconstruir: **no alcanza con el mensaje del commit** para mapear commit a version. Varios mensajes no citan el numero (ej. `26c3522` dice solo "actualiza la version del service worker") y algunos commits bumpean mas de una version. Hay que leer el diff de `static/sw.js` de cada commit para leer el `CACHE_NAME` resultante. Ademas el mensaje describe la intencion, no siempre el alcance real del diff.
   - Lo mas valioso puede ser la prevencion, no el backfill: entender por que la regla se salteo 19 veces seguidas (¿trabajo en rafaga? ¿regla percibida como ruido en cambios chicos?) y, si corresponde, automatizar la verificacion en vez de confiar en la disciplina manual.
 
+- [ ] **Borrar del remoto las ramas ya mergeadas a `main`**
+  - Verificado 2026-08-31: las 8 ramas de abajo tienen 0 commits por delante de `origin/main` (`git log --oneline origin/main..origin/<rama>` vacío para cada una) y no hay ningún PR abierto que dependa de ellas (`gh pr list --state open` devuelve `[]`). El historial ya vive en `main` a través de sus commits de merge — borrar el puntero de la rama no pierde nada, GitHub lo mantiene recuperable por un tiempo vía el hash del último commit.
+  - Ramas: `feature/pour-cost`, `feat/captura-1x1-logs`, `feat/ui-polish`, `feature/autosave-paloteo-unificado`, `feature/barra-config-por-entorno`, `feature/paloteo3-consistencia-funcional`, `feature/topbar-hamburguesa-flotante`, `claude/adjustments-module-guide-xp8pt8`.
+  - Comando por rama: `git push origin --delete <rama>`.
+  - Re-verificar "0 commits por delante" justo antes de borrar, por si alguna sumó trabajo nuevo entre esta nota y la limpieza real.
+
+- [ ] **Migrar Tailwind de CDN (Play) a build estático**
+  - Hallazgo original: `documentos/analisis_tecnico.md` #29 (05/05/2026). `static/index.html` carga `cdn.tailwindcss.com` — la versión "Play" de Tailwind, pensada solo para prototipado: descarga el compilador JS completo (~350KB) y genera las clases en el navegador en tiempo real (con un `MutationObserver` reescaneando el DOM), en vez de servir un `.css` estático ya purgado con solo las clases usadas (~5-15KB). Había quedado como "🔵 Cuando sea posible" y se cayó del backlog activo sin resolverse; re-agregado 2026-08-31.
+  - No es que Tailwind no se use — se usa extensivamente como utility classes en todo `index.html` — el problema es exclusivamente el mecanismo de entrega en producción.
+  - Costo de dejarlo: ~350KB extra por carga, dependencia dura de que `cdn.tailwindcss.com` esté arriba (si cae, se rompe el styling basado en utilidades de golpe), y el CSP necesita `'unsafe-eval'` solo por esto (`main.py`, `_CSP_PWA`) — un build estático permitiría sacarlo.
+  - Desde 2026-08-31 los colores viven en CSS custom properties (`static/cellar-sync-tokens.css` + override por marca en `static/brands/*.css`, ver "Marca (branding) por instancia" en `README.md`) y el `tailwind.config` de `index.html` ya las referencia con `var(--token)` en vez de hex propios — la migración a build real no requiere rehacer esa parte, solo cambiar el mecanismo de compilación.
+  - Camino de bajo esfuerzo: correr `npx tailwindcss` una vez localmente (apuntando a `index.html`/`app.js`), commitear el `.css` resultante al repo, y reemplazar el `<script src="cdn.tailwindcss.com">` por un `<link>` a ese archivo estático — sin agregar Node.js al build de Seenode (sigue siendo `pip install -r requirements.txt`). Costo permanente: hay que re-correr ese comando cada vez que se agregue una clase de Tailwind nueva que no exista todavía en el HTML/JS (con el CDN cualquier clase nueva "simplemente funciona"; con el build purgado no, hasta regenerar).
+
 ## 📌 Pendiente de Validaciones de Cantidades y Pesos (Paloteo 1, 2 y 3)
 
 - [x] **Alinear validaciones Frontend/Backend para pesos fisicos maximos**
