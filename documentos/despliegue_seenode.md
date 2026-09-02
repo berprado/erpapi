@@ -131,6 +131,29 @@ propio set de variables de entorno:
 Así, un fix de lógica de negocio (redondeo, tolerancia, etc.) llega a todas
 las instancias en su próximo deploy sin portarlo a mano.
 
+### 6.3.2 Instancias desplegadas actualmente
+
+Estado a 2026-09-02 — actualizar esta tabla cada vez que se dé de alta o se
+apague una instancia (no dejar que quede desactualizada, es la unica vista
+rapida de "que esta corriendo donde"):
+
+| Instancia | URL | `BRAND_ID` | Túnel LocalToNet (`PROD_DB_HOST:PORT`) |
+|---|---|---|---|
+| Casa matriz | https://erpapi.seenode.app/ | `backstage` (default) | `backapp.localto.net:1790` |
+| Sucursal Beer Garden | https://erpapi-2.seenode.app/ | `beer_garden` | `gardentcp.localto.net:7755` |
+
+Credenciales (`SECRET_KEY`, `PROD_DB_PASS`, etc.) **no** se documentan acá a
+propósito — viven solo en las env vars de cada Web Service de Seenode, nunca
+en el repo. Cada instancia tiene su propio `SECRET_KEY` (no se comparte
+entre instancias — ver 6.3.1).
+
+Nota operativa: `erpapi.seenode.app` estuvo apuntado temporalmente a
+`APP_ENV=test_pos` (réplica de la sucursal) mientras se validaba el
+despliegue de Beer Garden antes de tener su propio túnel dedicado. Confirmar
+que haya vuelto a `APP_ENV=production` contra su propia base
+(`backapp.localto.net:1790`) — no debe quedar sirviendo produccion de casa
+matriz contra una base de pruebas.
+
 ## 7. Conexion a BD por tunel: que debes considerar
 
 Este punto es critico para que el despliegue funcione en Seenode.

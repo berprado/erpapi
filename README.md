@@ -453,12 +453,22 @@ repo por marca; ver `documentos/despliegue_seenode.md`.
   en runtime (`branding.build_manifest`) en vez de ser un archivo estático.
 - Colores funcionales (error/warning/info/success) **no** varían por
   marca a propósito: son lenguaje semántico de UI, no identidad visual.
+- El PDF de exportación de PALOTEO 3 (`exportar_pdf_paloteo3`) también es
+  consciente de la marca: `_LOGO_PATH` toma `logo_navbar_full` de la marca
+  activa en vez de un archivo fijo.
 
 Para dar de alta una marca nueva: agregar sus assets en
 `static/imgs/brands/<id>/` y `static/icons/brands/<id>/`, crear
 `static/brands/<id>.css` con el override de colores, agregar la entrada en
 `branding.py` y setear `BRAND_ID=<id>` en las env vars de esa instancia de
 Seenode.
+
+**Instancias en producción hoy** (ver "Instancias desplegadas actualmente"
+en `documentos/despliegue_seenode.md` para la tabla completa y mantenida):
+casa matriz en https://erpapi.seenode.app/ (`BRAND_ID=backstage`, default) y
+la sucursal Beer Garden en https://erpapi-2.seenode.app/
+(`BRAND_ID=beer_garden`) — mismo repo y rama `main`, cada una con su propia
+base de datos vía un túnel LocalToNet distinto.
 
 Flujo actual de navegacion:
 
