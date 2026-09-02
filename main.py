@@ -2009,7 +2009,13 @@ def aplicar_ajustes_inventario(
 import os
 from fpdf import FPDF
 
-_LOGO_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "imgs", "backstage_horizontal_banner.png")
+# Logo de marca para el encabezado del PDF: reusa el mismo asset "navbar
+# completo" de la marca activa (ver branding.py) en vez de un archivo fijo,
+# para que el export quede consistente con la piel visual de cada instancia.
+_LOGO_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "static" + _brand_activa["logo_navbar_full"][len("/assets"):],
+)
 _FONTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "fonts")
 _FONT_REGULAR_PATH = os.path.join(_FONTS_DIR, "SpaceGrotesk-Regular.ttf")
 _FONT_BOLD_PATH = os.path.join(_FONTS_DIR, "SpaceGrotesk-Bold.ttf")
