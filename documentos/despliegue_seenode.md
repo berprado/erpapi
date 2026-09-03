@@ -149,10 +149,9 @@ entre instancias — ver 6.3.1).
 
 Nota operativa: `erpapi.seenode.app` estuvo apuntado temporalmente a
 `APP_ENV=test_pos` (réplica de la sucursal) mientras se validaba el
-despliegue de Beer Garden antes de tener su propio túnel dedicado. Confirmar
-que haya vuelto a `APP_ENV=production` contra su propia base
-(`backapp.localto.net:1790`) — no debe quedar sirviendo produccion de casa
-matriz contra una base de pruebas.
+despliegue de Beer Garden antes de tener su propio túnel dedicado.
+Confirmado el 2026-09-02: volvió a `APP_ENV=production` contra
+`backapp.localto.net:1790`.
 
 ## 7. Conexion a BD por tunel: que debes considerar
 
