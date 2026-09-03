@@ -606,6 +606,49 @@ Service Worker:
 
 ---
 
+## Versionado
+
+Conviven dos numeraciones independientes, con propósitos distintos — no hay
+que hacerlas coincidir:
+
+- **`CACHE_NAME` / `?v=` (`static/sw.js` / `static/index.html`)**: contador
+  interno de cache-busting de la PWA, formato `MAJOR.MINOR` (`12.2`, `12.3`,
+  ...). Sube en **cada** modificación del proyecto, por chica que sea — ver
+  `.github/instructions/cache-busting-obligatorio.instructions.md`. Cada
+  bump tiene su entrada en `CHANGELOG.md`. No representa un release del
+  producto, solo fuerza al navegador a descartar el caché viejo.
+- **Git tags semánticos (`vMAJOR.MINOR.PATCH`)**: marcan hitos de
+  release/rollback del producto — un punto de la historia al que siempre se
+  puede volver (`git checkout v1.0.0`), independiente de cuánto avance
+  `main` después. Se crean a mano cuando el estado actual merece quedar
+  marcado como una versión estable (no en cada commit):
+
+  ```bash
+  git tag -a v1.1.0 -m "resumen del hito"
+  git push origin v1.1.0
+  ```
+
+  - **PATCH** (`v1.0.1`): fixes que no cambian funcionalidad.
+  - **MINOR** (`v1.1.0`): funcionalidad nueva que no rompe lo existente.
+  - **MAJOR** (`v2.0.0`): cambios grandes de arquitectura, breaking changes,
+    o una funcionalidad premium que redefine el producto base.
+
+  `v1.0.0` (2026-09-03) es el primer tag: marca la primera versión
+  productiva de la PWA, en uso real en casa matriz y en la sucursal Beer
+  Garden — ver `documentos/despliegue_seenode.md`.
+
+Si en el futuro una funcionalidad nueva (premium u otra) necesita
+**coexistir** con la versión base en distintas instancias desplegadas
+simultáneamente (algunas la tienen, otras no) — a diferencia de un release
+que simplemente reemplaza al anterior para todos — eso no se resuelve con
+tags ni ramas: se resuelve con un feature flag por variable de entorno,
+mismo patrón que `BRAND_ID` (ver "Marca (branding) por instancia" más
+arriba). Los tags siguen sirviendo para marcar el hito en el historial; la
+convivencia de variantes la decide la configuración de cada instancia en
+runtime, no el código desplegado.
+
+---
+
 ## Pendientes
 
 Ver `TODO.md` para el backlog actualizado.

@@ -4,6 +4,13 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+**Este numero (`12.x`) es un contador interno de cache-busting de la PWA,
+no la version del producto.** Los hitos de release/rollback se marcan por
+separado con git tags semanticos (`vMAJOR.MINOR.PATCH`) — ver seccion
+"Versionado" en `README.md`. El primer tag, `v1.0.0` (2026-09-03, primera
+version productiva en uso real), corresponde a este mismo punto de la
+historia, `## 12.2` de abajo.
+
 ## 12.2
 - PDF de PALOTEO 3: el logo del encabezado ahora usa la marca activa (`_LOGO_PATH` via `logo_navbar_full`) en vez de un archivo fijo de casa matriz.
 
