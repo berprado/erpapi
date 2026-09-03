@@ -4,6 +4,12 @@ Resumen breve de los cambios por version. Cada entrada corresponde al bump de
 `CACHE_NAME` / `?v=` definido en `.github/instructions/cache-busting-obligatorio.instructions.md`.
 Las versiones anteriores a 10.13 no se reconstruyeron retroactivamente; ver `git log` para historial completo.
 
+## 12.2
+- PDF de PALOTEO 3: el logo del encabezado ahora usa la marca activa (`_LOGO_PATH` via `logo_navbar_full`) en vez de un archivo fijo de casa matriz.
+
+## 12.1
+- Marca visual por instancia (branding): nueva variable `BRAND_ID` selecciona logo/paleta/titulo/favicons/manifest sin ramas ni copias del repo. Primera marca alternativa: sucursal Beer Garden.
+
 ## 12.0
 - Mantenimiento de entrega: se normalizan espacios finales en documentación e instrucciones de POUR COST.
 
