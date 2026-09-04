@@ -2,7 +2,7 @@
 
 **Proyecto:** BackStage API · PWA Frontend · Módulo admin-only  
 **Fecha:** 2026-09-03 · **Versión:** 1.0  
-**Archivos analizados:** `static/index.html` (líneas 991–1192), `static/app.js` (líneas 644–1451), `main.py` (líneas 903–1322), `schemas.py` (líneas 60–98)
+**Archivos analizados:** `static/index.html` (líneas 1017–1260, incluye `#panel-pesaje` y `#pesaje-modal`), `static/app.js` (líneas 644–1451), `main.py` (líneas 908–1326), `schemas.py` (líneas 60–98)
 
 ---
 
@@ -141,7 +141,7 @@ El schema incluye `tolerancia_oz`, pero `ActualizarPesajeConfigRequest` no lo ac
 POST requiere `peso_bruto > 0` y `tara >= 0` obligatorios. PUT acepta tara nula (guardado parcial). Asimetría con sentido de negocio pero no comunicada en la UI.
 
 **D3 — Promoción silenciosa**  
-El PUT puede cambiar `pesable` de 0 a 1 sin indicarlo en la respuesta al usuario. El diálogo de éxito dice "Guardado exitosamente" sin mencionar el cambio de estado.
+El PUT puede cambiar `pesable` de 0 a 1 sin indicarlo en la respuesta al usuario. El diálogo de éxito (`titulo: 'Modelo guardado'`, `mensaje: 'Se guardaron los cambios de "..." correctamente.'`) no menciona el cambio de estado.
 
 **D4 — `volumen_oz` nulo deja gr/oz en blanco**  
 Si `volumen_oz` es `null` o `0`, el input gr/oz queda vacío sin mensaje explicativo. El admin no sabe si debe ingresarlo o si hay un problema con el catálogo.
@@ -215,28 +215,36 @@ En `app.js`, antes de llamar a `cargarPesaje()` después del PUT exitoso, verifi
 // Guardar estado previo antes del fetch
 const pesablePrevio = perfilActual.pesable;
 
-// Después de la respuesta exitosa del PUT:
+// Después de la respuesta exitosa del PUT (no existe un componente de "toast" en el
+// proyecto; el mecanismo real de aviso es mostrarDialogoResultado(), ya usado para
+// el diálogo de éxito de este mismo flujo — ver static/app.js:665):
 const data = await resp.json();
 if (pesablePrevio === 0 && data.pesable === 1) {
-  mostrarToast('El producto fue configurado como pesable y movido a Pesables.');
+  mostrarDialogoResultado({
+    tipo: 'success',
+    titulo: 'Modelo guardado',
+    mensaje: 'El producto fue configurado como pesable y se movió a la pestaña Pesables.',
+  });
+} else {
+  mostrarDialogoResultado({ tipo: 'success', titulo: 'Modelo guardado', mensaje: 'Se guardaron los cambios correctamente.' });
 }
 cargarPesaje();
 ```
 
 ### Rec 03 — Renombrar "Copas" para vinos
 
-En `crearFilaPerfilPesaje()` de `app.js`, en la sección donde se detecta `esVino`:
+En `crearFilaPerfilPesaje()` de `app.js`, el label hoy se arma en un template literal, no en una variable dedicada:
 
 ```javascript
-// Antes:
-labelPesoBruto.textContent = 'Peso bruto (copas)';
+// Antes (app.js, dentro del template de crearFilaPerfilPesaje()):
+`Peso bruto (${esVino ? 'copas' : 'g'})`
 
 // Después:
-labelPesoBruto.textContent = 'Copas por botella';
-helpTextPesoBruto.textContent = 'Número de copas estándar que rinde esta botella.';
+`${esVino ? 'Copas por botella' : 'Peso bruto (g)'}`
+// + agregar un texto de ayuda cuando esVino: 'Número de copas estándar que rinde esta botella.'
 ```
 
-Y en el modal de creación `#modelo-botella-dialog` de `index.html`, mismo cambio de label.
+Nota: el modal de creación `#modelo-botella-dialog` (`index.html`) **no** tiene esta rama condicional — su label "Peso bruto (g)" está fijo para toda categoría, vino incluido (no hay lógica `esVino` en `abrirModalModelo()`). Si se quiere el mismo tratamiento ahí, es una adición nueva, no un "mismo cambio" a un label ya condicional.
 
 ---
 

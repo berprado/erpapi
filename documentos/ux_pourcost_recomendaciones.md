@@ -110,8 +110,8 @@ El modal `#pourcost-modal` opera exclusivamente en memoria: **ningún dato escri
 **F2 — "Precios A / Precios B" sin contexto**  
 Los dos toggles de horario no tienen ningún tooltip, texto de ayuda ni etiqueta explicativa. El admin no sabe si A = turno día, A = lunes–jueves, A = precio normal, etc. El sistema de precios del POS puede tener reglas específicas que el admin debe conocer para seleccionar el toggle correcto, y la UI no ofrece ninguna pista.
 
-**F3 — Badge "Costo incompleto" no identifica el ingrediente**  
-La API retorna `costo_incompleto: True` pero no identifica cuál(es) ingrediente(s) carecen de WAC. En el modal, el admin ve la lista de ingredientes sin ninguna marcación visual que indique el problema. No sabe qué actualizar ni dónde.
+**F3 — Badge "Costo incompleto" es solo agregado a nivel de tarjeta** *(marcación por ingrediente ya existe)*  
+La API retorna `costo_incompleto: True` a nivel de cóctel — eso sigue siendo cierto y sirve para saber, desde la grilla, qué tarjetas tienen algún ingrediente sin costear. Pero dentro del modal el detalle por ingrediente **ya está resuelto**: `PourCostIngrediente.sin_wac` (schema) se popula por ingrediente en `/api/pourcost/recetas` y el modal ya renderiza una etiqueta "Sin WAC cacheado" en color de advertencia junto al ingrediente afectado (`pourCostCrearFilaIngrediente()`, desde v11.9). El punto de fricción residual, si lo hay, es de jerarquía visual (texto vs. ícono), no de ausencia de dato.
 
 ### Prioridad media
 
@@ -129,8 +129,8 @@ Si un producto/cóctel no tiene precio definido para el horario A o B, el badge 
 
 ### Prioridad baja
 
-**F8 — Ingredientes opcionales: checkbox pequeño en móvil**  
-El checkbox para incluir/excluir ingredientes opcionales es del tamaño estándar del sistema (`<input type="checkbox">`). En pantallas de 360–390px, el tap puede errar al checkbox o al ± adyacente. El área de tap activa es inferior a los 44px recomendados por WCAG.
+**F8 — Corregido: el checkbox de ingredientes opcionales ya fue agrandado**  
+El checkbox (`h-5 w-5`, 20px) ya está envuelto en un `<label>` con padding negativo/positivo (`-m-xs p-xs`) que amplía el área clickeable más allá del cuadro visual, específicamente para uso táctil en barra (fix v11.9, ver `documentos/pour_cost/pourcost.md` §6.3). No es un punto de fricción activo.
 
 **F9 — Target % y Precio: no hay retroalimentación de cuál campo está "activo"**  
 Los flags `pourCostTargetTocadoManualmente` y `pourCostPrecioTocadoManualmente` controlan cuál campo tiene prioridad, pero visualmente ambos inputs se ven iguales cuando ambos tienen valor. No hay indicación de cuál está "conduciendo" el cálculo.
@@ -145,11 +145,11 @@ Si `GET /api/pourcost/recetas` o `/api/pourcost/productos` falla, la grilla qued
 
 ## Discrepancias frontend ↔ backend
 
-**D1 — `costo_incompleto` no identifica el ingrediente**  
-El backend podría retornar los `id_producto` con WAC nulo dentro del array de ingredientes. Hoy solo retorna el flag booleano. El frontend no puede marcar la fila problemática.
+**D1 — Corregido: el backend ya identifica el ingrediente sin WAC**  
+`PourCostIngrediente.sin_wac: bool` (`schemas.py`) se popula por ingrediente en `/api/pourcost/recetas` (`main.py`), y el frontend ya lo usa para marcar la fila problemática en el modal. No hay gap frontend↔backend en este punto.
 
-**D2 — WAC no tiene timestamp de actualización**  
-`wac_unitario` viene de la vista `vw_pourcost_receta` y puede estar desactualizado si el ERP actualizó costos recientemente. El frontend no tiene forma de informar cuándo fue la última actualización del costo.
+**D2 — WAC de ingredientes de receta no tiene timestamp de actualización**  
+El campo de ingredientes de combo/receta es `wac_actual` (no `wac_unitario`), viene de `vw_pourcost_receta` (`schemas.py:258`, poblado en `main.py:2422`) y puede estar desactualizado si el ERP actualizó costos recientemente. Ese path no incluye un timestamp. Distinto es el caso de productos sueltos e insumos: ahí sí existe `PourCostProducto.fecha_actualizacion_wac` / el mismo campo en `PourCostInsumo` (`schemas.py:288,291,309`, poblado desde `v9_cache_wac_producto` en `main.py:2471`) — el dato ya lo devuelve la API, simplemente el frontend no lo muestra. `wac_unitario` es un nombre de campo distinto, exclusivo de esos dos endpoints (productos/insumos), y no aplica a ingredientes de receta.
 
 **D3 — Precios A/B: la etiqueta "A" / "B" no está en la API**  
 El backend recibe `id_dia` (1 o 2). La interpretación de "A" y "B" es solo fronted. Si el POS tiene nombres reales para esos schedules, la API no los expone y el UI no puede mostrarlos.
@@ -182,7 +182,7 @@ El endpoint retorna el listado de insumos con WAC. No existe ningún panel, tab 
 |---|---|---|---|
 | 01 | Mover buscador dentro del panel POUR COST | Alto | Mínimo |
 | 02 | Tooltip en toggles Precios A/B explicando cada horario | Alto | Mínimo |
-| 03 | Marcar con ícono de advertencia el ingrediente sin WAC en el modal | Alto | Bajo |
+| ~~03~~ | ~~Marcar con ícono de advertencia el ingrediente sin WAC~~ — ya implementado (ver Rec 03) | — | — |
 
 ### Mejoras de presentación (un sprint)
 
@@ -237,15 +237,15 @@ function filtrarPourCost(query) {
 En el HTML del panel, agregar atributos `title` y `aria-label` a cada botón:
 
 ```html
-<!-- Precios A -->
-<button id="btn-pourcost-horario-a"
+<!-- Precios A (id real: pourcost-horario-a, index.html:1078) -->
+<button id="pourcost-horario-a"
         title="Precios A — aplica de lunes a jueves"
         aria-label="Ver precios del horario A">
   Precios A
 </button>
 
-<!-- Precios B -->
-<button id="btn-pourcost-horario-b"
+<!-- Precios B (id real: pourcost-horario-b, index.html:1079) -->
+<button id="pourcost-horario-b"
         title="Precios B — aplica viernes, sábado y domingo"
         aria-label="Ver precios del horario B">
   Precios B
@@ -254,33 +254,14 @@ En el HTML del panel, agregar atributos `title` y `aria-label` a cada botón:
 
 *Ajustar el texto del `title` al calendario real del negocio.*
 
-### Rec 03 — Marcar ingrediente sin WAC
+### Rec 03 — Marcar ingrediente sin WAC *(ya implementado)*
 
-En el backend (`main.py`), agregar campo `sin_wac` por ingrediente:
+El campo `sin_wac` por ingrediente y su marcación visual ya existen (ver F3/D1 corregidos arriba):
 
-```python
-# En el agrupador de ingredientes del endpoint /api/pourcost/recetas:
-{
-    "id_producto": ...,
-    "nombre_insumo": ...,
-    "wac_unitario": wac or None,
-    "sin_wac": wac is None,   # ← nuevo campo
-    ...
-}
-```
+- Backend: `PourCostIngrediente.sin_wac: bool` (`schemas.py:259`), poblado en `/api/pourcost/recetas` (`main.py:2422-2423`).
+- Frontend: `pourCostCrearFilaIngrediente()` (`app.js:2036`) ya renderiza `<p style="color:var(--semantic-warning)">Sin WAC cacheado</p>` por fila cuando `ingrediente.sin_wac` es `true`.
 
-En `pourCostCrearFilaIngrediente()` de `app.js`:
-
-```javascript
-// Agregar ícono de advertencia junto al nombre si sin_wac es true:
-if (ingrediente.sin_wac) {
-  const warn = document.createElement('span');
-  warn.title = 'Sin costo (WAC nulo) — este ingrediente no tiene precio de insumo registrado';
-  warn.textContent = '⚠';
-  warn.className = 'text-semantic-warning ml-xs text-[11px]';
-  nombreEl.appendChild(warn);
-}
-```
+No queda trabajo pendiente en esta recomendación — se retira de los Quick Wins.
 
 ### Rec 05 — Indicar cuál calculadora está activa
 
@@ -336,7 +317,7 @@ El módulo **no escribe nada al backend**. Todo lo que el admin modifica en el m
 | `GET /api/pourcost/menu` | Ítems de menú | — |
 
 Las categorías se derivan en cliente del dataset activo — no hay endpoint propio.  
-El WAC viene de vistas de DB (`vw_pourcost_receta`) y no tiene timestamp de actualización.
+El WAC de ingredientes de receta viene de `vw_pourcost_receta` (campo `wac_actual`) y no tiene timestamp de actualización; el WAC de productos sueltos/insumos viene de `v9_cache_wac_producto` (campo `wac_unitario`) y sí trae `fecha_actualizacion_wac`, aunque el frontend hoy no la muestra (ver D2).
 
 ---
 

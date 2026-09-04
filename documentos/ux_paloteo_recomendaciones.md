@@ -28,8 +28,11 @@
 | Fricción revisión global | 🟢 Baja | 🔴 Alta | 🟡 Media |
 | Pasos por producto pesable | 4–5 taps | 3–4 taps | 5–8 taps |
 | Feedback delta en tiempo real | ✅ Inline | ✅ Inline | Solo en módulo Reporte |
-| Buscador de productos | ❌ | ❌ | ✅ |
-| Exportar PDF | ❌ | ❌ | ✅ (único) |
+| Buscador de productos | ✅ (compartido)¹ | ✅ (compartido)¹ | ✅ (compartido)¹ |
+| Exportar PDF | ❌ (tab aparte)² | ❌ (tab aparte)² | ❌ (tab aparte)² |
+
+¹ Los tres módulos comparten el mismo input de búsqueda del topbar (`BUSQUEDA_POR_TAB` en `app.js`), con comportamiento distinto por tab: en PALOTEO 1 filtra tarjetas (`filtrarInventarioPaloteo1`), en PALOTEO 2 salta el carrusel al primer match (`buscarYNavegarCaptura`), en PALOTEO 3 filtra la tabla (`filtrarStockPaloteo3`). No es una funcionalidad exclusiva de ningún módulo — el gap real es de *discoverability* del ícono, no de lógica faltante.  
+² La exportación PDF (`#reporte-btn-pdf`) vive en el tab separado "Ajustes" (`panel-scan`, también origen del REPORTE), no dentro de ningún panel de Paloteo. Los tres módulos requieren el mismo cambio de tab para llegar al PDF.
 
 ---
 
@@ -45,7 +48,7 @@
 ### Problemas de fricción
 
 **Sobrecarga visual durante la captura.**  
-Las filas Sistema / Barra / Delta son información de *revisión*, no de *entrada*. Tenerlas visibles mientras el usuario tipea complejiza la lectura sin agregar valor en ese momento.
+Las filas Sistema / Barra / Delta son información de *revisión*, no de *entrada*. Tenerlas visibles mientras el usuario tipea complejiza la lectura sin agregar valor en ese momento. Nota: esto no es exclusivo de PALOTEO 1 — la tarjeta de PALOTEO 2 se construye con la misma función (`crearTarjetaProductoElement(producto, 'captura')`), que renderiza las mismas tres filas sin ocultarlas para el scope de captura. El carrusel 1×1 mitiga el impacto (un producto a la vez en vez de una lista completa), pero no elimina la sobrecarga en la tarjeta individual.
 
 **El scroll rompe la cadencia.**  
 Con 15+ productos, el usuario debe desplazarse entre tarjetas. Si necesita corregir un producto anterior, pierde su posición actual sin ningún mecanismo de "volver aquí después".
@@ -75,7 +78,7 @@ Para un producto con 0 unidades y sin botellas abiertas, el usuario debe escribi
 Navegar hacia atrás con [← Prev] interrumpe el ritmo. No hay indicador visual de qué productos ya tienen datos vs. cuáles están pendientes.
 
 **Botones de navegación pequeños en móvil.**  
-Los botones [← Prev] y [Sigt →] son texto plano. En pantallas táctiles, áreas de tap pequeñas generan errores de toque.
+Los botones [← Prev] y [Sigt →] sí tienen fondo, borde e ícono (no son texto plano), pero su altura fija (`h-9`, 36px) queda por debajo del objetivo táctil recomendado de 44px. En pantallas táctiles esto puede generar errores de toque.
 
 ---
 
@@ -86,7 +89,6 @@ Los botones [← Prev] y [Sigt →] son texto plano. En pantallas táctiles, ár
 ### Fortalezas
 - Buscador + botones ± = combinación ideal para ajustar un producto específico rápidamente.
 - Óptimo para correcciones puntuales ("recuenté una botella más").
-- Integración con REPORTE y exportación PDF.
 
 ### Problemas de fricción
 
@@ -96,8 +98,8 @@ Los botones ± son óptimos para ajustes de ±1 o ±2. Para 12 botellas desde ce
 **Densidad excesiva en móvil.**  
 La tabla con tres columnas de controles (input + botón − + botón +) apila elementos muy pequeños en pantallas de 360–390px. Alta probabilidad de tap erróneo entre botones adyacentes.
 
-**Reporte PDF como funcionalidad huérfana.**  
-El usuario que captura en PALOTEO 2 y envía el paloteo no tiene acceso al PDF sin cambiar de módulo. No tiene justificación de UX.
+**Reporte PDF fuera de los tres módulos.**  
+El botón de exportación PDF (`#reporte-btn-pdf`) no está en `panel-stock` (PALOTEO 3) sino en el tab separado "Ajustes" (`panel-scan`). Un usuario que captura en cualquiera de los tres módulos y quiere exportar el PDF debe cambiar de tab igual — no es una fricción específica de PALOTEO 3 frente a los otros dos, sino un problema transversal de descubribilidad (ver hallazgo transversal #4).
 
 ---
 
@@ -129,7 +131,7 @@ El contador "Prod 3/15" es informativo pero sin impacto visual. Una barra de pro
 
 ### 4 — Reporte PDF como funcionalidad huérfana
 
-La exportación PDF vive únicamente en PALOTEO 3. El lugar natural es el estado de éxito post-envío, accesible desde cualquier módulo.
+La exportación PDF (`#reporte-btn-pdf`) vive en el tab separado "Ajustes" (`panel-scan`), no dentro de ningún módulo de Paloteo — ni siquiera PALOTEO 3. El lugar natural es el estado de éxito post-envío, accesible desde cualquier módulo sin cambiar de tab.
 
 ### 5 — Sin indicador de estado por producto en PALOTEO 2
 
@@ -181,25 +183,27 @@ El contador global no revela cuáles productos tienen datos y cuáles están en 
 
 ### Rec 03 — Barra de progreso en PALOTEO 2
 
-Agregar en el HTML del panel-logs un `<div id="barra-progreso-p2">` con estilos CSS, y en `navegarCaptura()`:
+Agregar en el HTML del panel-logs un `<div id="barra-progreso-p2">` con estilos CSS, y actualizarlo en `renderTarjetaCaptura()` (que ya calcula el contador "Prod X/Y" mostrado en el carrusel):
 
 ```javascript
-// En app.js — función navegarCaptura() o la que actualiza el contador
-const pct = ((indiceActual + 1) / totalProductos) * 100;
+// En app.js — dentro de renderTarjetaCaptura(), que ya calcula el contador "Prod X/Y"
+const pct = ((capturaEstado.indice + 1) / capturaEstado.idsOrdenados.length) * 100;
 document.querySelector('#barra-progreso-p2').style.width = pct + '%';
 ```
 
 ### Rec 04 — Botón "Sin stock / Saltar" en PALOTEO 2
 
 ```javascript
-// Lógica del botón "Sin stock":
+// Lógica del botón "Sin stock" (usa el estado y las funciones reales de app.js):
 function saltarProductoSinStock() {
-  const card = obtenerTarjetaCanonica(productoActual.id_producto);
+  const idProducto = capturaEstado.idsOrdenados[capturaEstado.indice];
+  const card = getCardInventarioById(idProducto);
   // Setear cerradas=0, limpiar pesos
   aplicarValoresCard(card, { cerradas: 0, pesos: [] }, crearInputPeso);
-  // Sincronizar y avanzar
-  syncCapturaConInventario(card);
-  if (indiceActual < totalProductos - 1) navegarCaptura(indiceActual + 1);
+  // Sincronizar (opera sobre la tarjeta activa de capturaEstado, sin parámetros)
+  syncCapturaConInventario();
+  // Avanzar un paso (navegarCaptura recibe un delta relativo, no un índice absoluto)
+  navegarCaptura(1);
 }
 ```
 
