@@ -19,6 +19,14 @@ class Settings(BaseSettings):
     PALOTEO_SELECTOR_ENABLED: bool = False
     PALOTEO_ALLOWED_BARRAS: str = "1"
 
+    # Grupos de ope_dia que POUR COST debe ofrecer como horario de precio
+    # seleccionable (separados por coma). ope_dia puede tener más filas de
+    # las que el negocio realmente usa hoy (ej. un grupo creado pero nunca
+    # puesto en producción, con precios en 0) — este allowlist es la fuente
+    # de verdad de "cuáles están realmente activos", igual que
+    # PALOTEO_ALLOWED_BARRAS para barras. Hoy: solo el grupo 1.
+    POURCOST_DIAS_PRECIO_ACTIVOS: str = "1"
+
     # Freno de fuerza bruta en /api/auth/login: máximo de intentos fallidos
     # dentro de la ventana antes de responder 429. Un login exitoso resetea
     # el contador de ese usuario/IP.
@@ -89,7 +97,26 @@ class Settings(BaseSettings):
         if self.PALOTEO_DEFAULT_BARRA_ID not in valores_unicos:
             valores_unicos.insert(0, self.PALOTEO_DEFAULT_BARRA_ID)
         return valores_unicos
-    
+
+    @property
+    def pourcost_dias_precio_activos(self) -> list[int]:
+        valores = []
+        for token in (self.POURCOST_DIAS_PRECIO_ACTIVOS or "").split(','):
+            token = token.strip()
+            if not token:
+                continue
+            try:
+                id_dia = int(token)
+            except ValueError:
+                continue
+            if id_dia > 0:
+                valores.append(id_dia)
+
+        if not valores:
+            valores = [1]
+
+        return list(dict.fromkeys(valores))
+
     # Variables de prueba (WAMP local)
     TEST_DB_HOST: str
     TEST_DB_USER: str

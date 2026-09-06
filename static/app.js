@@ -656,6 +656,7 @@ const resultadoMensaje       = document.getElementById('resultado-mensaje');
 const resultadoBtnsOk        = document.getElementById('resultado-btns-ok');
 const resultadoBtnsConfirm   = document.getElementById('resultado-btns-confirm');
 const btnResultadoOk         = document.getElementById('btn-resultado-ok');
+const btnResultadoExtra      = document.getElementById('btn-resultado-extra');
 const btnResultadoCancelar   = document.getElementById('btn-resultado-cancelar');
 const btnResultadoConfirmar  = document.getElementById('btn-resultado-confirmar');
 
@@ -664,7 +665,7 @@ const btnResultadoConfirmar  = document.getElementById('btn-resultado-confirmar'
  * @param {Object} opts - { tipo: 'success'|'warning'|'error', titulo: string, mensaje: string }
  * @returns {Promise<void>}
  */
-function mostrarDialogoResultado({ tipo = 'success', titulo, mensaje }) {
+function mostrarDialogoResultado({ tipo = 'success', titulo, mensaje, accionExtra }) {
     return new Promise((resolve) => {
         // Configurar icono y color según tipo
         if (tipo === 'success') {
@@ -684,9 +685,21 @@ function mostrarDialogoResultado({ tipo = 'success', titulo, mensaje }) {
         resultadoTituloTexto.textContent = titulo;
         resultadoMensaje.textContent = mensaje || '';
 
-        // Modo resultado: un solo botón "Aceptar"
+        // Modo resultado: botón "Aceptar" + botón extra opcional (accionExtra),
+        // usado hoy solo por el submit de paloteo ("Exportar PDF"). El resto de
+        // los llamados de este modal no pasan accionExtra y no ven ese botón.
         resultadoBtnsOk.classList.remove('hidden');
         resultadoBtnsConfirm.classList.add('hidden');
+
+        let onExtra = null;
+        if (accionExtra && btnResultadoExtra) {
+            btnResultadoExtra.textContent = accionExtra.label;
+            btnResultadoExtra.classList.remove('hidden');
+            onExtra = () => accionExtra.onClick();
+            btnResultadoExtra.addEventListener('click', onExtra);
+        } else if (btnResultadoExtra) {
+            btnResultadoExtra.classList.add('hidden');
+        }
 
         resultadoDialog.classList.remove('hidden');
 
@@ -694,6 +707,7 @@ function mostrarDialogoResultado({ tipo = 'success', titulo, mensaje }) {
             resultadoDialog.classList.add('hidden');
             btnResultadoOk.removeEventListener('click', cerrar);
             resultadoOverlay.removeEventListener('click', cerrar);
+            if (onExtra) btnResultadoExtra.removeEventListener('click', onExtra);
             resolve();
         }
 
@@ -848,6 +862,7 @@ const pesajeCategoriaSel         = document.getElementById('pesaje-categoria');
 const pesajeFiltroPesablesBtn    = document.getElementById('pesaje-filtro-pesables');
 const pesajeFiltroIncompletosBtn = document.getElementById('pesaje-filtro-incompletos');
 const pesajeFiltroNoPesablesBtn  = document.getElementById('pesaje-filtro-no-pesables');
+const pesajeBtnBuscar            = document.getElementById('pesaje-btn-buscar');
 const pesajeList                = document.getElementById('pesaje-list');
 const pesajeEmptyState          = document.getElementById('pesaje-empty-state');
 
@@ -1027,7 +1042,14 @@ function renderizarPesaje() {
     if (pesajeModalProductoActualId != null) {
         const actualizado = productos.get(pesajeModalProductoActualId);
         if (actualizado) {
+            // renderizarModalPesaje() reconstruye #pesaje-modal-perfiles desde
+            // cero (innerHTML=''); sin esto, cada guardado devuelve el scroll
+            // interno del modal al tope, perdiendo la posición si había 3+
+            // perfiles y el admin estaba viendo uno de los últimos.
+            const scrollContainer = pesajeModalPerfiles.parentElement;
+            const scrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
             renderizarModalPesaje(actualizado);
+            if (scrollContainer) scrollContainer.scrollTop = scrollTop;
         } else {
             cerrarModalPesaje();
         }
@@ -1185,7 +1207,10 @@ function crearFilaPerfilPesaje(producto, perfil) {
     const comandarRaw = (producto.nombre_ind_permite_comandar || '').trim().toLowerCase();
     const catalogoPermitePesar = comandarRaw === 'si' || comandarRaw === 'sí';
     const puedeConfigurarPeso = esPesable || catalogoPermitePesar;
-    const puedeEliminar = esPesable && producto.perfiles.length > 1;
+    // Usa perfilesReales (filtra filas fantasma con id==null), igual que el
+    // badge "N modelos" y el resto del módulo — antes usaba producto.perfiles
+    // crudo, que podía habilitar "Eliminar" contando una fila fantasma.
+    const puedeEliminar = esPesable && pesajePerfilesReales(producto).length > 1;
     const esIncompleto = puedeConfigurarPeso && (perfil.peso_bruto === null || perfil.tara === null || perfil.peso_bruto <= 0 || perfil.gramos_por_oz <= 0);
 
     row.className = esIncompleto
@@ -1234,7 +1259,7 @@ function crearFilaPerfilPesaje(producto, perfil) {
             <button type="button" class="pesaje-btn-guardar ${PESAJE_BTN_CLASS}">
                 <span class="material-symbols-outlined text-sm">save</span>Guardar
             </button>
-            ${puedeEliminar ? `<button type="button" class="pesaje-btn-eliminar ${PESAJE_BTN_CLASS}"><span class="material-symbols-outlined text-sm">delete</span>Eliminar</button>` : ''}
+            <button type="button" class="pesaje-btn-eliminar ${PESAJE_BTN_CLASS}"${puedeEliminar ? '' : ' disabled title="Este producto necesita al menos 2 modelos para poder eliminar uno"'}><span class="material-symbols-outlined text-sm">delete</span>Eliminar</button>
         </div>
     `;
 
@@ -1319,11 +1344,20 @@ function crearFilaPerfilPesaje(producto, perfil) {
                 errorEl.classList.remove('hidden');
                 return;
             }
+            // "Promover": si este perfil estaba en pesable=0 (fila fantasma,
+            // ver puedeConfigurarPeso) y el backend detectó elegibilidad, el
+            // producto pasa a pesable=1 sin que la UI lo señale — el usuario
+            // solo vería desaparecer el producto del tab "No pesables" sin
+            // ningún aviso. La respuesta del PUT ya trae `pesable`, así que
+            // se compara contra el estado previo a este guardado (esPesable).
+            const fuePromovido = !esPesable && data.pesable === 1;
             await cargarPesaje();
             await mostrarDialogoResultado({
                 tipo: 'success',
-                titulo: 'Modelo guardado',
-                mensaje: `Se guardaron los cambios de "${perfil.nombre_perfil}" correctamente.`,
+                titulo: fuePromovido ? 'Modelo promovido a pesable' : 'Modelo guardado',
+                mensaje: fuePromovido
+                    ? `"${perfil.nombre_perfil}" ahora es pesable y se movió a la pestaña Pesables.`
+                    : `Se guardaron los cambios de "${perfil.nombre_perfil}" correctamente.`,
             });
         } catch (error) {
             if (error instanceof SesionExpiradaError) return;
@@ -1453,6 +1487,13 @@ if (pesajeFiltroNoPesablesBtn) {
     });
 }
 
+// Segundo punto de entrada al buscador compartido: mismo mecanismo que el
+// ícono del topbar, sin estado ni handler propio (ver hallazgo en el plan
+// de Fase 2 — pesaje/pourcost ya estaban cableados en BUSQUEDA_POR_TAB).
+if (pesajeBtnBuscar) {
+    pesajeBtnBuscar.addEventListener('click', () => abrirBusquedaTopbar());
+}
+
 // ==========================================
 // MÓDULO POUR COST (solo lectura + simulación en memoria)
 // Ver documentos/pour_cost/pourcost.md para el diseño completo. A diferencia
@@ -1477,9 +1518,14 @@ const pourCostEstado = {
 
 const pourCostTipoCoctelesBtn  = document.getElementById('pourcost-tipo-cocteles');
 const pourCostTipoProductosBtn = document.getElementById('pourcost-tipo-productos');
+const pourCostHorarioToggleWrap = document.getElementById('pourcost-horario-toggle-wrap');
 const pourCostHorarioABtn      = document.getElementById('pourcost-horario-a');
 const pourCostHorarioBBtn      = document.getElementById('pourcost-horario-b');
+const pourCostHorarioUnico       = document.getElementById('pourcost-horario-unico');
+const pourCostHorarioUnicoNombre = document.getElementById('pourcost-horario-unico-nombre');
+const pourCostBtnBuscar        = document.getElementById('pourcost-btn-buscar');
 const pourCostCategoriaSel     = document.getElementById('pourcost-categoria');
+const pourCostCategoriaResetAviso = document.getElementById('pourcost-categoria-reset-aviso');
 const pourCostList             = document.getElementById('pourcost-list');
 const pourCostEmptyState       = document.getElementById('pourcost-empty-state');
 
@@ -1592,7 +1638,20 @@ function actualizarCategoriasPourCost() {
         pourCostCategoriaSel.appendChild(option);
     });
 
+    // Si había una categoría elegida y no existe en el nuevo dataset (F5 del
+    // análisis UX), el select se resetea a "Todas" en silencio — sin este
+    // aviso, parece un bug de filtrado en vez de un cambio de contexto.
+    const seReinicioSilenciosamente = !!valorPrevio && !categorias.includes(valorPrevio);
     pourCostCategoriaSel.value = (valorPrevio && categorias.includes(valorPrevio)) ? valorPrevio : '';
+
+    if (pourCostCategoriaResetAviso) {
+        if (seReinicioSilenciosamente) {
+            pourCostCategoriaResetAviso.textContent = `"${valorPrevio}" no existe en ${esCocteles ? 'Cócteles' : 'Productos sueltos'} — se volvió a "Todas las categorías".`;
+            pourCostCategoriaResetAviso.classList.remove('hidden');
+        } else {
+            pourCostCategoriaResetAviso.classList.add('hidden');
+        }
+    }
 }
 
 function mostrarCargandoPourCost() {
@@ -1605,9 +1664,62 @@ function mostrarCargandoPourCost() {
         </div>`;
 }
 
+let pourCostDiasCargados = false;
+let pourCostDiasCargaPromise = null;
+
+/** Trae los grupos de precio (ope_dia) realmente activos hoy (ver
+ * settings.pourcost_dias_precio_activos en config.py) y ajusta la UI: si
+ * el negocio solo usa 1 grupo, oculta el toggle A/B por completo y muestra
+ * su nombre real como texto plano (no tiene sentido "elegir" con 1 opción);
+ * si usa 2, reemplaza los labels fijos "Precios A/B" por los nombres reales
+ * de ope_dia en los mismos 2 botones que ya existen. Se pide una sola vez
+ * por sesión — este allowlist no cambia mientras el admin no reinicie
+ * la app con otra configuración. */
+async function cargarPourCostDias() {
+    if (pourCostDiasCargados) return;
+    if (pourCostDiasCargaPromise) {
+        await pourCostDiasCargaPromise;
+        return;
+    }
+
+    pourCostDiasCargaPromise = (async () => {
+        try {
+            const response = await fetchAutenticado(`${API_BASE}/pourcost/dias`);
+            if (!response.ok) return; // reintenta en la próxima carga del panel, no marca cargados
+            const dias = await response.json();
+
+            if (dias.length <= 1) {
+                if (pourCostHorarioToggleWrap) pourCostHorarioToggleWrap.classList.add('hidden');
+                if (pourCostHorarioUnico) pourCostHorarioUnico.classList.remove('hidden');
+                if (pourCostHorarioUnicoNombre) {
+                    pourCostHorarioUnicoNombre.textContent = dias[0] ? dias[0].nombre : '-';
+                }
+                // Si el único grupo activo no es el 1 (poco probable, pero el
+                // allowlist lo permite), alinear idDia para no pedir datos de
+                // un id_dia que ni siquiera está en el listado devuelto.
+                if (dias[0]) pourCostEstado.idDia = dias[0].id_dia;
+            } else {
+                if (pourCostHorarioUnico) pourCostHorarioUnico.classList.add('hidden');
+                if (pourCostHorarioToggleWrap) pourCostHorarioToggleWrap.classList.remove('hidden');
+                const porId = new Map(dias.map((d) => [d.id_dia, d.nombre]));
+                if (pourCostHorarioABtn && porId.has(1)) pourCostHorarioABtn.textContent = porId.get(1);
+                if (pourCostHorarioBBtn && porId.has(2)) pourCostHorarioBBtn.textContent = porId.get(2);
+            }
+            pourCostDiasCargados = true;
+        } catch (error) {
+            if (error instanceof SesionExpiradaError) return;
+            // Sin datos de ope_dia: se deja el toggle A/B genérico como estaba
+            // (mejor eso que un panel roto), y se reintenta en la próxima carga.
+        }
+    })();
+    await pourCostDiasCargaPromise;
+    pourCostDiasCargaPromise = null;
+}
+
 async function cargarPourCost() {
     if (!pourCostList) return;
     mostrarCargandoPourCost();
+    await cargarPourCostDias();
     actualizarUIFiltrosPourCost();
 
     const endpoint = pourCostEstado.tipo === 'cocteles' ? 'recetas' : 'productos';
@@ -1692,9 +1804,15 @@ if (pourCostHorarioBBtn) {
         cargarPourCost();
     });
 }
+// Segundo punto de entrada al buscador compartido: mismo mecanismo que el
+// ícono del topbar, sin estado ni handler propio.
+if (pourCostBtnBuscar) {
+    pourCostBtnBuscar.addEventListener('click', () => abrirBusquedaTopbar());
+}
 if (pourCostCategoriaSel) {
     pourCostCategoriaSel.addEventListener('change', () => {
         pourCostEstado.idCategoria = pourCostCategoriaSel.value;
+        if (pourCostCategoriaResetAviso) pourCostCategoriaResetAviso.classList.add('hidden');
         renderizarPourCost();
     });
 }
@@ -1767,10 +1885,12 @@ const pourCostModalWacDirectoWrap   = document.getElementById('pourcost-modal-wa
 const pourCostModalWacDirecto       = document.getElementById('pourcost-modal-wac-directo');
 const pourCostModalTarget           = document.getElementById('pourcost-modal-target');
 const pourCostModalSugerido         = document.getElementById('pourcost-modal-sugerido');
+const pourCostModalBtnCopiarSugerido = document.getElementById('pourcost-modal-btn-copiar-sugerido');
 const pourCostModalDelta            = document.getElementById('pourcost-modal-delta');
 const pourCostModalPrecioInput      = document.getElementById('pourcost-modal-precio-input');
 const pourCostModalPctResultado     = document.getElementById('pourcost-modal-pct-resultado');
 const pourCostModalBtnReset         = document.getElementById('pourcost-modal-btn-reset');
+const pourCostModalSinPrecioAviso   = document.getElementById('pourcost-modal-sin-precio-aviso');
 
 // Estado de la simulación del item actualmente abierto (se descarta al cerrar
 // o reabrir con otro item -- nunca se envía al backend).
@@ -1911,6 +2031,12 @@ function pourCostPintarResumenCosto(costoTotal, precioVenta, pct) {
 
     if (pourCostModalCosto) pourCostModalCosto.textContent = pourCostFormatearMoneda(costoTotal);
     if (pourCostModalPrecio) pourCostModalPrecio.textContent = pourCostFormatearMoneda(precioVenta);
+    // Sin precio base para este horario: el campo "Bs precio" de la
+    // calculadora (dirección B) parte vacío sin ningún contexto — F7 del
+    // análisis UX. El aviso se limpia solo al reabrir el modal con datos.
+    if (pourCostModalSinPrecioAviso) {
+        pourCostModalSinPrecioAviso.classList.toggle('hidden', precioVenta != null);
+    }
     if (pourCostModalPct) {
         pourCostModalPct.textContent = pourCostFormatearPct(pct);
         pourCostModalPct.style.color = pourCostColorTexto(pct);
@@ -1918,14 +2044,38 @@ function pourCostPintarResumenCosto(costoTotal, precioVenta, pct) {
     pourCostPintarResultadoPrecio(costoTotal);
 }
 
+/** Resalta cuál de los dos campos de la calculadora bidireccional está
+ * "conduciendo" el cálculo (el que el usuario tocó a mano) y atenúa el otro
+ * (el que se autocompleta). Si se tocaron los dos, dejan de sincronizarse
+ * entre sí (ver pourCostPintarSugerido/pourCostPintarResultadoPrecio) y no
+ * se resalta ninguno — ya son independientes. */
+function pourCostActualizarResaltadoCalculadora() {
+    const targetActivo = pourCostTargetTocadoManualmente && !pourCostPrecioTocadoManualmente;
+    const precioActivo = pourCostPrecioTocadoManualmente && !pourCostTargetTocadoManualmente;
+    if (pourCostModalTarget) {
+        pourCostModalTarget.classList.toggle('border-primary-fixed-dim', targetActivo);
+        pourCostModalTarget.classList.toggle('opacity-60', precioActivo);
+    }
+    if (pourCostModalPrecioInput) {
+        pourCostModalPrecioInput.classList.toggle('border-primary-fixed-dim', precioActivo);
+        pourCostModalPrecioInput.classList.toggle('opacity-60', targetActivo);
+    }
+}
+
 /** Lee el % objetivo del input y pinta precio sugerido + delta vs precio
  * actual. Depende de `costoTotal` explícito (no de pourCostSimulacion) para
  * poder usarse tanto con el valor autoritativo inicial como con el simulado. */
 function pourCostPintarSugerido(costoTotal, precioVenta) {
+    pourCostActualizarResaltadoCalculadora();
     const target = pourCostModalTarget ? parseFloat(pourCostModalTarget.value) : NaN;
     const sugerido = Number.isFinite(target) && target > 0 ? pourCostCalcularPrecioSugerido(costoTotal, target) : null;
 
-    if (pourCostModalSugerido) pourCostModalSugerido.textContent = sugerido ? pourCostFormatearMoneda(sugerido.redondeado) : '-';
+    if (pourCostModalSugerido) {
+        pourCostModalSugerido.textContent = sugerido ? pourCostFormatearMoneda(sugerido.redondeado) : '-';
+        // Valor crudo para el botón "Copiar" (sin símbolo de moneda, para
+        // pegarlo directo en el campo de precio del POS).
+        pourCostModalSugerido.dataset.valorCrudo = sugerido ? String(sugerido.redondeado) : '';
+    }
     if (pourCostModalDelta) {
         if (sugerido && precioVenta != null) {
             const delta = sugerido.redondeado - Number(precioVenta);
@@ -1952,6 +2102,7 @@ function pourCostPintarSugerido(costoTotal, precioVenta) {
  * Se llama desde pourCostPintarResumenCosto (al cambiar el costo) y desde
  * el listener del input de precio (al editar el precio). */
 function pourCostPintarResultadoPrecio(costoTotal) {
+    pourCostActualizarResaltadoCalculadora();
     if (!pourCostModalPctResultado) return;
     const precio = pourCostModalPrecioInput ? parseFloat(pourCostModalPrecioInput.value) : NaN;
     if (!Number.isFinite(precio) || precio <= 0) {
@@ -2344,6 +2495,28 @@ if (pourCostModalBtnReset) {
         if (!pourCostUltimoItemAbierto) return;
         if (pourCostSimulacion?.esCoctel) abrirModalPourCostReceta(pourCostUltimoItemAbierto);
         else abrirModalPourCostProducto(pourCostUltimoItemAbierto);
+    });
+}
+
+if (pourCostModalBtnCopiarSugerido && pourCostModalSugerido) {
+    pourCostModalBtnCopiarSugerido.addEventListener('click', async () => {
+        const valor = pourCostModalSugerido.dataset.valorCrudo;
+        if (!valor) return;
+        try {
+            await navigator.clipboard.writeText(valor);
+            // Feedback breve sin componente de toast: swap de ícono a check por
+            // ~1.2s, mismo patrón liviano que ya usa el resto del proyecto para
+            // confirmaciones puntuales sin bloquear con un modal.
+            const iconoEl = pourCostModalBtnCopiarSugerido.querySelector('.material-symbols-outlined');
+            if (iconoEl) {
+                const original = iconoEl.textContent;
+                iconoEl.textContent = 'check';
+                setTimeout(() => { iconoEl.textContent = original; }, 1200);
+            }
+        } catch (error) {
+            // Clipboard API puede fallar por permisos/contexto no seguro; no
+            // hay nada más que hacer salvo dejar el ícono como estaba.
+        }
     });
 }
 
@@ -4112,12 +4285,19 @@ async function enviarInventario(payload) {
             
             const accion = esCorreccion ? '¡Inventario Corregido!' : '¡Inventario Guardado!';
             inputObservaciones.value = '';
+            // modoEnvioOrigen distingue el envío de PALOTEO 2 (captura) del de
+            // PALOTEO 1 (inventario) — ambos comparten este mismo diálogo de
+            // éxito, pero el PDF de reporte solo tiene sentido tras un paloteo.
+            const esEnvioDeCaptura = modoEnvioOrigen === 'captura';
             cerrarDialogoObservaciones();
             // NO recargar dashboard para mantener los datos en pantalla permitiendo más correcciones
             await mostrarDialogoResultado({
                 tipo: 'success',
                 titulo: accion,
-                mensaje: result.mensaje
+                mensaje: result.mensaje,
+                accionExtra: esEnvioDeCaptura
+                    ? { label: 'Exportar PDF', onClick: () => exportarReportePaloteo3Pdf() }
+                    : undefined,
             });
         } else {
             await mostrarDialogoResultado({
@@ -4878,6 +5058,11 @@ function renderTarjetaCaptura(indice) {
     const producto = productosInventario.find(p => p.id_producto === idProducto);
     if (!producto) return;
 
+    // Se resuelve antes de armar el header para poder pintar el punto de
+    // estado (ver "indicador de estado por producto" más abajo); se reusa
+    // después para aplicar los valores ya cargados a la tarjeta de captura.
+    const cardInventario = getCardInventarioById(idProducto);
+
     capturaCardContainer.innerHTML = '';
     const card = crearTarjetaProductoElement(producto, 'captura');
 
@@ -4925,9 +5110,16 @@ function renderTarjetaCaptura(indice) {
 
     const pctAvance = total > 0 ? Math.round(((indice + 1) / total) * 100) : 0;
 
+    // Indicador de estado del producto actual: verde si ya tiene datos
+    // cargados (útil al volver con [← Prev] a revisar qué falta), gris si
+    // está en blanco. Reusa tarjetaCompleta(), el mismo criterio de
+    // "completo" que ya alimenta el contador global de progreso.
+    const tieneDato = !!cardInventario && tarjetaCompleta(cardInventario);
+    const colorEstadoProducto = tieneDato ? 'var(--semantic-action)' : 'var(--outline-variant)';
+
     const contador = document.createElement('div');
     contador.className = 'justify-self-center flex items-center justify-center gap-1 text-center leading-none min-w-max';
-    contador.innerHTML = `<span id="captura-indice-actual" class="text-[12px] sm:text-sm font-semibold text-primary-fixed tabular-nums">${indice + 1}</span><span class="text-[9px] sm:text-[10px] font-label-mono text-on-surface-variant uppercase tracking-[0.12em]">/</span><span id="captura-indice-total" class="text-[12px] sm:text-sm font-semibold text-primary-fixed tabular-nums">${total}</span><span id="captura-indice-pct" class="text-[9px] sm:text-[10px] font-label-mono text-on-surface-variant tabular-nums">&nbsp;(${pctAvance}%)</span>`;
+    contador.innerHTML = `<span class="inline-block w-[6px] h-[6px] rounded-full" style="background-color:${colorEstadoProducto}" title="${tieneDato ? 'Producto con datos cargados' : 'Producto pendiente'}"></span><span id="captura-indice-actual" class="text-[12px] sm:text-sm font-semibold text-primary-fixed tabular-nums">${indice + 1}</span><span class="text-[9px] sm:text-[10px] font-label-mono text-on-surface-variant uppercase tracking-[0.12em]">/</span><span id="captura-indice-total" class="text-[12px] sm:text-sm font-semibold text-primary-fixed tabular-nums">${total}</span><span id="captura-indice-pct" class="text-[9px] sm:text-[10px] font-label-mono text-on-surface-variant tabular-nums">&nbsp;(${pctAvance}%)</span>`;
 
     headerCaptura.appendChild(botonAnterior);
     headerCaptura.appendChild(contador);
@@ -4941,9 +5133,27 @@ function renderTarjetaCaptura(indice) {
     barraProgreso.innerHTML = `<div class="h-full bg-primary-fixed-dim transition-[width]" style="width:${pctAvance}%"></div>`;
     card.insertBefore(barraProgreso, headerCaptura);
 
+    // Botón "Sin stock / Saltar": para productos con 0 unidades y sin
+    // botellas abiertas, evita escribir "0" a mano y presionar Enter dos
+    // veces. Fila propia full-width, fuera del grid de 3 columnas de
+    // Prev/contador/Sigt para no romper ese layout en móvil.
+    const botonSinStock = document.createElement('button');
+    botonSinStock.type = 'button';
+    botonSinStock.className = 'mb-sm w-full h-9 bg-surface border border-outline-variant text-on-surface-variant rounded-sharp px-xs uppercase tracking-[0.08em] text-[10px] font-label-mono flex items-center justify-center gap-xs hover:border-primary-fixed-dim hover:text-primary-fixed transition-colors disabled:opacity-50';
+    botonSinStock.innerHTML = '<span class="material-symbols-outlined text-[16px]">block</span> Sin stock / Saltar';
+    botonSinStock.disabled = !operativaPermitePaloteo;
+    botonSinStock.addEventListener('click', () => {
+        // Cero explícito (no vacío): tarjetaCompleta() exige un input-peso
+        // con valor >= 0 para marcar un producto pesable como completo, y
+        // peso=0 es semánticamente correcto (no hay botella abierta que pesar).
+        aplicarValoresCard(card, { cerradas: 0, pesos: [{ peso: 0, perfilValue: null }] });
+        syncCapturaConInventario();
+        navegarCaptura(1);
+    });
+    card.insertBefore(botonSinStock, headerCaptura.nextSibling);
+
     capturaCardContainer.appendChild(card);
 
-    const cardInventario = getCardInventarioById(idProducto);
     if (cardInventario) {
         aplicarValoresCard(card, leerValoresCard(cardInventario));
     } else {

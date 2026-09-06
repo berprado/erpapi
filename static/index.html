@@ -1023,6 +1023,13 @@
                     </h2>
                     <p class="text-[11px] text-on-surface-variant mt-[2px] leading-tight">Modelos de botella y códigos de barra</p>
                 </div>
+                <!-- Segundo punto de entrada al buscador compartido del topbar (mismo
+                     mecanismo que #btn-topbar-search-toggle, ver abrirBusquedaTopbar()
+                     en app.js) — no duplica estado ni lógica de filtrado. -->
+                <button id="pesaje-btn-buscar" type="button" class="shrink-0 bg-surface border border-outline-variant text-on-surface-variant px-sm py-[6px] rounded-sharp text-[10px] font-label-mono uppercase tracking-widest flex items-center gap-xs hover:border-primary-fixed-dim hover:text-primary-fixed transition-colors">
+                    <span class="material-symbols-outlined" style="font-size:1rem;">search</span>
+                    Buscar
+                </button>
             </div>
 
 
@@ -1064,6 +1071,13 @@
                     </h2>
                     <p class="text-[11px] text-on-surface-variant mt-[2px] leading-tight">Costo de receta y simulación de precio de venta</p>
                 </div>
+                <!-- Segundo punto de entrada al buscador compartido del topbar (mismo
+                     mecanismo que #btn-topbar-search-toggle, ver abrirBusquedaTopbar()
+                     en app.js) — no duplica estado ni lógica de filtrado. -->
+                <button id="pourcost-btn-buscar" type="button" class="shrink-0 bg-surface border border-outline-variant text-on-surface-variant px-sm py-[6px] rounded-sharp text-[10px] font-label-mono uppercase tracking-widest flex items-center gap-xs hover:border-primary-fixed-dim hover:text-primary-fixed transition-colors">
+                    <span class="material-symbols-outlined" style="font-size:1rem;">search</span>
+                    Buscar
+                </button>
             </div>
 
             <!-- Tipo: Cócteles (con receta) / Productos sueltos (WAC directo) -->
@@ -1074,14 +1088,20 @@
 
             <!-- Horario de precio (id_dia) + filtro de categoría -->
             <div class="mb-sm flex flex-wrap gap-xs items-center">
-                <div class="flex gap-xs shrink-0">
+                <!-- Botones con nombres reales de ope_dia (via /api/pourcost/dias), no
+                     "Precios A/B" inventado -- ver cargarPourCostDias() en app.js. Si el
+                     negocio solo tiene 1 grupo activo (settings.pourcost_dias_precio_activos),
+                     este contenedor se oculta entero y se muestra #pourcost-horario-unico. -->
+                <div id="pourcost-horario-toggle-wrap" class="hidden flex gap-xs shrink-0">
                     <button id="pourcost-horario-a" type="button" class="pourcost-horario-btn bg-primary-container text-black border border-primary-fixed-dim px-sm py-[6px] rounded-sharp text-[10px] font-label-mono uppercase tracking-widest">Precios A</button>
                     <button id="pourcost-horario-b" type="button" class="pourcost-horario-btn bg-surface border border-outline-variant text-on-surface px-sm py-[6px] rounded-sharp text-[10px] font-label-mono uppercase tracking-widest">Precios B</button>
                 </div>
+                <span id="pourcost-horario-unico" class="hidden shrink-0 text-[10px] font-label-mono uppercase tracking-widest text-on-surface-variant px-sm py-[6px]">Precios: <span id="pourcost-horario-unico-nombre" class="text-on-surface"></span></span>
                 <select id="pourcost-categoria" class="flex-1 min-w-[160px] bg-surface-container border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-body-base">
                     <option value="">Todas las categorías</option>
                 </select>
             </div>
+            <p id="pourcost-categoria-reset-aviso" class="hidden -mt-xs mb-sm text-[10px] text-on-surface-variant"></p>
 
             <!-- Listado: grid responsivo, la cantidad de columnas se adapta al ancho disponible -->
             <div id="pourcost-list" class="grid gap-sm" style="grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));"></div>
@@ -1331,7 +1351,12 @@
                             <div class="grid grid-cols-2 gap-sm text-center">
                                 <div>
                                     <p class="text-label-mono text-on-surface-variant tracking-widest uppercase text-[10px] mb-xs">Precio sugerido</p>
-                                    <p id="pourcost-modal-sugerido" class="text-sm font-semibold text-primary-fixed font-data-tabular">-</p>
+                                    <p class="flex items-center justify-center gap-xs">
+                                        <span id="pourcost-modal-sugerido" class="text-sm font-semibold text-primary-fixed font-data-tabular">-</span>
+                                        <button type="button" id="pourcost-modal-btn-copiar-sugerido" class="topbar-icon-btn" title="Copiar precio sugerido" aria-label="Copiar precio sugerido">
+                                            <span class="material-symbols-outlined" style="font-size:1rem;">content_copy</span>
+                                        </button>
+                                    </p>
                                 </div>
                                 <div>
                                     <p class="text-label-mono text-on-surface-variant tracking-widest uppercase text-[10px] mb-xs">Vs. precio actual</p>
@@ -1351,6 +1376,7 @@
                                     <span id="pourcost-modal-pct-resultado" class="text-sm font-semibold font-data-tabular">-</span>
                                 </div>
                             </div>
+                            <p id="pourcost-modal-sin-precio-aviso" class="hidden mt-sm text-[10px] text-on-surface-variant">Este ítem no tiene un precio de venta cargado para el horario seleccionado — el campo "Bs precio" parte vacío. Ingresá uno para simular el pour cost.</p>
                         </div>
 
                         <button type="button" id="pourcost-modal-btn-reset" class="mt-md w-full bg-surface border border-outline-variant text-on-surface py-sm px-md rounded-sharp text-[10px] font-label-mono uppercase tracking-widest hover:border-primary-fixed-dim hover:text-primary-fixed transition-colors flex items-center justify-center gap-xs">
@@ -1411,9 +1437,13 @@
                     <span id="resultado-titulo-texto">Resultado</span>
                 </h3>
                 <p id="resultado-mensaje" class="text-sm text-on-surface-variant mb-md whitespace-pre-line"></p>
-                <!-- Botones para modo resultado (1 botón) -->
-                <div id="resultado-btns-ok" class="flex justify-end">
-                    <button id="btn-resultado-ok" class="bg-primary-container text-on-primary-fixed font-headline-md text-body-base py-sm px-md rounded-sharp flex items-center justify-center gap-sm hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest">
+                <!-- Botones para modo resultado (1 o 2 botones). El botón extra es
+                     opcional (accionExtra en mostrarDialogoResultado) y solo se usa
+                     hoy para "Exportar PDF" tras un envío de paloteo exitoso. -->
+                <div id="resultado-btns-ok" class="flex flex-col sm:flex-row sm:justify-end gap-sm">
+                    <button id="btn-resultado-extra" class="hidden w-full sm:w-auto bg-surface text-on-surface border border-outline-variant py-sm px-md rounded-sharp flex items-center justify-center gap-sm uppercase tracking-widest text-label-mono hover:border-primary-fixed-dim transition-colors">
+                    </button>
+                    <button id="btn-resultado-ok" class="w-full sm:w-auto bg-primary-container text-on-primary-fixed font-headline-md text-body-base py-sm px-md rounded-sharp flex items-center justify-center gap-sm hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest">
                         <span class="material-symbols-outlined text-sm">check</span>
                         Aceptar
                     </button>
@@ -1432,7 +1462,7 @@
         </div>
     </div>
 
-    <script src="/assets/app.js?v=12.3"></script>
+    <script src="/assets/app.js?v=12.4"></script>
 
     <script>
         (function () {
@@ -1481,7 +1511,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/assets/sw.js?v=12.3')
+                navigator.serviceWorker.register('/assets/sw.js?v=12.4')
                     .then(reg => console.log('[PWA] Service Worker registrado:', reg.scope))
                     .catch(err => console.error('[PWA] Error al registrar SW:', err));
             });
