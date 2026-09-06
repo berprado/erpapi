@@ -509,7 +509,7 @@ function crearInputPeso(perfilesJson, removable = true, esVino = false) {
         <div class="relative flex items-center item-peso-wrapper gap-sm">
             ${selectHTML}
             <div class="relative flex-1">
-                <input type="number" min="0" step="${step}" class="w-full bg-surface border border-outline-variant rounded-md pl-md pr-lg py-sm text-on-surface input-peso focus:border-error focus:outline-none focus:shadow-cyan-glow-focus font-data-tabular" placeholder="${placeholder}" required${disabledAttr}>
+                <input type="number" inputmode="decimal" min="0" step="${step}" class="w-full bg-surface border border-outline-variant rounded-md pl-md pr-lg py-sm text-on-surface input-peso focus:border-error focus:outline-none focus:shadow-cyan-glow-focus font-data-tabular" placeholder="${placeholder}" required${disabledAttr}>
                 ${removeButtonHtml}
             </div>
         </div>
@@ -546,7 +546,7 @@ function crearInputPesoCompacto(perfilesJson, removable = true, esVino = false) 
     return `
         <div class="item-peso-wrapper flex items-center gap-1">
             ${selectHTML}
-            <input type="number" min="0" step="${step}" class="input-peso w-14 text-center bg-surface border border-outline-variant rounded px-1 py-1 text-on-surface focus:border-primary-fixed-dim focus:outline-none transition-colors" placeholder="0"${disabledAttr}>
+            <input type="number" inputmode="decimal" min="0" step="${step}" class="input-peso w-14 text-center bg-surface border border-outline-variant rounded px-1 py-1 text-on-surface focus:border-primary-fixed-dim focus:outline-none transition-colors" placeholder="0"${disabledAttr}>
             <button type="button" class="stock-btn-dec-peso${claseBotonAjustePeso} flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded text-on-surface hover:bg-surface-container-highest transition-colors font-semibold leading-none" title="Restar"${disabledAttr}>−</button>
             <button type="button" class="stock-btn-inc-peso${claseBotonAjustePeso} flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded text-on-surface hover:bg-surface-container-highest transition-colors font-semibold leading-none" title="Sumar"${disabledAttr}>+</button>
             ${removeButtonHtml}
@@ -633,6 +633,8 @@ const modeloBotellaOverlay = document.getElementById('modelo-botella-overlay');
 const modeloBotellaSubtit  = document.getElementById('modelo-botella-subtitulo');
 const mbNombre     = document.getElementById('mb-nombre');
 const mbNombreHint = document.getElementById('mb-nombre-hint');
+const mbLabelPesoBruto = document.getElementById('mb-label-peso-bruto');
+const mbPesoBrutoHint  = document.getElementById('mb-peso-bruto-hint');
 const mbPesoBruto  = document.getElementById('mb-peso-bruto');
 const mbTara       = document.getElementById('mb-tara');
 const mbGramosOz   = document.getElementById('mb-gramos-oz');
@@ -753,6 +755,8 @@ function abrirModalModelo(nombreProducto, perfilBase, volumenOz, forzarEstandar 
         mbTara.value      = esVino ? '0' : (perfilBase ? perfilBase.tara : '');
         mbBarcode.value   = perfilBase ? (perfilBase.barcode || '') : '';
         mbTara.readOnly = esVino;
+        if (mbLabelPesoBruto) mbLabelPesoBruto.textContent = esVino ? 'Copas por botella' : 'Peso bruto (g)';
+        if (mbPesoBrutoHint) mbPesoBrutoHint.classList.toggle('hidden', !esVino);
         mbError.classList.add('hidden');
         mbError.textContent = '';
 
@@ -785,6 +789,9 @@ function abrirModalModelo(nombreProducto, perfilBase, volumenOz, forzarEstandar 
             mbTara.readOnly = false;
             if (mbNombreHint) {
                 mbNombreHint.classList.add('hidden');
+            }
+            if (mbPesoBrutoHint) {
+                mbPesoBrutoHint.classList.add('hidden');
             }
             btnConfirmarModelo.removeEventListener('click', onConfirmar);
             btnCancelarModelo.removeEventListener('click', onCancelar);
@@ -1205,8 +1212,9 @@ function crearFilaPerfilPesaje(producto, perfil) {
         ` : ''}
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-sm ${puedeConfigurarPeso ? '' : 'hidden'}">
             <div>
-                <label class="text-[10px] font-label-mono uppercase tracking-widest text-on-surface-variant block mb-xs">Peso bruto (${esVino ? 'copas' : 'g'})</label>
+                <label class="text-[10px] font-label-mono uppercase tracking-widest text-on-surface-variant block mb-xs">${esVino ? 'Copas por botella' : 'Peso bruto (g)'}</label>
                 <input type="number" min="0" step="0.01" class="pesaje-input-peso-bruto w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface font-data-tabular" value="${perfil.peso_bruto ?? ''}">
+                ${esVino ? '<p class="text-[10px] text-on-surface-variant mt-[2px]">Número de copas estándar que rinde esta botella.</p>' : ''}
             </div>
             <div>
                 <label class="text-[10px] font-label-mono uppercase tracking-widest text-on-surface-variant block mb-xs">Tara (${esVino ? 'constante' : 'g'})</label>
@@ -1309,11 +1317,6 @@ function crearFilaPerfilPesaje(producto, perfil) {
             if (!response.ok) {
                 errorEl.textContent = data.detail || 'No se pudo guardar.';
                 errorEl.classList.remove('hidden');
-                await mostrarDialogoResultado({
-                    tipo: 'error',
-                    titulo: 'No se pudo guardar',
-                    mensaje: data.detail || 'Ocurrió un error al guardar el modelo.',
-                });
                 return;
             }
             await cargarPesaje();
@@ -1326,11 +1329,6 @@ function crearFilaPerfilPesaje(producto, perfil) {
             if (error instanceof SesionExpiradaError) return;
             errorEl.textContent = 'Error de red al guardar.';
             errorEl.classList.remove('hidden');
-            await mostrarDialogoResultado({
-                tipo: 'error',
-                titulo: 'Error de red',
-                mensaje: 'No se pudo conectar con el servidor para guardar los cambios.',
-            });
         } finally {
             // Si el guardado fue exitoso, cargarPesaje() ya recreó esta fila
             // (btnGuardar quedó desprendido); restaurar aquí es inocuo. En los
@@ -1405,6 +1403,11 @@ async function agregarModeloPesaje(producto) {
         }
 
         await cargarPesaje();
+        await mostrarDialogoResultado({
+            tipo: 'success',
+            titulo: 'Modelo creado',
+            mensaje: `Se creó el modelo "${datos.nombre}" correctamente.`,
+        });
     } catch (error) {
         if (error instanceof SesionExpiradaError) return;
         mbError.textContent = 'Error de red al crear el modelo de botella.';
@@ -3119,12 +3122,12 @@ function crearTarjetaProductoElement(p, scope = 'inv') {
         <div class="grid ${p.pesable === 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'} gap-md items-start">
             <div>
                 <label class="block text-label-mono font-label-mono text-on-surface-variant mb-xs tracking-widest uppercase">Unidades</label>
-                <input type="number" min="0" class="w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-on-surface input-cerradas focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus font-data-tabular" placeholder="0"${!operativaPermitePaloteo ? ' disabled' : ''}>
+                <input type="number" inputmode="numeric" min="0" class="w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-on-surface input-cerradas focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus font-data-tabular" placeholder="0"${!operativaPermitePaloteo ? ' disabled' : ''}>
             </div>
 
             ${p.pesable === 1 ? `
             <div class="border-t border-outline-variant pt-md sm:border-t-0 sm:border-l sm:pt-0 sm:pl-md">
-                <label class="block text-label-mono font-label-mono text-on-surface-variant mb-xs tracking-widest uppercase">${esVino ? 'Copas' : 'Peso'}</label>
+                <label class="block text-label-mono font-label-mono text-on-surface-variant mb-xs tracking-widest uppercase">${esVino ? 'Copas' : 'Peso (g)'}</label>
                 <div class="pesos-container grid grid-cols-1 gap-sm" id="${pesosContainerId}">
                     ${crearInputPeso(perfilesJson, false, esVino)}
                 </div>
@@ -3229,7 +3232,7 @@ function crearFilaPaloteo3(producto) {
                 <!-- Unidades con botones +/- (solo administradores) -->
                 <div class="flex items-center gap-1">
                     <span class="material-symbols-outlined text-on-surface-variant" style="font-size:1.4rem;" title="Unidades">123</span>
-                    <input type="number" min="0" step="1" class="input-cerradas stock-input-unidades w-14 text-center bg-surface border border-outline-variant rounded px-1 py-1 text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors" placeholder="0"${disabledAttrFila}>
+                    <input type="number" inputmode="numeric" min="0" step="1" class="input-cerradas stock-input-unidades w-14 text-center bg-surface border border-outline-variant rounded px-1 py-1 text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors" placeholder="0"${disabledAttrFila}>
                     <button type="button" class="stock-btn-dec-unid${claseBotonAjusteUnidades} flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded flex items-center justify-center text-on-surface hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors font-semibold leading-none" title="Restar"${disabledAttrFila}>−</button>
                     <button type="button" class="stock-btn-inc-unid${claseBotonAjusteUnidades} flex-none px-1.5 py-1 bg-surface border border-outline-variant rounded flex items-center justify-center text-on-surface hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors font-semibold leading-none" title="Sumar"${disabledAttrFila}>+</button>
                 </div>
@@ -3237,7 +3240,7 @@ function crearFilaPaloteo3(producto) {
                 ${esPesable ? `
                 <!-- Pesos (una o más botellas abiertas) con botones +/- y selector de perfil si aplica -->
                 <div class="flex items-center gap-1">
-                    <span class="material-symbols-outlined text-on-surface-variant" style="font-size:1.1rem;" title="${esVino ? 'Copas' : 'Peso'}">balance</span>
+                    <span class="material-symbols-outlined text-on-surface-variant" style="font-size:1.1rem;" title="${esVino ? 'Copas' : 'Peso (g)'}">balance</span>
                     <div class="pesos-container flex flex-col gap-1" id="stock-pesos-${producto.id_producto}">
                         ${crearInputPesoCompacto(perfilesJson, false, esVino)}
                     </div>
@@ -4930,6 +4933,13 @@ function renderTarjetaCaptura(indice) {
     headerCaptura.appendChild(contador);
     headerCaptura.appendChild(botonSiguiente);
     card.insertBefore(headerCaptura, card.firstChild);
+
+    // Barra de progreso visual del carrusel: refuerza el contador "X/Y (pct%)"
+    // con una señal a simple vista, sin tocar el grid de 3 columnas del header.
+    const barraProgreso = document.createElement('div');
+    barraProgreso.className = 'mb-sm w-full h-[3px] bg-surface-container-highest rounded-full overflow-hidden';
+    barraProgreso.innerHTML = `<div class="h-full bg-primary-fixed-dim transition-[width]" style="width:${pctAvance}%"></div>`;
+    card.insertBefore(barraProgreso, headerCaptura);
 
     capturaCardContainer.appendChild(card);
 

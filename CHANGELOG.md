@@ -11,6 +11,13 @@ separado con git tags semanticos (`vMAJOR.MINOR.PATCH`) — ver seccion
 version productiva en uso real), corresponde a este mismo punto de la
 historia, `## 12.2` de abajo.
 
+## 12.3
+- PALOTEO: `inputmode` numérico/decimal en inputs de unidades y peso; label de peso ahora dice "Peso (g)".
+- PALOTEO 2: barra de progreso visual en el carrusel de captura, junto al contador "Prod X/Y".
+- PESAJE: se elimina el diálogo modal duplicado al fallar un guardado (queda solo el error inline); se agrega confirmación de éxito al crear un modelo nuevo (antes no daba ningún aviso).
+- PESAJE: label "Peso bruto (copas)" renombrado a "Copas por botella" con texto de ayuda, en el modal de edición y en el de creación de modelo.
+- POUR COST: nota "Solo en esta simulación" junto al campo WAC editable de productos sueltos.
+
 ## 12.2
 - PDF de PALOTEO 3: el logo del encabezado ahora usa la marca activa (`_LOGO_PATH` via `logo_navbar_full`) en vez de un archivo fijo de casa matriz.
 

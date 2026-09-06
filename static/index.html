@@ -1151,9 +1151,10 @@
                         <div class="grid grid-cols-2 gap-sm">
                             <!-- Peso bruto -->
                             <div>
-                                <label class="text-[10px] font-label-mono tracking-widest uppercase text-on-surface-variant block mb-xs">Peso bruto (g)</label>
+                                <label id="mb-label-peso-bruto" class="text-[10px] font-label-mono tracking-widest uppercase text-on-surface-variant block mb-xs">Peso bruto (g)</label>
                                 <input id="mb-peso-bruto" type="number" min="0" step="0.01" placeholder="Ej: 1200"
                                     class="w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-data-tabular">
+                                <p id="mb-peso-bruto-hint" class="hidden mt-xs text-[10px] text-on-surface-variant">Número de copas estándar que rinde esta botella.</p>
                             </div>
                             <!-- Tara -->
                             <div>
@@ -1313,6 +1314,7 @@
                             <label class="text-[10px] font-label-mono tracking-widest uppercase text-on-surface-variant block mb-xs">WAC (costo unitario)</label>
                             <input id="pourcost-modal-wac-directo" type="number" min="0" step="0.0001"
                                 class="w-full bg-surface border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface font-data-tabular focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors">
+                            <p class="mt-xs text-[10px] text-on-surface-variant">Solo en esta simulación — no se guarda ni se envía al sistema.</p>
                         </div>
 
                         <!-- Sandbox: calculadora bidireccional precio ↔ pour cost -->
@@ -1430,7 +1432,7 @@
         </div>
     </div>
 
-    <script src="/assets/app.js?v=12.2"></script>
+    <script src="/assets/app.js?v=12.3"></script>
 
     <script>
         (function () {
@@ -1479,7 +1481,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/assets/sw.js?v=12.2')
+                navigator.serviceWorker.register('/assets/sw.js?v=12.3')
                     .then(reg => console.log('[PWA] Service Worker registrado:', reg.scope))
                     .catch(err => console.error('[PWA] Error al registrar SW:', err));
             });
