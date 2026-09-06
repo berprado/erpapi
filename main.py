@@ -2321,6 +2321,35 @@ def _float_o_none(valor) -> Optional[float]:
     return float(valor) if valor is not None else None
 
 
+@app.get("/api/pourcost/dias", response_model=List[schemas.PourCostDia])
+def listar_pourcost_dias(
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_usuario_administrador)
+):
+    """Grupos de precio (ope_dia) que el negocio realmente usa hoy, según el
+    allowlist POURCOST_DIAS_PRECIO_ACTIVOS -- ope_dia puede tener más filas de
+    las que están en producción real (ver config.py, pourcost_dias_precio_activos).
+    ope_dia no está mapeada en models.py (tabla externa al ORM de esta app,
+    igual que otras consultadas solo via sqlalchemy.text() en este módulo)."""
+    dias_activos = settings.pourcost_dias_precio_activos
+    if not dias_activos:
+        return []
+
+    placeholders = ", ".join(f":dia_{i}" for i in range(len(dias_activos)))
+    params = {f"dia_{i}": id_dia for i, id_dia in enumerate(dias_activos)}
+    rows = db.execute(
+        text(f"""
+            SELECT id, dia
+            FROM ope_dia
+            WHERE estado = 'HAB' AND id IN ({placeholders})
+            ORDER BY id
+        """),
+        params
+    ).mappings().all()
+
+    return [schemas.PourCostDia(id_dia=row["id"], nombre=row["dia"]) for row in rows]
+
+
 @app.get("/api/pourcost/menu", response_model=List[schemas.PourCostMenuItem])
 def listar_pourcost_menu(
     id_dia: int = Query(1, ge=1, description="Horario de precio; 1 por defecto (ver pourcost.md, seccion 8.2)"),

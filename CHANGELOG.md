@@ -11,6 +11,13 @@ separado con git tags semanticos (`vMAJOR.MINOR.PATCH`) — ver seccion
 version productiva en uso real), corresponde a este mismo punto de la
 historia, `## 12.2` de abajo.
 
+## 12.4
+- PESAJE/POUR COST: chip "Buscar" en el header de ambos paneles, segundo punto de entrada al buscador compartido del topbar (sin duplicar lógica).
+- PESAJE: se preserva la posición de scroll del modal de edición al guardar; botón "Eliminar" ahora siempre visible (deshabilitado + tooltip explicativo cuando no aplica, en vez de desaparecer del DOM); mensaje específico al promover un perfil fantasma a pesable.
+- PALOTEO 2: botón "Sin stock / Saltar" para productos sin unidades ni botellas abiertas; punto de color junto al contador indicando si el producto ya tiene datos cargados.
+- PALOTEO: el modal de éxito al enviar un paloteo ahora ofrece un botón "Exportar PDF" (antes solo disponible cambiando al tab Ajustes/REPORTE).
+- POUR COST: los botones de horario de precio ("Precios A/B") ahora muestran los nombres reales de `ope_dia` en vez de una etiqueta inventada, y se ocultan por completo si el negocio solo tiene un grupo de precio activo (nuevo endpoint `GET /api/pourcost/dias` + `POURCOST_DIAS_PRECIO_ACTIVOS` en `config.py`); se resalta visualmente cuál campo de la calculadora bidireccional está activo; aviso cuando no hay precio cargado para el horario elegido; aviso al resetear la categoría por cambio de tipo Cócteles↔Productos; botón para copiar el precio sugerido al portapapeles.
+
 ## 12.3
 - PALOTEO: `inputmode` numérico/decimal en inputs de unidades y peso; label de peso ahora dice "Peso (g)".
 - PALOTEO 2: barra de progreso visual en el carrusel de captura, junto al contador "Prod X/Y".

@@ -228,6 +228,13 @@ class AplicarAjustesResponse(BaseModel):
 
 # --- POUR COST (solo lectura, ver documentos/pour_cost/pourcost.md) ---
 
+class PourCostDia(BaseModel):
+    """Un grupo de precio de ope_dia habilitado por POURCOST_DIAS_PRECIO_ACTIVOS
+    (settings.pourcost_dias_precio_activos) -- ver main.py, listar_pourcost_dias."""
+    id_dia: int
+    nombre: str
+
+
 class PourCostMenuItem(BaseModel):
     """Una fila de v9_menubackstage: combo o producto suelto con su precio vigente para el id_dia pedido."""
     codigo: str
