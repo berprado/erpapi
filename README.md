@@ -114,6 +114,10 @@ PROD_DB_PORT=3306
 PALOTEO_DEFAULT_BARRA_ID=1
 PALOTEO_SELECTOR_ENABLED=false
 PALOTEO_ALLOWED_BARRAS=1
+
+# POUR COST: grupos de precio (ope_dia) que la instancia realmente usa,
+# separados por coma. Ver "POUR COST" mas abajo. Default: "1".
+POURCOST_DIAS_PRECIO_ACTIVOS=1
 ```
 
 Generar una `SECRET_KEY` segura:
@@ -174,6 +178,7 @@ Reglas de barra operativa:
 1. Si `PALOTEO_SELECTOR_ENABLED=false`, la barra se fija por `PALOTEO_DEFAULT_BARRA_ID`.
 2. Si `PALOTEO_SELECTOR_ENABLED=true`, frontend puede enviar `X-Barra-Id` (solo valores de `PALOTEO_ALLOWED_BARRAS`).
 3. En `POST/PUT /api/inventario/paloteo`, `payload.id_barra` debe coincidir con la barra operativa resuelta.
+4. `/pendientes` y `/catalogo/buscar` filtran explícitamente `AND i.id_barra = :id_barra` al unir contra `vista_inventario_barra_con_filtro` (fix 2026-09-08, `CHANGELOG` 12.5) — la vista **no** viene pre-filtrada a la barra activa pese a su nombre; sin este filtro, un producto con movimiento en más de una barra devolvía una fila (y cada perfil de pesaje asociado) por cada barra.
 
 ### Perfiles de Pesaje (requiere JWT + rol administrador)
 
@@ -325,6 +330,7 @@ Modulo de solo lectura: calcula el costo de receta (WAC) y el pour cost % de com
 
 | Metodo | Ruta | Descripcion |
 |---|---|---|
+| `GET` | `/api/pourcost/dias` | Grupos de precio (`ope_dia`) que la instancia realmente usa, segun el allowlist `POURCOST_DIAS_PRECIO_ACTIVOS` (`config.py`) — devuelve `id_dia`/`nombre` reales, no un `id_dia` inventado. `ope_dia` puede tener mas filas de las que estan realmente en produccion (un grupo creado pero nunca puesto en uso, con precios en `0`); este endpoint es la fuente de verdad de "cuales estan activos", no la mera existencia de filas en `ope_dia`/`ope_precio_venta` |
 | `GET` | `/api/pourcost/menu?id_dia=1` | Menu activo (combos + productos sueltos) con su `precio_venta` para el `id_dia` pedido |
 | `GET` | `/api/pourcost/recetas?id_dia=1` | Combos agregados desde `vw_pourcost_receta`: costo total de receta, `precio_venta` del `id_dia` pedido, pour cost % y la lista de ingredientes con su `cogs_ingrediente` |
 | `GET` | `/api/pourcost/productos?id_dia=1` | Productos sueltos comandables (sin receta): costo = su WAC directo (`v9_cache_wac_producto`), sin agregacion de lineas |
@@ -335,7 +341,8 @@ Reglas:
 1. `id_dia` es un "horario de precio" (ej. jueves-sabado vs. domingo-lunes con tarifa distinta), no un dia calendario 1:1 — se selecciona manualmente en la UI, default `1`. Las vistas fuente traen su propio `precio_venta` fijo a `id_dia=1`; los endpoints lo ignoran y resuelven el precio aparte contra `v9_menubackstage` filtrando por el `id_dia` recibido.
 2. `sin_wac`/`costo_incompleto` marcan ingredientes sin WAC cacheado (`cache_wac_producto` vacio) — no se ocultan ni se tratan como costo cero silencioso.
 3. Las vistas fuente (`v9_menubackstage`, `vw_pourcost_receta`, `vw_alm_producto_con_nombres`, `v9_cache_wac_producto`) viven en MySQL, no en el ORM de este repo — mismo patron que los triggers de `alm_producto`. DDL versionado en `querys/create_views_pourcost.sql`; ya existen en `test_pos`, que es el entorno de desarrollo/validacion de este modulo (ver `documentos/pour_cost/pourcost.md`, seccion 2).
-4. Sin `Aplicar Precio` (escritura en `ope_precio_venta`) todavia — explicitamente fuera de alcance de esta fase.
+4. `POURCOST_DIAS_PRECIO_ACTIVOS` (`config.py`, default `"1"`, lista separada por coma, mismo patron que `PALOTEO_ALLOWED_BARRAS`) determina que `id_dia` de `ope_dia` expone `GET /api/pourcost/dias` y, por lo tanto, si el frontend muestra el selector "Precios A/B" con sus 2 botones (nombres reales de `ope_dia`) o lo oculta y muestra un solo grupo como texto plano (caso de hoy: solo el grupo 1 esta realmente en uso).
+5. Sin `Aplicar Precio` (escritura en `ope_precio_venta`) todavia — explicitamente fuera de alcance de esta fase.
 
 ---
 
@@ -544,6 +551,13 @@ cuenta cuantos productos ya tienen unidades/peso ingresados
 revela el inventario ideal, solo el avance de la captura, y se mantiene
 sincronizada entre ambos modulos porque comparten el mismo origen de datos.
 
+### PALOTEO 2: carrusel de captura
+
+- Todos los inputs de unidades y peso usan `inputmode` (`numeric`/`decimal`) para forzar teclado numerico en movil; el label de peso dice "Peso (g)" (antes solo "Peso").
+- El header del carrusel (`renderTarjetaCaptura()`) incluye una barra de progreso visual (ademas del contador "Prod X/Y (pct%)") y un punto de color junto al contador indicando si el producto activo ya tiene datos cargados (`tarjetaCompleta()` sobre la tarjeta canonica).
+- Boton "Sin stock / Saltar": pone la tarjeta activa en cerradas=0/peso=0 (no vacio, para que cuente como completa) y avanza al siguiente producto, reusando `syncCapturaConInventario()`/`navegarCaptura()`.
+- Al enviar un paloteo con exito, el dialogo de resultado ofrece un boton "Exportar PDF" (`mostrarDialogoResultado({..., accionExtra})`) que dispara `exportarReportePaloteo3Pdf()` sin necesidad de cambiar al tab Ajustes/REPORTE. Es un parametro opcional del dialogo generico — el resto de sus ~15 usos (ajustes, login, pesaje, etc.) no lo pasan y no cambian.
+
 ### Modulo PESAJE: detalles de UI
 
 - **Grid responsivo de tarjetas resumen** (`#pesaje-list`, `grid-template-columns: repeat(auto-fill, minmax(240px, 1fr))`): la cantidad de tarjetas por fila se adapta sola al ancho del dispositivo, sin breakpoints manuales. Cada tarjeta muestra categoria, nombre, ID/codigo, `medida`+`nombre_unidad_medida` (ej. "750 ML"), `cantidad_detalle`+`nombre_unidad_medida_detalle` (ej. "25 Oz." — la unidad varia por producto, no siempre es onzas), badge "Comanda: Si/No" y, si tiene mas de un perfil, un badge con la cantidad de modelos.
@@ -551,8 +565,11 @@ sincronizada entre ambos modulos porque comparten el mismo origen de datos.
 - **NO PESABLES ya no es un callejon sin salida (desde v10.98, "promover")**: dentro de esa pestaña, una tarjeta con `pesable=0` muestra los campos de peso (ademas de `barcode`) si el catalogo dice que el producto deberia ser pesable (`nombre_ind_permite_comandar` = "Si" — el listado ya garantiza que si el producto llego hasta el frontend, su categoria no esta excluida). Cargar `peso_bruto` la promueve a `pesable=1` sin editar la BD a mano. Si el catalogo no lo marca pesable (`nombre_ind_permite_comandar` = "No"), la tarjeta se comporta igual que siempre: solo `barcode` editable.
 - **Dos acciones por tarjeta**: cada tarjeta tiene en su parte inferior los botones EDITAR y, solo en pesables completos, CALCULAR. EDITAR abre el modal de edicion (`#pesaje-modal`); CALCULAR abre la calculadora (`#conversor-modal`, ver "Calculadora peso -> onzas") reutilizando los perfiles ya cargados del producto (sin fetch adicional). En NO PESABLES e INCOMPLETOS la tarjeta solo muestra EDITAR.
 - **Modal de edicion** (`#pesaje-modal`, mismo patron que `#conversor-modal`): se abre con EDITAR y muestra exactamente lo que antes se veia inline por perfil (`peso_bruto`, `tara`, `g/oz` recalculado en vivo, `barcode`, botones Guardar/Eliminar) mas el boton "Agregar modelo". Los campos de modelo de botella (`peso_bruto`/`tara`/`g/oz`) se muestran si el perfil ya es `pesable=1` **o** si el catalogo dice que deberia serlo (`nombre_ind_permite_comandar`="Si", habilita "promover" — ver v10.98); solo en un producto genuinamente no pesable por catalogo el modal muestra unicamente el codigo de barras. Los perfiles con `peso_bruto`/`tara` nulos o con `peso_bruto`/`gramos_por_oz` en `0` se siguen marcando con borde de advertencia + icono "Incompleto" dentro del modal (por perfil, relevante si un producto tiene varios modelos y solo uno esta incompleto).
-- Al crear el primer modelo de un producto sin perfiles activos, el nombre se fija en `Estándar` por defecto; a partir del segundo modelo, el nombre vuelve a ser editable.
-- Si el modal esta abierto cuando se guarda/agrega/elimina un perfil, su contenido se refresca en el lugar con los datos nuevos (`renderizarModalPesaje()`) en vez de cerrarse — incluso si el producto "cambio de pestaña" (ej. paso de INCOMPLETOS a PESABLES al completarse). Se cierra solo si el producto deja de existir en la respuesta.
+- Al crear el primer modelo de un producto sin perfiles activos, el nombre se fija en `Estándar` por defecto; a partir del segundo modelo, el nombre vuelve a ser editable. Para vinos (`id_categoria=6`), el campo "peso bruto" se etiqueta "Copas por botella" (con texto de ayuda) en vez de "Peso bruto (g)", tanto en el modal de edicion como en el de creacion — antes solo la edicion tenia esta rama.
+- Si el modal esta abierto cuando se guarda/agrega/elimina un perfil, su contenido se refresca en el lugar con los datos nuevos (`renderizarModalPesaje()`) en vez de cerrarse — incluso si el producto "cambio de pestaña" (ej. paso de INCOMPLETOS a PESABLES al completarse). Se cierra solo si el producto deja de existir en la respuesta. La posicion de scroll del modal se preserva a traves de ese refresco (desde Fase 2 de UX, ver `documentos/ux_pesaje_recomendaciones.md`); antes volvia siempre al tope.
+- El boton "Eliminar" siempre se renderiza (antes se omitia del DOM si el producto tenia un solo modelo); cuando no aplica, queda `disabled` con un `title` explicando por que ("Este producto necesita al menos 2 modelos para poder eliminar uno"), en vez de desaparecer sin aviso.
+- Al fallar un guardado, el error se muestra solo inline junto al formulario (antes tambien se duplicaba en un dialogo modal para el mismo fallo). Al crear un modelo nuevo con exito, ahora se muestra confirmacion (`mostrarDialogoResultado`) — antes cerraba el modal sin ningun aviso. Al guardar un perfil que pasa de `pesable=0` a `1` ("promover"), el mensaje de exito menciona explicitamente el cambio de estado en vez del generico "Modelo guardado".
+- Buscador "BUSCAR" visible en el encabezado del panel (ademas del icono de lupa del topbar global) — mismo buscador compartido (`abrirBusquedaTopbar()`), solo un segundo punto de entrada mas descubrible.
 - Excluye productos de las categorias 10, 11, 13, 14, 15, 17, 18, 19 y 20 (tanto en el listado como en el filtro de categorias).
 
 ### Calculadora peso -> onzas (integrada en PESAJE, ex-modulo CONVERSOR)
@@ -567,10 +584,13 @@ sincronizada entre ambos modulos porque comparten el mismo origen de datos.
 
 - Mismo patron visual/estructural que PESAJE (tarjetas + modal de detalle), pero de solo lectura + simulacion: no hay accion "Guardar" en ningun lado del modulo. Solo visible/accesible para `ROLE_ADMIN`, igual criterio que PESAJE.
 - Toggle **Cocteles / Productos sueltos** (`pourCostEstado.tipo`) determina que endpoint se consulta (`/api/pourcost/recetas` o `/api/pourcost/productos`) — son datasets y formas de tarjeta distintas, no un filtro sobre los mismos datos.
-- Selector **Precios A / Precios B** (`pourCostEstado.idDia`, query param `id_dia`) es una eleccion manual del usuario, no se infiere de la operativa activa (decision de diseno, ver `documentos/pour_cost/pourcost.md` seccion 8.2) — cambiarlo vuelve a pedir datos al backend porque el precio depende del horario elegido.
-- El filtro de categoria se llena en cliente a partir del dataset ya cargado (no hay endpoint `/api/pourcost/categorias`); cambia junto con el toggle de tipo.
+- Selector **Precios A / Precios B** (`pourCostEstado.idDia`, query param `id_dia`) es una eleccion manual del usuario, no se infiere de la operativa activa (decision de diseno, ver `documentos/pour_cost/pourcost.md` seccion 8.2) — cambiarlo vuelve a pedir datos al backend porque el precio depende del horario elegido. Los labels de los botones ya no son "Precios A"/"Precios B" fijos: `cargarPourCostDias()` los reemplaza por los nombres reales de `ope_dia` (`GET /api/pourcost/dias`, ver seccion POUR COST de endpoints); si solo hay un grupo activo (`POURCOST_DIAS_PRECIO_ACTIVOS`), el toggle se oculta por completo y se muestra ese nombre como texto plano no interactivo — hoy es el caso (solo el grupo 1 esta en uso real).
+- El filtro de categoria se llena en cliente a partir del dataset ya cargado (no hay endpoint `/api/pourcost/categorias`); cambia junto con el toggle de tipo. Si la categoria seleccionada no existe en el nuevo dataset al cambiar de tipo, el `<select>` se resetea a "Todas" y se muestra un aviso breve junto al filtro explicando por que (antes era un reset silencioso).
 - Cada tarjeta muestra el pour cost % en un badge coloreado: verde (`badge-ok`, <=28%), ambar (`badge-caution`, 28-35%) o rojo (`badge-danger`, >35%) — cortes definidos por el negocio, no un estandar generico. `badge-caution` es una clase nueva porque `badge-warning` ya estaba tomada por el rojo de diferencias de PALOTEO/AJUSTES.
 - Al hacer click en una tarjeta se abre `#pourcost-modal` con el desglose real (receta con `cogs_ingrediente` por linea, o WAC directo en productos sueltos) y el sandbox de simulacion: cantidad/WAC editables por ingrediente y un campo de % objetivo que calcula el precio sugerido (exacto + redondeado a unidad entera) y su diferencia contra el precio actual. Todo el calculo (`pourCostCalcularPct`, `pourCostCalcularPrecioSugerido`, `pourCostRedondearHalfUp`) es JS puro que espeja exactamente las funciones de `main.py` (mismo HALF_UP manual que `redondearOnzasOperativas`, no `Math.round`) — nunca se envia nada al backend, "Reiniciar simulacion" descarta los cambios volviendo a clonar el item original.
+- El campo del WAC editable (productos sueltos) tiene una nota inline ("Solo en esta simulación") junto al input, ademas del disclaimer general del header del modal. Cuando el precio base es nulo para el horario elegido, se muestra un aviso explicando que el campo "Bs precio" parte vacio, en vez de dejarlo sin contexto.
+- Mientras el usuario edita "% objetivo" o "Bs precio", el campo activo (el que esta "conduciendo" el calculo) se resalta con borde y el otro se atenua; si se editaron ambos a mano, dejan de sincronizarse entre si y ninguno queda resaltado. Un boton de copiar (icono junto al precio sugerido) copia ese valor al portapapeles.
+- Buscador "BUSCAR" visible en el encabezado del panel, mismo mecanismo que en PESAJE (segundo punto de entrada al buscador compartido del topbar).
 
 ### FAB "volver al inicio"
 
