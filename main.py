@@ -1430,7 +1430,13 @@ def obtener_productos_pendientes(
             AND asi.ind_estado_salida = 21
         ) mov
         INNER JOIN alm_producto a ON mov.id_producto = a.id
-        INNER JOIN vista_inventario_barra_con_filtro i ON a.id = i.id_almacen
+        -- id_barra filtrado explícitamente: vista_inventario_barra_con_filtro NO
+        -- viene fijada a la barra activa (no filtra por id_barra en su propia
+        -- definición) -- en un entorno con más de una barra con movimiento,
+        -- un producto puede tener una fila en bar_inventario por cada una,
+        -- duplicando esta fila (y con ella cada perfil de pesaje del LEFT JOIN
+        -- de abajo) tantas veces como barras tenga. Ver hallazgo en sesión UX.
+        INNER JOIN vista_inventario_barra_con_filtro i ON a.id = i.id_almacen AND i.id_barra = :id_barra
         LEFT JOIN app_producto_pesaje_config_api p ON a.id = p.id_producto_almacen AND p.estado = 'HAB'
         ORDER BY a.nombre ASC, p.id ASC;
 
@@ -1464,10 +1470,13 @@ def buscar_productos_catalogo(
     el frontend trate un resultado de búsqueda exactamente igual que uno cargado
     por movimiento, sin mapeos especiales.
     """
-    # Resuelve y valida la barra operativa (X-Barra-Id) aunque no se use en el
-    # WHERE: vista_inventario_barra_con_filtro ya viene fijada a la barra activa,
-    # igual que en /pendientes; aqui solo nos interesa el efecto de validacion.
-    _resolver_barra_operativa(request)
+    # id_barra se usa explícitamente en el JOIN de abajo: vista_inventario_barra_con_filtro
+    # NO viene fijada a la barra activa (no filtra por id_barra en su propia
+    # definición) -- en un entorno con más de una barra, un producto puede
+    # tener una fila en bar_inventario por cada una, duplicando esta fila (y
+    # cada perfil de pesaje del LEFT JOIN de abajo) tantas veces como barras
+    # tenga. Ver hallazgo en sesión UX / mismo fix que en /pendientes.
+    id_barra_operativa = _resolver_barra_operativa(request)
 
     patron = busqueda.strip()
     if patron and len(patron) < 2:
@@ -1483,7 +1492,7 @@ def buscar_productos_catalogo(
             p.id AS perfil_id, p.pesable, p.nombre_perfil, p.peso_bruto, p.tara, p.gramos_por_oz, p.tolerancia_oz, p.barcode,
             a.cantidad_detalle AS onzas_por_botella_llena
         FROM alm_producto a
-        INNER JOIN vista_inventario_barra_con_filtro i ON a.id = i.id_almacen
+        INNER JOIN vista_inventario_barra_con_filtro i ON a.id = i.id_almacen AND i.id_barra = :id_barra
         LEFT JOIN app_producto_pesaje_config_api p ON a.id = p.id_producto_almacen AND p.estado = 'HAB'
         WHERE a.estado = 'HAB'
           {filtro_nombre}
@@ -1494,6 +1503,7 @@ def buscar_productos_catalogo(
     rows = db.execute(query, {
         "patron": f"%{patron}%",
         "limite": limite,
+        "id_barra": id_barra_operativa,
     }).mappings().all()
 
     return _agrupar_filas_producto_pesaje(rows)
@@ -1525,7 +1535,7 @@ def _calcular_diferencias_paloteo(db: Session, id_barra: int, id_inventario_fisi
         FROM bar_detalle_fisico df
         LEFT JOIN vista_inventario_barra_con_filtro v
                ON v.id_almacen = df.id_producto
-              AND v.nro_barra = :id_barra
+              AND v.id_barra = :id_barra
         WHERE df.id_inventario_fisico = :id_fisico
           AND df.estado = 'HAB'
           AND NOT EXISTS (
