@@ -11,6 +11,10 @@ separado con git tags semanticos (`vMAJOR.MINOR.PATCH`) — ver seccion
 version productiva en uso real), corresponde a este mismo punto de la
 historia, `## 12.2` de abajo.
 
+## 12.5
+- Fix (inventario): `/api/inventario/pendientes` y `/api/inventario/catalogo/buscar` ahora filtran explícitamente por `id_barra` al unir contra `vista_inventario_barra_con_filtro` (ya no la asumen fijada a la barra activa). Sin este filtro, un producto con movimiento en más de una barra duplicaba fila por fila (y con ella cada perfil de pesaje), haciendo aparecer el selector de modelo de botella en PALOTEO aunque el producto solo tuviera un modelo real.
+- Fix (ajustes): `_calcular_diferencias_paloteo()` (usada por `/api/inventario/consolidar/preview` y `/api/inventario/ajustes/aplicar`) referenciaba `v.nro_barra`, columna que ya no existe en `vista_inventario_barra_con_filtro` tras un rediseño posterior de la vista — causaba `500` en cualquier preview o aplicación de ajustes. Corregido a `v.id_barra`.
+
 ## 12.4
 - PESAJE/POUR COST: chip "Buscar" en el header de ambos paneles, segundo punto de entrada al buscador compartido del topbar (sin duplicar lógica).
 - PESAJE: se preserva la posición de scroll del modal de edición al guardar; botón "Eliminar" ahora siempre visible (deshabilitado + tooltip explicativo cuando no aplica, en vez de desaparecer del DOM); mensaje específico al promover un perfil fantasma a pesable.
