@@ -28,12 +28,30 @@ def _crear_producto(db: Session, *, id_categoria: int, ind_permite_comandar: int
 
 def _crear_perfil_fantasma(db: Session, id_producto: int) -> int:
     """Fila pesable=0 con ceros, igual a como quedaban los productos
-    "atascados" (ver TODO.md, conflictos excepcionales de pesable)."""
+    "atascados" (ver TODO.md, conflictos excepcionales de pesable).
+
+    trg_alm_producto_after_insert ya crea una fila 'Estándar' (DEFAULT de
+    columna) al insertar el producto en _crear_producto de arriba -- un
+    INSERT liso acá chocaría con uk_producto_perfil. ON DUPLICATE KEY UPDATE
+    normaliza esa fila a los valores de "fantasma" que el test necesita
+    (ceros, pesable=0), sin importar qué pesable haya derivado el trigger del
+    catálogo de cada caso. LAST_INSERT_ID(id) preserva el id de la fila
+    existente para el SELECT de abajo (MySQL solo lo repone solo en el INSERT
+    real; en la rama UPDATE hay que pedirlo explícito)."""
     db.execute(text("""
         INSERT INTO app_producto_pesaje_config_api
             (id_producto_almacen, nombre_perfil, peso_bruto, tara, gramos_por_oz,
              pesable, tolerancia_oz, estado, usuario_reg)
         VALUES (:id_producto, 'Estándar', 0.00, 0.00, 0.000000, 0, 1.50, 'HAB', 'pytest')
+        ON DUPLICATE KEY UPDATE
+            id = LAST_INSERT_ID(id),
+            peso_bruto = VALUES(peso_bruto),
+            tara = VALUES(tara),
+            gramos_por_oz = VALUES(gramos_por_oz),
+            pesable = VALUES(pesable),
+            tolerancia_oz = VALUES(tolerancia_oz),
+            estado = VALUES(estado),
+            usuario_reg = VALUES(usuario_reg)
     """), {"id_producto": id_producto})
     id_perfil = db.execute(text("SELECT LAST_INSERT_ID()")).scalar()
     db.commit()
