@@ -1042,14 +1042,22 @@ def listar_categorias_pesaje(
     db: Session = Depends(get_db),
     current_user: models.Usuario = Depends(get_usuario_administrador)
 ):
-    """Lista de categorías habilitadas, para el filtro del módulo PESAJE."""
+    """Lista de categorías habilitadas, para el filtro del módulo PESAJE.
+
+    No excluye CATEGORIAS_EXCLUIDAS_PESAJE: ese conjunto solo describe qué
+    categorías el catálogo NO deriva como pesables por defecto (triggers y
+    _producto_deberia_ser_pesable), pero desde el backfill de 2026-09-08
+    app_producto_pesaje_config_api tiene fila (pesable=0 o 1) para todo el
+    catálogo HAB, categorías excluidas incluidas — filtrarlas aquí las
+    escondía del selector aunque tuvieran perfiles reales que listar (ej.
+    CERVEZAS, con productos no pesables y con la excepción pesable del barril).
+    """
     rows = db.execute(
         text("""
             SELECT id, nombre FROM alm_categoria
-            WHERE estado = 'HAB' AND id NOT IN :excluidas
+            WHERE estado = 'HAB'
             ORDER BY nombre
-        """).bindparams(bindparam("excluidas", expanding=True)),
-        {"excluidas": CATEGORIAS_EXCLUIDAS_PESAJE}
+        """)
     ).mappings().all()
     return [
         schemas.CategoriaItem(id_categoria=row["id"], nombre_categoria=row["nombre"])
@@ -1065,9 +1073,18 @@ def listar_pesaje_config(
     db: Session = Depends(get_db),
     current_user: models.Usuario = Depends(get_usuario_administrador)
 ):
-    """Listado de perfiles de pesaje (tabla app_producto_pesaje_config_api vía v9_pesaje_config_api), para el módulo PESAJE."""
-    condiciones = ["(pc.id_categoria IS NULL OR pc.id_categoria NOT IN :excluidas)"]
-    parametros = {"excluidas": CATEGORIAS_EXCLUIDAS_PESAJE}
+    """Listado de perfiles de pesaje (tabla app_producto_pesaje_config_api vía v9_pesaje_config_api), para el módulo PESAJE.
+
+    No filtra CATEGORIAS_EXCLUIDAS_PESAJE aquí: esa constante describe qué
+    categorías el catálogo NO deriva como pesables por defecto, no qué
+    categorías deben esconderse del listado. Desde el backfill de 2026-09-08,
+    app_producto_pesaje_config_api ya tiene fila real (pesable=0 o 1) para
+    todo el catálogo HAB, así que filtrar por categoría excluida escondía
+    perfiles legítimos de ambas pestañas (ej. CERVEZAS: la mayoría de sus
+    productos son pesable=0, pero el barril es la excepción pesable=1 real).
+    """
+    condiciones = ["1=1"]
+    parametros = {}
 
     if nombre:
         condiciones.append("pc.nombre_producto LIKE :nombre")
@@ -1091,7 +1108,7 @@ def listar_pesaje_config(
         LEFT JOIN vw_alm_producto_con_nombres vw ON vw.id = pc.id_producto
         {where_sql}
         ORDER BY pc.nombre_producto ASC, pc.nombre_perfil ASC
-    """).bindparams(bindparam("excluidas", expanding=True))
+    """)
 
     rows = list(db.execute(query, parametros).mappings().all())
 
