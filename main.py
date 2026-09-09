@@ -1029,24 +1029,32 @@ def crear_perfil_pesaje(
     )
 
 
-CATEGORIAS_EXCLUIDAS_PESAJE = (10, 11, 13, 14, 15, 17, 18, 19, 20)
+# Unidades de medida (alm_producto.p_unidad_medida) que identifican un
+# producto pesable. Reemplaza desde 2026-09-09 al criterio anterior
+# (ind_permite_comandar=71 + categoria fuera de una lista negra de 9
+# categorias) -- ver "Pesaje config es synced from alm_producto by DB
+# triggers" en CLAUDE.md y CHANGELOG. 11 = unidad usada por todo el catalogo
+# de licores/vinos pesables existente (verificado 1:1 contra
+# app_producto_pesaje_config_api.pesable=1 antes de este cambio); 61 =
+# barril/keg (ej. BARRIL PACEÑA 50L), la unica excepcion pesable dentro de
+# una categoria (CERVEZAS) que en general no se pesa -- antes requeria un
+# backfill manual por SQL, ahora la deriva sola cualquier producto nuevo con
+# esa unidad.
+UNIDADES_MEDIDA_PESABLES = (11, 61)
 
 
 def _producto_deberia_ser_pesable(db: Session, id_producto: int) -> bool:
     """Mismo criterio que usan trg_alm_producto_after_insert/after_update para
-    derivar `pesable` desde el catalogo: ind_permite_comandar=71 y categoria
-    fuera de CATEGORIAS_EXCLUIDAS_PESAJE. Se usa para permitir "promover" un
-    perfil pesable=0 sin depender de que el listado ya lo haya filtrado antes."""
-    row = db.execute(
-        text("SELECT ind_permite_comandar, id_categoria FROM alm_producto WHERE id = :id_producto LIMIT 1"),
+    derivar `pesable` desde el catalogo: p_unidad_medida en
+    UNIDADES_MEDIDA_PESABLES. Se usa para permitir "promover" un perfil
+    pesable=0 sin depender de que el listado ya lo haya filtrado antes."""
+    p_unidad_medida = db.execute(
+        text("SELECT p_unidad_medida FROM alm_producto WHERE id = :id_producto LIMIT 1"),
         {"id_producto": id_producto}
-    ).mappings().first()
-    if not row or int(row["ind_permite_comandar"] or 0) != 71:
+    ).scalar()
+    if p_unidad_medida is None:
         return False
-    id_categoria = row["id_categoria"]
-    if id_categoria is not None and int(id_categoria) in CATEGORIAS_EXCLUIDAS_PESAJE:
-        return False
-    return True
+    return int(p_unidad_medida) in UNIDADES_MEDIDA_PESABLES
 
 
 @app.get("/api/pesaje/categorias", response_model=List[schemas.CategoriaItem])
@@ -1056,13 +1064,14 @@ def listar_categorias_pesaje(
 ):
     """Lista de categorías habilitadas, para el filtro del módulo PESAJE.
 
-    No excluye CATEGORIAS_EXCLUIDAS_PESAJE: ese conjunto solo describe qué
-    categorías el catálogo NO deriva como pesables por defecto (triggers y
-    _producto_deberia_ser_pesable), pero desde el backfill de 2026-09-08
+    No filtra por categoría: la derivación de "qué es pesable" vive en
+    UNIDADES_MEDIDA_PESABLES (triggers y _producto_deberia_ser_pesable), no
+    en la categoría del producto. Desde el backfill de 2026-09-08
     app_producto_pesaje_config_api tiene fila (pesable=0 o 1) para todo el
-    catálogo HAB, categorías excluidas incluidas — filtrarlas aquí las
-    escondía del selector aunque tuvieran perfiles reales que listar (ej.
-    CERVEZAS, con productos no pesables y con la excepción pesable del barril).
+    catálogo HAB, categorías antes excluidas por la lógica vieja incluidas —
+    filtrarlas aquí las escondía del selector aunque tuvieran perfiles reales
+    que listar (ej. CERVEZAS, con productos no pesables y con la excepción
+    pesable del barril).
     """
     rows = db.execute(
         text("""
@@ -1087,13 +1096,13 @@ def listar_pesaje_config(
 ):
     """Listado de perfiles de pesaje (tabla app_producto_pesaje_config_api vía v9_pesaje_config_api), para el módulo PESAJE.
 
-    No filtra CATEGORIAS_EXCLUIDAS_PESAJE aquí: esa constante describe qué
-    categorías el catálogo NO deriva como pesables por defecto, no qué
-    categorías deben esconderse del listado. Desde el backfill de 2026-09-08,
-    app_producto_pesaje_config_api ya tiene fila real (pesable=0 o 1) para
-    todo el catálogo HAB, así que filtrar por categoría excluida escondía
-    perfiles legítimos de ambas pestañas (ej. CERVEZAS: la mayoría de sus
-    productos son pesable=0, pero el barril es la excepción pesable=1 real).
+    No filtra por categoría: la derivación de "qué es pesable" vive en
+    UNIDADES_MEDIDA_PESABLES, no en la categoría del producto. Desde el
+    backfill de 2026-09-08, app_producto_pesaje_config_api ya tiene fila real
+    (pesable=0 o 1) para todo el catálogo HAB, así que filtrar por categoría
+    escondía perfiles legítimos de ambas pestañas (ej. CERVEZAS: la mayoría
+    de sus productos son pesable=0, pero el barril es la excepción
+    pesable=1 real).
     """
     condiciones = ["1=1"]
     parametros = {}
@@ -1115,7 +1124,7 @@ def listar_pesaje_config(
                pc.id_categoria, pc.nombre_categoria, pc.cantidad_detalle, pc.peso_bruto, pc.tara,
                pc.gramos_por_oz, pc.pesable, pc.barcode, pc.nombre_perfil,
                vw.medida, vw.nombre_unidad_medida, vw.nombre_unidad_medida_detalle,
-               vw.nombre_ind_permite_comandar
+               vw.nombre_ind_permite_comandar, vw.p_unidad_medida
         FROM v9_pesaje_config_api pc
         LEFT JOIN vw_alm_producto_con_nombres vw ON vw.id = pc.id_producto
         {where_sql}
@@ -1130,11 +1139,10 @@ def listar_pesaje_config(
     if pesable == 1:
         condiciones_sin_config = [
             "a.estado = 'HAB'",
-            "a.ind_permite_comandar = 71",
-            "(a.id_categoria IS NULL OR a.id_categoria NOT IN :excluidas)",
+            "a.p_unidad_medida IN :pesables",
             "NOT EXISTS (SELECT 1 FROM app_producto_pesaje_config_api p WHERE p.id_producto_almacen = a.id AND p.estado = 'HAB')",
         ]
-        parametros_sin_config = {"excluidas": CATEGORIAS_EXCLUIDAS_PESAJE}
+        parametros_sin_config = {"pesables": UNIDADES_MEDIDA_PESABLES}
 
         if nombre:
             condiciones_sin_config.append("a.nombre LIKE :nombre")
@@ -1162,13 +1170,14 @@ def listar_pesaje_config(
                    vw.medida,
                    vw.nombre_unidad_medida,
                    vw.nombre_unidad_medida_detalle,
-                   vw.nombre_ind_permite_comandar
+                   vw.nombre_ind_permite_comandar,
+                   a.p_unidad_medida
             FROM alm_producto a
             LEFT JOIN alm_categoria c ON c.id = a.id_categoria
             LEFT JOIN vw_alm_producto_con_nombres vw ON vw.id = a.id
             {where_sin_config}
             ORDER BY a.nombre ASC
-        """).bindparams(bindparam("excluidas", expanding=True))
+        """).bindparams(bindparam("pesables", expanding=True))
 
         rows_sin_config = db.execute(query_sin_config, parametros_sin_config).mappings().all()
         rows.extend(rows_sin_config)
@@ -1180,6 +1189,8 @@ def listar_pesaje_config(
         es_vino = int(row["id_categoria"] or 0) == ID_CATEGORIA_VINOS and int(row["pesable"] or 0) == 1
         tara = TARA_VINOS if es_vino else row["tara"]
         gramos_por_oz = GRAMOS_POR_OZ_VINOS if es_vino else row["gramos_por_oz"]
+        p_unidad_medida = row["p_unidad_medida"]
+        catalogo_permite_pesar = p_unidad_medida is not None and int(p_unidad_medida) in UNIDADES_MEDIDA_PESABLES
 
         salida.append(
             schemas.PesajeConfigItem(
@@ -1200,6 +1211,7 @@ def listar_pesaje_config(
                 nombre_unidad_medida=row["nombre_unidad_medida"],
                 nombre_unidad_medida_detalle=row["nombre_unidad_medida_detalle"],
                 nombre_ind_permite_comandar=row["nombre_ind_permite_comandar"],
+                catalogo_permite_pesar=catalogo_permite_pesar,
             )
         )
 

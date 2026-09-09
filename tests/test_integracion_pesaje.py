@@ -3,24 +3,30 @@
 Antes de este fix, un perfil pesable=0 (fila fantasma creada por
 trg_alm_producto_after_insert) no se podia completar desde la app: el
 endpoint solo permitia editar barcode. La correccion permite completar el
-perfil directo desde aca -- solo si el catalogo (ind_permite_comandar=71 y
-categoria fuera de CATEGORIAS_EXCLUIDAS_PESAJE) dice que el producto deberia
+perfil directo desde aca -- solo si el catalogo dice que el producto deberia
 ser pesable -- y ya no exige peso_bruto/tara juntos (la tara recien se
 conoce cuando se termina el contenido de la botella).
+
+Desde 2026-09-09, "el catalogo dice que deberia ser pesable" se decide por
+`p_unidad_medida IN UNIDADES_MEDIDA_PESABLES` (11 o 61) -- ver
+_producto_deberia_ser_pesable en main.py y las notas de CHANGELOG/README.
+Reemplaza al criterio anterior (`ind_permite_comandar=71` + categoria fuera
+de una lista negra de 9 categorias): categoria e ind_permite_comandar ya NO
+influyen en la elegibilidad, solo la unidad de medida.
 """
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 
-def _crear_producto(db: Session, *, id_categoria: int, ind_permite_comandar: int | None,
-                     nombre: str) -> int:
+def _crear_producto(db: Session, *, id_categoria: int, p_unidad_medida: int,
+                     nombre: str, ind_permite_comandar: int = 71) -> int:
     db.execute(text("""
         INSERT INTO alm_producto
             (nombre, correlativo, id_categoria, medida, p_unidad_medida,
              cantidad_detalle, ind_permite_comandar, codigo, usuario_reg, estado)
-        VALUES (:nombre, 0, :id_categoria, 750, 0, 25.5, :comandar, :codigo, 'pytest', 'HAB')
-    """), {"nombre": nombre, "id_categoria": id_categoria, "comandar": ind_permite_comandar,
-           "codigo": f"PYT-{nombre[:12]}"})
+        VALUES (:nombre, 0, :id_categoria, 750, :p_unidad_medida, 25.5, :comandar, :codigo, 'pytest', 'HAB')
+    """), {"nombre": nombre, "id_categoria": id_categoria, "p_unidad_medida": p_unidad_medida,
+           "comandar": ind_permite_comandar, "codigo": f"PYT-{nombre[:12]}"})
     id_producto = db.execute(text("SELECT LAST_INSERT_ID()")).scalar()
     db.commit()
     return id_producto
@@ -69,12 +75,13 @@ def _categoria_pytest(db: Session) -> int:
 
 
 def test_promover_con_solo_peso_bruto(client, crear_usuario, db_session):
-    """Perfil pesable=0 elegible por catalogo: PUT con peso_bruto solo lo
-    promueve a pesable=1, dejando tara/gramos_por_oz en NULL (no exige tara)."""
+    """Perfil pesable=0 elegible por catalogo (p_unidad_medida=11): PUT con
+    peso_bruto solo lo promueve a pesable=1, dejando tara/gramos_por_oz en
+    NULL (no exige tara)."""
     admin = crear_usuario(admin=True)
     id_categoria = _categoria_pytest(db_session)
     id_producto = _crear_producto(db_session, id_categoria=id_categoria,
-                                   ind_permite_comandar=71, nombre="PYTEST PROMOVER")
+                                   p_unidad_medida=11, nombre="PYTEST PROMOVER")
     id_perfil = _crear_perfil_fantasma(db_session, id_producto)
 
     r = client.put(f"/api/pesaje/config/{id_perfil}", json={"peso_bruto": 1000.0},
@@ -93,7 +100,7 @@ def test_completar_tara_en_segunda_edicion(client, crear_usuario, db_session):
     admin = crear_usuario(admin=True)
     id_categoria = _categoria_pytest(db_session)
     id_producto = _crear_producto(db_session, id_categoria=id_categoria,
-                                   ind_permite_comandar=71, nombre="PYTEST TARA")
+                                   p_unidad_medida=11, nombre="PYTEST TARA")
     id_perfil = _crear_perfil_fantasma(db_session, id_producto)
 
     r1 = client.put(f"/api/pesaje/config/{id_perfil}", json={"peso_bruto": 1000.0},
@@ -110,13 +117,15 @@ def test_completar_tara_en_segunda_edicion(client, crear_usuario, db_session):
     assert data["gramos_por_oz"] == round((1000.0 - 300.0) / 25.5, 6)
 
 
-def test_no_promueve_categoria_excluida(client, crear_usuario, db_session):
-    """Categoria excluida (CERVEZAS=11) con ind_permite_comandar=71: el PUT
-    rechaza el intento de cargar peso_bruto y pesable sigue en 0. Mismo caso
-    real que AMSTEL/HUARI (revertido en produccion el 2026-07-30)."""
+def test_no_promueve_unidad_medida_no_pesable(client, crear_usuario, db_session):
+    """p_unidad_medida fuera de (11,61) (ej. 12, unidad real de productos no
+    pesables como cigarrillos/energizantes): el PUT rechaza el intento de
+    cargar peso_bruto y pesable sigue en 0, sin importar la categoria ni
+    ind_permite_comandar=71."""
     admin = crear_usuario(admin=True)
-    id_producto = _crear_producto(db_session, id_categoria=11,
-                                   ind_permite_comandar=71, nombre="PYTEST CERVEZA")
+    id_categoria = _categoria_pytest(db_session)
+    id_producto = _crear_producto(db_session, id_categoria=id_categoria,
+                                   p_unidad_medida=12, nombre="PYTEST NO PESABLE")
     id_perfil = _crear_perfil_fantasma(db_session, id_producto)
 
     r = client.put(f"/api/pesaje/config/{id_perfil}", json={"peso_bruto": 500.0},
@@ -131,27 +140,33 @@ def test_no_promueve_categoria_excluida(client, crear_usuario, db_session):
     assert float(fila["peso_bruto"]) == 0.0
 
 
-def test_no_promueve_sin_ind_permite_comandar(client, crear_usuario, db_session):
-    """ind_permite_comandar != 71 (catalogo no lo marca pesable): mismo
-    rechazo aunque la categoria no este excluida."""
+def test_promueve_sin_importar_ind_permite_comandar(client, crear_usuario, db_session):
+    """Guarda de regresion: ind_permite_comandar ya no influye en la
+    elegibilidad. Un producto con unidad pesable (11) pero
+    ind_permite_comandar=70 (valor que bajo el criterio anterior hubiera
+    bloqueado la promocion) debe promoverse igual -- si esto empieza a
+    fallar, alguien reacoplo ind_permite_comandar a la logica de pesable."""
     admin = crear_usuario(admin=True)
     id_categoria = _categoria_pytest(db_session)
     id_producto = _crear_producto(db_session, id_categoria=id_categoria,
-                                   ind_permite_comandar=70, nombre="PYTEST NO COMANDA")
+                                   p_unidad_medida=11, ind_permite_comandar=70,
+                                   nombre="PYTEST SIN COMANDAR")
     id_perfil = _crear_perfil_fantasma(db_session, id_producto)
 
     r = client.put(f"/api/pesaje/config/{id_perfil}", json={"peso_bruto": 500.0},
                     headers=admin.headers)
-    assert r.status_code == 400, r.text
+    assert r.status_code == 200, r.text
+    assert r.json()["pesable"] == 1
 
 
 def test_promover_vino_se_completa_en_un_paso(client, crear_usuario, db_session):
-    """Categoria VINOS (id=6): con peso_bruto solo alcanza para completarlo
-    del todo -- tara=0 y gramos_por_oz=1 se fuerzan igual que en un perfil
-    creado por POST, no queda incompleto esperando una segunda edicion."""
+    """Categoria VINOS (id=6, p_unidad_medida=11 en el catalogo real): con
+    peso_bruto solo alcanza para completarlo del todo -- tara=0 y
+    gramos_por_oz=1 se fuerzan igual que en un perfil creado por POST, no
+    queda incompleto esperando una segunda edicion."""
     admin = crear_usuario(admin=True)
     id_producto = _crear_producto(db_session, id_categoria=6,
-                                   ind_permite_comandar=71, nombre="PYTEST VINO")
+                                   p_unidad_medida=11, nombre="PYTEST VINO")
     id_perfil = _crear_perfil_fantasma(db_session, id_producto)
 
     r = client.put(f"/api/pesaje/config/{id_perfil}", json={"peso_bruto": 5.0},
@@ -169,8 +184,9 @@ def test_editar_solo_barcode_no_promueve(client, crear_usuario, db_session):
     aunque el producto no sea elegible por catalogo -- sigue permitido editar
     el codigo de barras de un perfil no pesable."""
     admin = crear_usuario(admin=True)
-    id_producto = _crear_producto(db_session, id_categoria=11,
-                                   ind_permite_comandar=71, nombre="PYTEST BARCODE")
+    id_categoria = _categoria_pytest(db_session)
+    id_producto = _crear_producto(db_session, id_categoria=id_categoria,
+                                   p_unidad_medida=12, nombre="PYTEST BARCODE")
     id_perfil = _crear_perfil_fantasma(db_session, id_producto)
 
     r = client.put(f"/api/pesaje/config/{id_perfil}", json={"barcode": "7791234567890"},

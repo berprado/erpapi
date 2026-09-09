@@ -1011,6 +1011,7 @@ function renderizarPesaje() {
                 nombre_unidad_medida: item.nombre_unidad_medida,
                 nombre_unidad_medida_detalle: item.nombre_unidad_medida_detalle,
                 nombre_ind_permite_comandar: item.nombre_ind_permite_comandar,
+                catalogo_permite_pesar: item.catalogo_permite_pesar,
                 perfiles: [],
             });
         }
@@ -1201,12 +1202,13 @@ function crearFilaPerfilPesaje(producto, perfil) {
     const esPesable = producto.pesable === 1;
     const esVino = esCategoriaVinos(producto.id_categoria);
     // "Promover": si el catalogo dice que el producto deberia ser pesable
-    // (mismo criterio que usa el backend, ver _producto_deberia_ser_pesable),
-    // se muestran los campos de peso aunque el perfil todavia este en
-    // pesable=0 (fila fantasma) — permite completarlo sin tocar la BD.
-    const comandarRaw = (producto.nombre_ind_permite_comandar || '').trim().toLowerCase();
-    const catalogoPermitePesar = comandarRaw === 'si' || comandarRaw === 'sí';
-    const puedeConfigurarPeso = esPesable || catalogoPermitePesar;
+    // (mismo criterio que usa el backend, ver _producto_deberia_ser_pesable /
+    // UNIDADES_MEDIDA_PESABLES), se muestran los campos de peso aunque el
+    // perfil todavia este en pesable=0 (fila fantasma) — permite completarlo
+    // sin tocar la BD. catalogo_permite_pesar viene calculado del backend
+    // (antes se derivaba en JS desde nombre_ind_permite_comandar, que quedo
+    // desalineado del criterio real -- p_unidad_medida -- el 2026-09-09).
+    const puedeConfigurarPeso = esPesable || producto.catalogo_permite_pesar === true;
     // Usa perfilesReales (filtra filas fantasma con id==null), igual que el
     // badge "N modelos" y el resto del módulo — antes usaba producto.perfiles
     // crudo, que podía habilitar "Eliminar" contando una fila fantasma.

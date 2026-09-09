@@ -8,7 +8,7 @@
 -- con AMSTEL/HUARI/-LIMONADA (CERVEZAS/AGUAS Y JUGOS con
 -- ind_permite_comandar=71 que NO son pesables).
 --
--- Esta version:
+-- Esta version (2026-07-30):
 --   - Deriva pesable de ind_permite_comandar=71 Y de que la categoria no
 --     este en CATEGORIAS_EXCLUIDAS_PESAJE (main.py: 10,11,13,14,15,17,18,19,20).
 --   - Usa NULL (no 0) en peso_bruto/tara/gramos_por_oz -- un producto nuevo
@@ -17,6 +17,21 @@
 --     productos de TODO.md ("conflictos excepcionales").
 --   - Sincroniza barcode=NULL y estado segun el producto, igual que
 --     trg_alm_producto_after_update.
+--
+-- Fix (2026-09-09): v_pesable se deriva ahora de
+-- `p_unidad_medida IN (11, 61)` (UNIDADES_MEDIDA_PESABLES en main.py),
+-- reemplazando el criterio de arriba (ind_permite_comandar + lista negra de
+-- categorias). Motivo: verificado 1:1 contra el catalogo real (test,
+-- 2026-09-09) que 11 es la unidad de TODO producto pesable existente
+-- (incluye VINOS) y 61 es la unica excepcion pesable dentro de una categoria
+-- que en general no pesa (BARRIL PACEÑA 50L, CERVEZAS) -- antes esa
+-- excepcion requeria un backfill manual por SQL
+-- (querys/backfill_producto_barril_pesable_pesaje_config_api.sql); con este
+-- criterio la deriva sola cualquier producto nuevo con esa unidad. La
+-- categoria y el flag ind_permite_comandar ya NO influyen en `pesable`. Ver
+-- tambien _producto_deberia_ser_pesable() y el bloque INCOMPLETOS en
+-- main.py, actualizados en el mismo cambio para no reabrir la
+-- inconsistencia que motivo el fix de PR #7 (CHANGELOG v12.6).
 --
 -- Ejecutar UNA VEZ por entorno.
 
@@ -32,9 +47,7 @@ BEGIN
     DECLARE v_estado VARCHAR(3);
 
     SET v_pesable = CASE
-                        WHEN NEW.ind_permite_comandar = 71
-                             AND (NEW.id_categoria IS NULL OR NEW.id_categoria NOT IN (10,11,13,14,15,17,18,19,20))
-                            THEN 1
+                        WHEN NEW.p_unidad_medida IN (11, 61) THEN 1
                         ELSE 0
                      END;
     SET v_estado = CASE WHEN NEW.estado = 'HAB' THEN 'HAB' ELSE 'DES' END;

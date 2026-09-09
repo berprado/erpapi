@@ -11,6 +11,9 @@ separado con git tags semanticos (`vMAJOR.MINOR.PATCH`) — ver seccion
 version productiva en uso real), corresponde a este mismo punto de la
 historia, `## 12.2` de abajo.
 
+## 12.8
+- Cambio (PESAJE): el criterio de "este producto deberia ser pesable" pasa de `ind_permite_comandar=71 + categoria fuera de una lista negra de 9 categorias` (`CATEGORIAS_EXCLUIDAS_PESAJE`) a `p_unidad_medida IN (11, 61)` (`UNIDADES_MEDIDA_PESABLES`). Actualizado en los 4 lugares que debian quedar consistentes: `trg_alm_producto_after_insert`/`after_update` (BD, `querys/`), `_producto_deberia_ser_pesable()` (endpoint "promover"), el bloque INCOMPLETOS de `GET /api/pesaje/config`, y el frontend del modulo PESAJE (que derivaba la misma decision en JS desde `nombre_ind_permite_comandar` — ahora usa el nuevo campo `catalogo_permite_pesar` que devuelve el backend). Motivo: verificado 1:1 contra el catalogo real que `p_unidad_medida=11` es la unidad de todo producto pesable existente (incluye VINOS) y `61` es la unica excepcion pesable dentro de una categoria que en general no pesa (BARRIL PACEÑA 50L, CERVEZAS) — antes esa excepcion requeria un backfill manual por SQL; ahora la deriva sola cualquier producto nuevo con esa unidad. Categoria e `ind_permite_comandar` ya no influyen en `pesable`.
+
 ## 12.7
 - Fix (PALOTEO): `POST /api/inventario/paloteo` exigía que la primera fila de config del producto (`configs_producto[0]`, sin orden explícito) tuviera `pesable=1` para validar el peso, asumiendo una sola fila de config por producto. Un producto con la fila fantasma `'Estándar'` (`pesable=0`, creada por `trg_alm_producto_after_insert`) más un modelo de botella real con nombre propio (`pesable=1`) podía saltarse en silencio toda validación de peso bruto/capacidad si la fantasma quedaba primera — se removió esa condición redundante; `perfiles` (ya filtrado a `pesable=1`) es la señal correcta.
 
