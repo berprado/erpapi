@@ -366,11 +366,23 @@ def _procesar_items_paloteo(
             productos_omitidos.append(item.id_producto)
             continue
 
-        config_base = configs_producto[0]
+        # `perfiles` ya filtra pesable==1: es la unica señal correcta de "este
+        # producto tiene pesaje real que validar". Antes se exigia ademas
+        # `configs_producto[0].pesable == 1` (la PRIMERA fila del producto,
+        # sin ORDER BY -- orden arbitrario de MySQL), asumiendo una sola fila
+        # de config por producto. Esa asuncion se rompe con normalidad desde
+        # que trg_alm_producto_after_insert crea una fila fantasma
+        # 'Estándar' (pesable=0) para todo producto nuevo (ver "Triggers de
+        # base de datos" en README.md): un producto con multiples modelos de
+        # botella (perfil "Estándar" fantasma sin promover + un modelo real
+        # con nombre propio, pesable=1) podia caer con la fantasma primera en
+        # `configs_producto` y saltarse toda validacion de peso en silencio
+        # (total_onzas quedaba en 0 sin lanzar 400, aunque el perfil pesable
+        # real existiera y el payload lo referenciara por perfil_id).
         perfiles = sorted([cfg for cfg in configs_producto if cfg.pesable == 1], key=lambda cfg: cfg.id or 0)
 
         total_onzas = 0.0
-        if config_base.pesable == 1 and perfiles:
+        if perfiles:
             for abierta in item.pesos_abiertas:
                 perfil = None
 

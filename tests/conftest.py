@@ -255,6 +255,18 @@ class EscenarioAjustes:
                         29.063830, :pesable, 'pytest')
             """), {"id_producto": id_producto, "pesable": 1 if perfil == "pesable" else 0})
             id_perfil = self._ultimo_id()
+        else:
+            # trg_alm_producto_after_insert crea una fila fantasma 'Estándar'
+            # (estado HAB) para todo alm_producto nuevo, sin excepcion (ver
+            # README "Triggers de base de datos"). perfil=None quiere simular
+            # un producto sin NINGUNA config activa -- no alcanza con
+            # abstenerse de insertar la propia, hay que desactivar la que ya
+            # dejo el trigger o el escenario no reproduce lo que dice probar.
+            self.db.execute(text("""
+                UPDATE app_producto_pesaje_config_api
+                SET estado = 'DES'
+                WHERE id_producto_almacen = :id_producto AND estado = 'HAB'
+            """), {"id_producto": id_producto})
 
         for _ in range(filas_inventario):
             self.db.execute(text("""
