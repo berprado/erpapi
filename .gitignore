@@ -49,3 +49,5 @@ querys/*
 !querys/fix_12_productos_atascados_produccion.sql
 !querys/fix_barcode_vacio_a_null.sql
 !querys/create_views_pourcost.sql
+!querys/backfill_productos_no_pesables_pesaje_config_api.sql
+!querys/backfill_producto_barril_pesable_pesaje_config_api.sql
