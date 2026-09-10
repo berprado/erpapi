@@ -11,6 +11,9 @@ separado con git tags semanticos (`vMAJOR.MINOR.PATCH`) — ver seccion
 version productiva en uso real), corresponde a este mismo punto de la
 historia, `## 12.2` de abajo.
 
+## 12.14
+- BD: backfills y criterio nuevo de `pesable` aplicados y verificados en `production` casa matriz (tras backup previo del usuario) — falta solo el smoke test funcional en la PWA real. Detalle completo en `README.md` y en el runbook. Solo queda `production` Beer Garden pendiente.
+
 ## 12.13
 - Docs: correcciones de revisión al PR #10. (1) `README.md` y `documentos/DOCUMENTACION_ALMACENAMIENTO_PALOTEO.md` seguían diciendo que solo `test` tenía el trigger nuevo, contradiciendo al runbook (que ya registraba `test_pos` como completo) — actualizado el estado en `README.md` (única fuente de verdad ahora, con `production` desglosado en casa matriz/Beer Garden) y `DOCUMENTACION_ALMACENAMIENTO_PALOTEO.md` apunta ahí en vez de duplicar el estado puntual. (2) El pre-chequeo del runbook (3.1) y la verificación post-aplicación (3.5) solo miraban `trg_alm_producto_after_insert` — si `after_update` hubiera fallado al reaplicarse (los dos se instalan con comandos `mysql < archivo.sql` independientes) el pre-chequeo lo hubiera pasado por alto y saltado 3.5 dejándolo en el criterio viejo. Ahora se verifican los dos triggers por separado en ambos puntos.
 
