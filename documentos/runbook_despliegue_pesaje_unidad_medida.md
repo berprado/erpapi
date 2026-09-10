@@ -26,7 +26,7 @@ propios, no compartidos):
 |---|---|---|
 | `test` (WAMP local) | `adminerp_garden` — copia local, funciona como entorno de desarrollo de la sucursal Beer Garden | ✅ Ya tiene todo aplicado y verificado (backfills + triggers 2026-09-09) |
 | `test_pos` | Túnel `servidor.localto.net:5277`, BD `adminerp` — entorno de validación E2E con POS real conectado, réplica exacta de producción Beer Garden | ✅ Aplicado y verificado 2026-09-10 (backfills + fix de esquema legacy + triggers, con sanity check real de INSERT/UPDATE) |
-| `production` — casa matriz | Túnel `backapp.localto.net:1790`, BD `adminerp` | ⬜ Pendiente — **atención**: esta base usa el sistema legacy `app_producto_pesaje_config` activamente (296 filas, actividad real) — **no aplica** el paso 3.4 de este runbook (esquema legacy), solo 3.1/3.2/3.3/3.5/3.6/3.7 |
+| `production` — casa matriz | Túnel `backapp.localto.net:1790`, BD `adminerp` | ✅ Aplicado y verificado 2026-09-10 (backfills + triggers, con sanity check real de INSERT/UPDATE; el paso 3.4 no aplicó — esquema legacy ya correcto, 296 filas con actividad real). Auditoría: 63 productos sin config (INCOMPLETOS), 5 conflictos excepcionales incluyendo `HUARI 620ML`/`AMSTEL 620ML` — sin editar por SQL directo, pendiente completar vía PESAJE |
 | `production` — Beer Garden | Túnel `gardentcp.localto.net:7755`, BD propia | ⬜ Pendiente — misma línea que `test_pos`, se espera el mismo esquema legacy desfasado (ver 3.4) |
 
 **Antes de arrancar, confirmar con quien tenga acceso:**
@@ -350,7 +350,7 @@ código.
 ## 7. Checklist final (una fila por base de datos)
 
 - [x] `test_pos`: 3.1 → 3.2 → 3.3 → 3.4 → 3.5 → 3.6 → 3.7 → smoke test (5) — completado 2026-09-10
-- [ ] `production` casa matriz: 3.1 → 3.2 → 3.3 → **3.4 no aplica** (esquema ya es el nuevo) → 3.5 → 3.6 → 3.7 → smoke test (5)
+- [x] `production` casa matriz: 3.1 → 3.2 → 3.3 → **3.4 no aplicó** (esquema ya era el nuevo) → 3.5 → 3.6 → 3.7 — completado 2026-09-10, pendiente solo el smoke test (5) en la PWA real
 - [ ] `production` Beer Garden: 3.1 → 3.2 → 3.3 → 3.4 → 3.5 → 3.6 → 3.7 → smoke test (5)
 - [x] PR #9 mergeado (2026-09-10) — deploy de código a confirmar en ambas instancias de Seenode
 - [ ] Tabla "Instancias desplegadas actualmente" de `despliegue_seenode.md` (6.3.2) sigue reflejando la realidad — actualizarla si algo cambió

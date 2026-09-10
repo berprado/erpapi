@@ -11,6 +11,10 @@ separado con git tags semanticos (`vMAJOR.MINOR.PATCH`) — ver seccion
 version productiva en uso real), corresponde a este mismo punto de la
 historia, `## 12.2` de abajo.
 
+## 12.14
+- BD (`production` casa matriz, tras backup previo del usuario): aplicados los backfills y el criterio nuevo de `pesable` (`p_unidad_medida IN (11,61)`), verificado con `SHOW CREATE TRIGGER` (los dos) y un sanity check real de `INSERT`/`UPDATE`. El paso de esquema legacy no aplicó ahí (ya tenía el esquema correcto, confirmado). Auditoría post-aplicación: 63 productos sin ninguna fila de config (candidatos a INCOMPLETOS) y 5 conflictos excepcionales — incluyendo `HUARI 620ML`/`AMSTEL 620ML`, exactamente en el estado post-incidente de la operativa 1263 (`pesable=0`, `peso_bruto=0`), protegidos de auto-promoverse por la guarda de asimetría del trigger. Ninguno editado por SQL directo — queda pendiente completarlos vía el módulo PESAJE. Solo queda `production` Beer Garden pendiente de todo el runbook.
+- Docs: `README.md` actualizado como única fuente de verdad del estado por entorno (casa matriz ahora al día); `documentos/runbook_despliegue_pesaje_unidad_medida.md` y `TODO.md` reflejan el mismo estado.
+
 ## 12.13
 - Docs: correcciones de revisión al PR #10. (1) `README.md` y `documentos/DOCUMENTACION_ALMACENAMIENTO_PALOTEO.md` seguían diciendo que solo `test` tenía el trigger nuevo, contradiciendo al runbook (que ya registraba `test_pos` como completo) — actualizado el estado en `README.md` (única fuente de verdad ahora, con `production` desglosado en casa matriz/Beer Garden) y `DOCUMENTACION_ALMACENAMIENTO_PALOTEO.md` apunta ahí en vez de duplicar el estado puntual. (2) El pre-chequeo del runbook (3.1) y la verificación post-aplicación (3.5) solo miraban `trg_alm_producto_after_insert` — si `after_update` hubiera fallado al reaplicarse (los dos se instalan con comandos `mysql < archivo.sql` independientes) el pre-chequeo lo hubiera pasado por alto y saltado 3.5 dejándolo en el criterio viejo. Ahora se verifican los dos triggers por separado en ambos puntos.
 
