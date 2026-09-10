@@ -291,6 +291,8 @@ Los archivos `querys/fix_trigger_alm_producto_after_insert.sql` y `querys/fix_tr
 [querys/fix_trigger_alm_producto_after_insert.sql](querys/fix_trigger_alm_producto_after_insert.sql),
 [querys/fix_trigger_alm_producto_after_update.sql](querys/fix_trigger_alm_producto_after_update.sql).
 
+**Guía paso a paso para aplicar todo esto (backfills + triggers) en `test_pos` y en cada base de producción**: [documentos/runbook_despliegue_pesaje_unidad_medida.md](documentos/runbook_despliegue_pesaje_unidad_medida.md).
+
 **Antecedente (por que la validacion de `pesable=1` importa):** antes de este fix, versiones anteriores de estos triggers podian dejar una fila "fantasma" en `pesable=0` con `nombre_perfil='Estándar'` para un producto que el catalogo si marca pesable. Como `app_producto_pesaje_config_api` tiene una clave unica real (`uk_producto_perfil` sobre `id_producto_almacen, nombre_perfil`), esa fila fantasma bloqueaba cualquier arreglo desde la app (`POST /perfiles` respondia 409 porque `'Estándar'` ya existia; `DELETE` respondia 400 por ser el ultimo perfil activo; `PUT` con `pesable=0` solo permitia editar `barcode`) — la unica salida era editar la BD directo, que es como se origino el bug de `PATRON SILVER 750ML` corregido en v10.94 (ver CHANGELOG). La limpieza puntual de los productos afectados en produccion quedo en `querys/fix_12_productos_atascados_produccion.sql`. **Desde v10.98, `PUT /api/pesaje/config/{id}` ya permite "promover" una fila fantasma directo desde la app** (ver la fila de esa ruta en la seccion de endpoints, mas arriba) — ya no hace falta SQL directo para este caso. Historial completo en `TODO.md` ("conflictos excepcionales de pesable").
 
 ### Reporte Paloteo 3 (requiere JWT)

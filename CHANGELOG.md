@@ -11,6 +11,9 @@ separado con git tags semanticos (`vMAJOR.MINOR.PATCH`) — ver seccion
 version productiva en uso real), corresponde a este mismo punto de la
 historia, `## 12.2` de abajo.
 
+## 12.11
+- Docs: nuevo `documentos/runbook_despliegue_pesaje_unidad_medida.md` — guía paso a paso para aplicar en `test_pos` y en cada base de producción (casa matriz y Beer Garden tienen catálogos independientes) los cambios de PESAJE de esta tanda: los 2 backfills, la re-aplicación de triggers con el criterio nuevo, verificación de auditoría y el paso de negocio sobre `HUARI 620ML`/`AMSTEL 620ML`. Enlazado desde `README.md` y `TODO.md`.
+
 ## 12.10
 - Docs: decisión de negocio tomada (ver `TODO.md`) sobre el hallazgo de v12.9 — `HUARI 620ML`/`AMSTEL 620ML` (y los otros 2 del incidente 2026-07-30) se confirman pesables de verdad; el problema original fue de preparación operativa, no de clasificación. Se aceptan sin excepción de código. `_procesar_items_paloteo` ya rechaza con `400` cualquier intento de pesar un perfil incompleto (fix v10.94), así que no puede repetirse el incidente de la operativa 1263 tal cual — recomendado igual completar sus perfiles reales antes de que caigan en una operativa, para no sorprender al staff.
 

@@ -2,6 +2,8 @@
 
 ## 🔴 Alta Prioridad
 
+- [ ] **Aplicar en `test_pos` y en cada base de producción los cambios de PESAJE de la sesión 2026-09-08/10** (backfills + nuevo criterio de `pesable` por unidad de medida, PRs #7/#8/#9): guía paso a paso completa en `documentos/runbook_despliegue_pesaje_unidad_medida.md`. Repetir por cada base real (casa matriz y Beer Garden tienen catálogos independientes, no es una sola "producción").
+
 - [ ] **Implementar actualización de precisión ML→OZ en PRODUCCIÓN (cuando test_pos sea estable)**
   - **Status:** ✓ COMPLETADO EN test_pos, PENDIENTE PRODUCCIÓN
   - **Cambios:** 306 productos con redondeo HALF_UP a 0.5 oz + 149 perfiles de pesaje recalculados
