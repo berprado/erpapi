@@ -92,20 +92,30 @@ SELECT p_unidad_medida, COUNT(*) FROM alm_producto WHERE estado='HAB' GROUP BY p
 -- Cuantos ya tienen fila de pesaje, por pesable
 SELECT pesable, COUNT(*) FROM app_producto_pesaje_config_api WHERE estado='HAB' GROUP BY pesable;
 
--- Trigger actual: que criterio esta corriendo hoy en esta base
+-- Trigger actual: que criterio esta corriendo hoy en esta base.
+-- LOS DOS, no solo uno -- after_insert y after_update se instalan con
+-- comandos separados en 3.5 (dos archivos .sql distintos): si uno de los
+-- dos falla a mitad de camino (ej. un timeout de conexion entre el primer
+-- mysql < ...sql y el segundo), quedan en versiones distintas. Mirar solo
+-- after_insert y asumir que after_update esta igual puede hacer que se
+-- salte 3.5 dejando after_update con el criterio viejo sin que nadie lo note.
 SHOW CREATE TRIGGER trg_alm_producto_after_insert\G
+SHOW CREATE TRIGGER trg_alm_producto_after_update\G
 
 -- OBLIGATORIO -- esquema de la tabla legacy que el trigger tambien escribe
 -- (ver 3.4 antes de re-aplicar el trigger, sin importar el resultado de
--- SHOW CREATE TRIGGER de arriba)
+-- los SHOW CREATE TRIGGER de arriba)
 SHOW CREATE TABLE app_producto_pesaje_config\G
 SELECT COUNT(*) FROM app_producto_pesaje_config;
 ```
 
-En la salida del `SHOW CREATE TRIGGER`, mirar la condición de `v_pesable`:
-si dice `ind_permite_comandar = 71 AND ... NOT IN (10,11,...)` es la versión
-vieja (2026-07-30); si dice `p_unidad_medida IN (11, 61)` ya es la nueva y
-**se puede saltar el paso 3.5** de esta base (ya está).
+En la salida de CADA `SHOW CREATE TRIGGER`, mirar la condición de
+`v_pesable`: si dice `ind_permite_comandar = 71 AND ... NOT IN (10,11,...)`
+es la versión vieja (2026-07-30); si dice `p_unidad_medida IN (11, 61)` ya
+es la nueva. **Solo saltar el paso 3.5 si LOS DOS triggers ya muestran la
+versión nueva** — si uno quedó viejo y el otro nuevo, correr 3.5 igual (el
+`DROP TRIGGER IF EXISTS` + `CREATE TRIGGER` de cada script es idempotente,
+no hay problema en reaplicar el que ya estaba bien).
 
 En la salida del `SHOW CREATE TABLE app_producto_pesaje_config`, confirmar
 si tiene columnas `id_producto_almacen`/`gramos_por_oz`/`pesable` (esquema
@@ -189,16 +199,27 @@ este paso, no aplica.
 
 ### 3.5 Re-aplicar los triggers con el criterio nuevo
 
-Solo si el pre-chequeo (3.1) mostró que esta base todavía tiene la versión
-2026-07-30:
+Solo si el pre-chequeo (3.1) mostró que **alguno de los dos** triggers de
+esta base todavía tiene la versión 2026-07-30 (correr ambos comandos
+siempre que uno lo necesite — son idempotentes, no pasa nada si el otro ya
+estaba en la versión nueva):
 
 ```powershell
 mysql -h <HOST> -P <PUERTO> -u <USUARIO> -p <BASE> < querys\fix_trigger_alm_producto_after_insert.sql
 mysql -h <HOST> -P <PUERTO> -u <USUARIO> -p <BASE> < querys\fix_trigger_alm_producto_after_update.sql
 ```
 
-Verificar con `SHOW CREATE TRIGGER trg_alm_producto_after_insert\G` que la
-condición de `v_pesable` ahora dice `p_unidad_medida IN (11, 61)`.
+Verificar **los dos**, no solo uno — cada `mysql < archivo.sql` es un
+proceso separado y puede fallar independientemente (conexión cortada,
+permisos, etc.) sin que el otro se entere:
+
+```sql
+SHOW CREATE TRIGGER trg_alm_producto_after_insert\G
+SHOW CREATE TRIGGER trg_alm_producto_after_update\G
+```
+
+Confirmar que la condición de `v_pesable` dice `p_unidad_medida IN (11, 61)`
+en ambas salidas antes de seguir al sanity check.
 
 **Sanity check OBLIGATORIO, no opcional** (esto fue justo lo que encontró el
 bug de 3.4 — `SHOW CREATE TRIGGER` solo confirma que el trigger se instaló,

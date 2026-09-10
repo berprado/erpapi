@@ -479,7 +479,7 @@ Ejemplo:
 
 **Consultas SQL de control (módulo PESAJE):**
 
-**Nota de vigencia (2026-09-09):** usan `p_unidad_medida IN (11, 61)`, el criterio vigente desde esa fecha, y solo reflejan la realidad en el entorno donde el trigger ya fue re-aplicado con esa definición (ver "Estado de aplicación por entorno" en `README.md`, sección "Triggers de base de datos" — al momento de escribir esto, solo `test`). Contra un entorno con la versión 2026-07-30 del trigger, cambiar la condición por `a.ind_permite_comandar = 71 AND (a.id_categoria IS NULL OR a.id_categoria NOT IN (10,11,13,14,15,17,18,19,20))`.
+**Nota de vigencia (actualizado 2026-09-10):** usan `p_unidad_medida IN (11, 61)`, el criterio vigente desde 2026-09-09, y solo reflejan la realidad en el entorno donde el trigger ya fue re-aplicado con esa definición (ver "Estado de aplicación por entorno", tabla mantenida en `README.md` sección "Triggers de base de datos" — no repetir el estado puntual acá, para no tener dos lugares que se puedan desincronizar entre sí; al momento de escribir esto son `test` y `test_pos`, pero verificar la tabla del README antes de asumirlo). Contra un entorno con la versión 2026-07-30 del trigger, cambiar la condición por `a.ind_permite_comandar = 71 AND (a.id_categoria IS NULL OR a.id_categoria NOT IN (10,11,13,14,15,17,18,19,20))`.
 
 ```sql
 -- 1) Universo objetivo del módulo PESAJE
