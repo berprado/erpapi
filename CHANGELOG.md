@@ -11,6 +11,10 @@ separado con git tags semanticos (`vMAJOR.MINOR.PATCH`) — ver seccion
 version productiva en uso real), corresponde a este mismo punto de la
 historia, `## 12.2` de abajo.
 
+## 12.12
+- Fix crítico (BD, `test_pos` ya corregido): `app_producto_pesaje_config` (tabla legacy de un sistema propio de casa matriz, activo ahí con 296 filas — independiente de este repo) tenía un esquema desfasado en la línea Beer Garden (`id_producto` en vez de `id_producto_almacen`, sin `gramos_por_oz`/`pesable`) desde que el trigger unificado se aplicó el 2026-07-30. Efecto real: cualquier `INSERT`/`UPDATE` sobre `alm_producto` fallaba (`ERROR 1054`) al disparar el trigger — bug dormido, nunca ejercitado con un alta/edición real de producto en esa línea hasta un sanity check el 2026-09-10. `querys/fix_esquema_legacy_app_producto_pesaje_config.sql` migra la tabla (vacía en esa línea, sin pérdida de datos) al mismo esquema que ya usa casa matriz — no aplica ahí, ya está correcto. Runbook actualizado con el paso (sección 3.4) y verificado con sanity check real de INSERT+UPDATE en `test_pos`.
+- Verificado sin cambios necesarios: el procedimiento `obtener_inventario_barra` (externo a este repo, no usado por esta API) es idéntico en las 3 bases consultadas y filtra por barra correctamente pese a nombrar sus columnas al revés de como los llama hoy `vista_inventario_barra_con_filtro` — convención propia, no un desincronismo.
+
 ## 12.11
 - Docs: nuevo `documentos/runbook_despliegue_pesaje_unidad_medida.md` — guía paso a paso para aplicar en `test_pos` y en cada base de producción (casa matriz y Beer Garden tienen catálogos independientes) los cambios de PESAJE de esta tanda: los 2 backfills, la re-aplicación de triggers con el criterio nuevo, verificación de auditoría y el paso de negocio sobre `HUARI 620ML`/`AMSTEL 620ML`. Enlazado desde `README.md` y `TODO.md`.
 

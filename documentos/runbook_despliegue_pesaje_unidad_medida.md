@@ -25,9 +25,9 @@ propios, no compartidos):
 | Entorno | Base de datos | Estado tras esta sesión |
 |---|---|---|
 | `test` (WAMP local) | `adminerp_garden` — copia local, funciona como entorno de desarrollo de la sucursal Beer Garden | ✅ Ya tiene todo aplicado y verificado (backfills + triggers 2026-09-09) |
-| `test_pos` | Túnel `servidor.localto.net:5277`, BD `adminerp` — entorno de validación E2E con POS real conectado | ⬜ Pendiente — **confirmar si sigue siendo el mismo catálogo que casa matriz o si ya está desactualizado como referencia** |
-| `production` — casa matriz | Túnel `backapp.localto.net:1790`, BD `adminerp` | ⬜ Pendiente |
-| `production` — Beer Garden | Túnel `gardentcp.localto.net:7755`, BD propia | ⬜ Pendiente |
+| `test_pos` | Túnel `servidor.localto.net:5277`, BD `adminerp` — entorno de validación E2E con POS real conectado, réplica exacta de producción Beer Garden | ✅ Aplicado y verificado 2026-09-10 (backfills + fix de esquema legacy + triggers, con sanity check real de INSERT/UPDATE) |
+| `production` — casa matriz | Túnel `backapp.localto.net:1790`, BD `adminerp` | ⬜ Pendiente — **atención**: esta base usa el sistema legacy `app_producto_pesaje_config` activamente (296 filas, actividad real) — **no aplica** el paso 3.4 de este runbook (esquema legacy), solo 3.1/3.2/3.3/3.5/3.6/3.7 |
+| `production` — Beer Garden | Túnel `gardentcp.localto.net:7755`, BD propia | ⬜ Pendiente — misma línea que `test_pos`, se espera el mismo esquema legacy desfasado (ver 3.4) |
 
 **Antes de arrancar, confirmar con quien tenga acceso:**
 1. ¿`test_pos` sigue vivo y es representativo de casa matriz, o quedó desactualizado desde que Beer Garden se desplegó por separado (2026-09-02)?
@@ -46,7 +46,8 @@ este runbook se repite igual, una vez por cada base real.
 | 2 | Backfill: único producto con `p_unidad_medida=61` como `pesable=1` | `querys/backfill_producto_barril_pesable_pesaje_config_api.sql` | `test` |
 | 3 | Fix de código: `GET /api/pesaje/config`/`categorias` ya no excluyen categorías del listado | PR #7 (mergeado a `main`) | Todo lo que corra el código de `main` |
 | 4 | Fix de código: `POST /api/inventario/paloteo` no ignora perfiles pesables cuando el producto tiene más de una fila de config | PR #8 (mergeado a `main`) | Todo lo que corra el código de `main` |
-| 5 | Cambio de criterio: `pesable` se deriva de `p_unidad_medida IN (11,61)` en vez de categoría — triggers, `_producto_deberia_ser_pesable()`, bloque INCOMPLETOS, frontend | PR #9 (⬜ pendiente de mergear) + `querys/fix_trigger_alm_producto_after_insert.sql`/`after_update.sql` | `test` (BD) — el código llega solo con el merge de #9 |
+| 5 | Cambio de criterio: `pesable` se deriva de `p_unidad_medida IN (11,61)` en vez de categoría — triggers, `_producto_deberia_ser_pesable()`, bloque INCOMPLETOS, frontend | PR #9 (mergeado a `main` 2026-09-10) + `querys/fix_trigger_alm_producto_after_insert.sql`/`after_update.sql` | `test` y `test_pos` (BD) |
+| 6 | **Fix crítico (2026-09-10, no relacionado al criterio de pesable):** esquema desfasado de `app_producto_pesaje_config` (legacy, sistema propio de casa matriz) en la línea Beer Garden rompía **todo** INSERT/UPDATE de `alm_producto` al disparar el trigger (`ERROR 1054: Unknown column 'id_producto_almacen'`) — bug dormido desde 2026-07-30, encontrado recién al hacer un sanity check real en `test_pos` | `querys/fix_esquema_legacy_app_producto_pesaje_config.sql` | `test_pos` |
 
 **Importante — separar "deploy de código" de "aplicar SQL a mano":** los
 puntos 3, 4 y 5 (parte de código) llegan automáticamente a casa matriz y
@@ -93,12 +94,23 @@ SELECT pesable, COUNT(*) FROM app_producto_pesaje_config_api WHERE estado='HAB' 
 
 -- Trigger actual: que criterio esta corriendo hoy en esta base
 SHOW CREATE TRIGGER trg_alm_producto_after_insert\G
+
+-- OBLIGATORIO -- esquema de la tabla legacy que el trigger tambien escribe
+-- (ver 3.4 antes de re-aplicar el trigger, sin importar el resultado de
+-- SHOW CREATE TRIGGER de arriba)
+SHOW CREATE TABLE app_producto_pesaje_config\G
+SELECT COUNT(*) FROM app_producto_pesaje_config;
 ```
 
-En la salida del último `SHOW CREATE TRIGGER`, mirar la condición de
-`v_pesable`: si dice `ind_permite_comandar = 71 AND ... NOT IN (10,11,...)`
-es la versión vieja (2026-07-30); si dice `p_unidad_medida IN (11, 61)` ya
-es la nueva y **se puede saltar el paso 3.4** de esta base (ya está).
+En la salida del `SHOW CREATE TRIGGER`, mirar la condición de `v_pesable`:
+si dice `ind_permite_comandar = 71 AND ... NOT IN (10,11,...)` es la versión
+vieja (2026-07-30); si dice `p_unidad_medida IN (11, 61)` ya es la nueva y
+**se puede saltar el paso 3.5** de esta base (ya está).
+
+En la salida del `SHOW CREATE TABLE app_producto_pesaje_config`, confirmar
+si tiene columnas `id_producto_almacen`/`gramos_por_oz`/`pesable` (esquema
+"nuevo", el que asume el trigger) o `id_producto` sin esas columnas (esquema
+"viejo", el de la línea Beer Garden antes de este fix) — ver 3.4.
 
 ### 3.2 Backfill: productos no pesables preexistentes
 
@@ -138,7 +150,44 @@ SELECT id, nombre, estado FROM alm_producto WHERE p_unidad_medida = 61;
 mysql -h <HOST> -P <PUERTO> -u <USUARIO> -p <BASE> < querys\backfill_producto_barril_pesable_pesaje_config_api.sql
 ```
 
-### 3.4 Re-aplicar los triggers con el criterio nuevo
+### 3.4 ⚠️ Corregir esquema legacy — obligatorio en la línea Beer Garden antes de re-aplicar el trigger
+
+**Hallazgo crítico (2026-09-10):** `trg_alm_producto_after_insert`/`after_update`
+siempre asumieron el esquema "nuevo" de `app_producto_pesaje_config` (tabla
+legacy de un sistema propio de casa matriz, independiente de este repo —
+`id_producto_almacen`, `gramos_por_oz`, `pesable`). En la línea Beer Garden
+(`test_pos`, y se espera lo mismo en su producción) esa tabla nunca se
+migró a ese esquema porque el sistema que la usa no está implementado ahí
+— quedó con un esquema viejo (`id_producto`, sin esas columnas) y sin
+ninguna fila. Mientras la tabla tenga ese esquema viejo, **el trigger falla
+con `ERROR 1054: Unknown column 'id_producto_almacen' in 'field list'` en
+CUALQUIER INSERT o UPDATE sobre `alm_producto`** — no solo altas de
+producto, cualquier edición del catálogo (precio, categoría,
+habilitar/deshabilitar) rompe. Confirmado con un sanity check real en
+`test_pos` el 2026-09-10; el error no aparece con `SHOW CREATE TRIGGER`
+(el trigger se instala bien), solo se ve al ejecutar un `INSERT`/`UPDATE`
+real.
+
+**Si el pre-chequeo (3.1) mostró el esquema viejo** (`id_producto`, sin
+`gramos_por_oz`/`pesable`) **y la tabla tiene 0 filas** (confirmar con el
+`SELECT COUNT(*)` del pre-chequeo):
+
+```powershell
+mysql -h <HOST> -P <PUERTO> -u <USUARIO> -p <BASE> < querys\fix_esquema_legacy_app_producto_pesaje_config.sql
+```
+
+El script termina con un `SHOW CREATE TABLE` — comparar contra el esquema
+de casa matriz (arriba, en el hallazgo) para confirmar que coincide.
+
+**Si la tabla ya tiene filas** (no se espera en la línea Beer Garden, pero
+si aparece): DETENERSE, no correr el script — fue escrito para migrar una
+tabla vacía, no para preservar datos existentes. Revisar a mano antes de
+seguir.
+
+**Si el pre-chequeo mostró el esquema nuevo** (como en casa matriz): saltar
+este paso, no aplica.
+
+### 3.5 Re-aplicar los triggers con el criterio nuevo
 
 Solo si el pre-chequeo (3.1) mostró que esta base todavía tiene la versión
 2026-07-30:
@@ -151,34 +200,42 @@ mysql -h <HOST> -P <PUERTO> -u <USUARIO> -p <BASE> < querys\fix_trigger_alm_prod
 Verificar con `SHOW CREATE TRIGGER trg_alm_producto_after_insert\G` que la
 condición de `v_pesable` ahora dice `p_unidad_medida IN (11, 61)`.
 
-**Sanity check recomendado (opcional pero barato)** — insertar un producto
-de prueba y confirmar que el trigger deriva `pesable` correctamente, después
-borrarlo (mismo patrón usado para verificar esto en `test`):
+**Sanity check OBLIGATORIO, no opcional** (esto fue justo lo que encontró el
+bug de 3.4 — `SHOW CREATE TRIGGER` solo confirma que el trigger se instaló,
+no que funcione de punta a punta): insertar un producto de prueba real,
+confirmar que ambas tablas quedan bien, probar también el `UPDATE`, y
+limpiar todo. Validado tal cual en `test_pos` el 2026-09-10:
 
 ```sql
+-- 1) INSERT -- si esto tira ERROR 1054, volver a 3.4, algo quedo mal
 INSERT INTO alm_producto (nombre, correlativo, id_categoria, medida, p_unidad_medida, cantidad_detalle, ind_permite_comandar, codigo, usuario_reg, estado)
 VALUES ('SANITY CHECK PESABLE', 0, 1, 750, 11, 25.5, 71, 'SANITY-PESABLE', 'sanity', 'HAB');
 
-SELECT p.id, p.nombre, pc.pesable
-FROM alm_producto p
-JOIN app_producto_pesaje_config_api pc ON pc.id_producto_almacen = p.id
-WHERE p.codigo = 'SANITY-PESABLE';
--- pesable debe ser 1
+-- 2) Verificar las DOS tablas que toca el trigger
+SELECT id_producto_almacen, pesable FROM app_producto_pesaje_config
+WHERE id_producto_almacen = (SELECT id FROM alm_producto WHERE codigo='SANITY-PESABLE');
+SELECT id_producto_almacen, nombre_perfil, pesable FROM app_producto_pesaje_config_api
+WHERE id_producto_almacen = (SELECT id FROM alm_producto WHERE codigo='SANITY-PESABLE');
+-- pesable debe ser 1 en ambas
 
--- Limpieza: usar el id devuelto arriba en vez de <ID>
-DELETE FROM app_producto_pesaje_config_api WHERE id_producto_almacen = <ID>;
-DELETE FROM app_producto_pesaje_config WHERE id_producto_almacen = <ID>;
+-- 3) Probar tambien el trigger de UPDATE (no solo el de INSERT)
+UPDATE alm_producto SET medida = 750 WHERE codigo='SANITY-PESABLE';
+-- no deberia tirar error
+
+-- 4) Limpieza (no hace falta copiar el id a mano)
+DELETE FROM app_producto_pesaje_config_api WHERE id_producto_almacen = (SELECT id FROM alm_producto WHERE codigo='SANITY-PESABLE');
+DELETE FROM app_producto_pesaje_config WHERE id_producto_almacen = (SELECT id FROM alm_producto WHERE codigo='SANITY-PESABLE');
 DELETE FROM alm_producto WHERE codigo = 'SANITY-PESABLE';
 ```
 
-### 3.5 Verificación de auditoría
+### 3.6 Verificación de auditoría
 
 Usar las 3 consultas de `README.md` sección "Consultas SQL de auditoría
 (PESAJE)" (ya actualizadas al criterio `p_unidad_medida IN (11,61)`) para
 confirmar que el universo objetivo, los productos en INCOMPLETOS y los
 conflictos excepcionales tienen sentido para el catálogo real de esta base.
 
-### 3.6 Paso de negocio: productos tipo HUARI/AMSTEL 620ML
+### 3.7 Paso de negocio: productos tipo HUARI/AMSTEL 620ML
 
 Ver `TODO.md` ("conflictos excepcionales de pesable") y CHANGELOG v12.9/12.10
 para el contexto completo. Decisión ya tomada: estos productos **sí son
@@ -258,6 +315,12 @@ código.
   apuntado a las filas insertadas por el backfill (identificables por rango
   de `id` o por `usuario_reg`, según lo que se haya usado al correrlo en esa
   base).
+- **Fix de esquema legacy (3.4)**: solo aplica en la línea Beer Garden y
+  solo se corre sobre una tabla vacía — no hay datos que revertir. Si hiciera
+  falta deshacer el cambio de esquema en sí (no debería, es estrictamente
+  más completo que el anterior), la definición vieja de la tabla está en el
+  historial de git de este runbook (versión previa a este commit) y en
+  `SHOW CREATE TABLE` de `test_pos` antes del 2026-09-10.
 - **Código**: revertir el merge de PR #9 en GitHub y dejar que Seenode
   redeploye el commit anterior.
 
@@ -265,8 +328,26 @@ código.
 
 ## 7. Checklist final (una fila por base de datos)
 
-- [ ] `test_pos`: 3.1 → 3.2 → 3.3 → 3.4 → 3.5 → 3.6 → smoke test (5)
-- [ ] `production` casa matriz: 3.1 → 3.2 → 3.3 → 3.4 → 3.5 → 3.6 → smoke test (5)
-- [ ] `production` Beer Garden: 3.1 → 3.2 → 3.3 → 3.4 → 3.5 → 3.6 → smoke test (5)
-- [ ] PR #9 mergeado y deploy de código confirmado en ambas instancias de Seenode
+- [x] `test_pos`: 3.1 → 3.2 → 3.3 → 3.4 → 3.5 → 3.6 → 3.7 → smoke test (5) — completado 2026-09-10
+- [ ] `production` casa matriz: 3.1 → 3.2 → 3.3 → **3.4 no aplica** (esquema ya es el nuevo) → 3.5 → 3.6 → 3.7 → smoke test (5)
+- [ ] `production` Beer Garden: 3.1 → 3.2 → 3.3 → 3.4 → 3.5 → 3.6 → 3.7 → smoke test (5)
+- [x] PR #9 mergeado (2026-09-10) — deploy de código a confirmar en ambas instancias de Seenode
 - [ ] Tabla "Instancias desplegadas actualmente" de `despliegue_seenode.md` (6.3.2) sigue reflejando la realidad — actualizarla si algo cambió
+
+---
+
+## 8. Objetos verificados sin acción necesaria
+
+- **Procedimiento `obtener_inventario_barra`** (MySQL, externo a este repo,
+  igual en las 3 bases verificadas — casa matriz creado 2025-06-28, `test`/
+  `test_pos` son copias más recientes de la misma definición): recibe
+  `p_id_barra` y sí filtra correctamente por barra (`WHERE bi.id_barra =
+  p_id_barra`), a diferencia de `vista_inventario_barra_con_filtro` que
+  necesita el filtro agregado a mano en la consulta que la usa (ver
+  CHANGELOG 12.5). Nombra `bi.id AS id_barra` (en realidad el id de la fila
+  de `bar_inventario`, no el número de barra) y `bi.id_barra AS nro_barra`
+  (el número de barra real) — nombres invertidos respecto a como los llama
+  hoy la vista de este repo, pero es una convención propia de este
+  procedimiento, consistente en las 3 bases, no algo que haya quedado
+  desincronizado. **No lo usa esta API** (sin referencias en el código) —
+  no requiere ninguna acción para este despliegue.
