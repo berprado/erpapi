@@ -71,7 +71,7 @@ El panel `#panel-pesaje` se compone de arriba a abajo:
 ### Promover un perfil fantasma (pesable=0 → pesable=1) — 4 pasos — flujo implícito
 
 1. Ir a la tab **"No pesables"** (el fantasma solo aparece aquí)
-2. Tap **"Editar"** → campos habilitados porque `ind_permite_comandar = 'si'`
+2. Tap **"Editar"** → campos habilitados porque `catalogo_permite_pesar = true` (antes del 2026-09-09 se derivaba de `ind_permite_comandar = 'si'`; ahora lo calcula el backend a partir de `p_unidad_medida`)
 3. Completar peso bruto y tara
 4. Tap **"Guardar"** → backend detecta elegibilidad y cambia `pesable` a 1
 
@@ -147,7 +147,7 @@ El PUT puede cambiar `pesable` de 0 a 1 sin indicarlo en la respuesta al usuario
 Si `volumen_oz` es `null` o `0`, el input gr/oz queda vacío sin mensaje explicativo. El admin no sabe si debe ingresarlo o si hay un problema con el catálogo.
 
 **D5 — Fantasmas clasificados en "No pesables" en lugar de "Incompletos"**  
-Un producto con `pesable=0` pero `ind_permite_comandar='si'` aparece en "No pesables". Para el admin, ese producto necesita configuración y debería estar en "Incompletos" o en una sub-tab "Pendientes".
+Un producto con `pesable=0` pero `catalogo_permite_pesar=true` (antes: `ind_permite_comandar='si'`) aparece en "No pesables". Para el admin, ese producto necesita configuración y debería estar en "Incompletos" o en una sub-tab "Pendientes". Sigue sin resolver tras el cambio de criterio del 2026-09-09 — el campo que decide la elegibilidad cambió, pero esta clasificación de tabs no.
 
 ---
 
