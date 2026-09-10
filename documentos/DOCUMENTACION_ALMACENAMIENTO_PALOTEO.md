@@ -461,7 +461,7 @@ Ejemplo:
 
 **Vista de consulta (módulo PESAJE):** `v9_pesaje_config_api` expone esta tabla unida con `alm_producto` y `alm_categoria`, filtrando `p.estado = 'HAB' AND pc.estado = 'HAB'` (los perfiles eliminados no aparecen en el listado del módulo).
 
-**Categorías excluidas del módulo PESAJE (histórico, corregido 2026-09-08):** hasta esa fecha, los endpoints `GET /api/pesaje/config` y `GET /api/pesaje/categorias` excluían siempre las categorías con `id` 10, 11, 13, 14, 15, 17, 18, 19 y 20 (y por lo tanto todos sus productos), tanto del listado como del filtro de categorías. Tenía sentido mientras `app_producto_pesaje_config_api` solo contenía perfiles de productos pesables; dejó de tenerlo tras el backfill que agregó fila real (`pesable=0`) para todo el resto del catálogo `HAB` (`querys/backfill_productos_no_pesables_pesaje_config_api.sql`), y un `pesable=1` real dentro de una categoría por lo demás excluida (`querys/backfill_producto_barril_pesable_pesaje_config_api.sql`: BARRIL PACEÑA 50L, categoría CERVEZAS). Ambos endpoints ya no aplican este filtro sobre filas existentes; `CATEGORIAS_EXCLUIDAS_PESAJE` sigue usándose solo donde describe una regla de derivación (triggers de BD, `_producto_deberia_ser_pesable`, y el bloque de INCOMPLETOS que sugiere productos sin configuración).
+**Categorías excluidas del módulo PESAJE (histórico, corregido 2026-09-08):** hasta esa fecha, los endpoints `GET /api/pesaje/config` y `GET /api/pesaje/categorias` excluían siempre las categorías con `id` 10, 11, 13, 14, 15, 17, 18, 19 y 20 (y por lo tanto todos sus productos), tanto del listado como del filtro de categorías. Tenía sentido mientras `app_producto_pesaje_config_api` solo contenía perfiles de productos pesables; dejó de tenerlo tras el backfill que agregó fila real (`pesable=0`) para todo el resto del catálogo `HAB` (`querys/backfill_productos_no_pesables_pesaje_config_api.sql`), y un `pesable=1` real dentro de una categoría por lo demás excluida (`querys/backfill_producto_barril_pesable_pesaje_config_api.sql`: BARRIL PACEÑA 50L, categoría CERVEZAS). Ambos endpoints ya no aplican este filtro sobre filas existentes. (`CATEGORIAS_EXCLUIDAS_PESAJE` ya no existe en el código: la regla de derivación que describía — triggers de BD, `_producto_deberia_ser_pesable`, bloque de INCOMPLETOS — fue reemplazada el 2026-09-09 por `UNIDADES_MEDIDA_PESABLES` / `p_unidad_medida IN (11, 61)`, ver más abajo.)
 
 **Indicador de datos incompletos (frontend):** en la UI del módulo PESAJE, un producto pesable (`pesable=1`) aparece en INCOMPLETOS cuando tiene al menos un perfil con `peso_bruto` o `tara` en `NULL`, con `peso_bruto<=0` o `gramos_por_oz<=0` (desde v10.94 — un perfil con ceros en vez de `NULL` pasaba antes como "completo" y rompía la captura de paloteo con `ZeroDivisionError`), o cuando no tiene ningún modelo activo en `app_producto_pesaje_config_api` (caso "sin modelos configurados"). `tara=0` sí es un valor válido (no cuenta como incompleto), ya que el schema lo permite explícitamente y es el valor forzado en VINOS.
 
@@ -469,7 +469,7 @@ Ejemplo:
 
 **Reglas de edición (`PUT /api/pesaje/config/{id}`) — reescritas en v10.98 ("promover"):**
 - `peso_bruto` y `tara` **ya no son obligatorios juntos**. Alcanza con `peso_bruto` (la tara recién se conoce cuando se termina el contenido de la botella); `tara`/`gramos_por_oz` quedan en `NULL` hasta completarlos con una segunda edición, que sí recalcula `gramos_por_oz` con la misma fórmula del alta (validando `tara < peso_bruto`).
-- **Promoción de `pesable=0` a `1` sin SQL directo:** si el perfil está en `pesable=0` pero el catálogo dice que el producto debería ser pesable (`alm_producto.ind_permite_comandar=71` **y** categoría fuera de las excluidas — mismo criterio que usan los triggers de BD, función `_producto_deberia_ser_pesable` en `main.py`), cargar `peso_bruto` promueve el perfil a `pesable=1` en el mismo guardado. Si el catálogo no lo marca pesable, se sigue rechazando con `400` cualquier intento de tocar `peso_bruto`/`tara` (solo se permite editar `barcode`).
+- **Promoción de `pesable=0` a `1` sin SQL directo:** si el perfil está en `pesable=0` pero el catálogo dice que el producto debería ser pesable (`alm_producto.p_unidad_medida IN (11, 61)` desde 2026-09-09 — mismo criterio que usan los triggers de BD, función `_producto_deberia_ser_pesable` en `main.py`; antes era `ind_permite_comandar=71` y categoría fuera de una lista negra), cargar `peso_bruto` promueve el perfil a `pesable=1` en el mismo guardado. Si el catálogo no lo marca pesable, se sigue rechazando con `400` cualquier intento de tocar `peso_bruto`/`tara` (solo se permite editar `barcode`).
 - Categoría VINOS: con `peso_bruto` alcanza para completar el perfil del todo en un solo paso (`tara=0` y `gramos_por_oz=1` se fuerzan igual que en el alta).
 - Contexto: antes de este fix, un perfil `pesable=0` era un callejón sin salida desde la app (`POST` chocaba 409 contra el nombre `'Estándar'` ya ocupado por la fila fantasma, `DELETE` rechazaba con 400 por ser el último perfil activo) — la única salida era editar la BD directo, que es como se originó el bug de `PATRON SILVER 750ML` (v10.94). Ver "conflictos excepcionales de pesable" en `TODO.md` y la sección "Triggers de base de datos" en `README.md`.
 
@@ -479,20 +479,20 @@ Ejemplo:
 
 **Consultas SQL de control (módulo PESAJE):**
 
+**Nota de vigencia (2026-09-09):** usan `p_unidad_medida IN (11, 61)`, el criterio vigente desde esa fecha, y solo reflejan la realidad en el entorno donde el trigger ya fue re-aplicado con esa definición (ver "Estado de aplicación por entorno" en `README.md`, sección "Triggers de base de datos" — al momento de escribir esto, solo `test`). Contra un entorno con la versión 2026-07-30 del trigger, cambiar la condición por `a.ind_permite_comandar = 71 AND (a.id_categoria IS NULL OR a.id_categoria NOT IN (10,11,13,14,15,17,18,19,20))`.
+
 ```sql
 -- 1) Universo objetivo del módulo PESAJE
 SELECT COUNT(*) AS total_objetivo
 FROM alm_producto a
 WHERE a.estado = 'HAB'
-  AND a.ind_permite_comandar = 71
-  AND (a.id_categoria IS NULL OR a.id_categoria NOT IN (10,11,13,14,15,17,18,19,20));
+  AND a.p_unidad_medida IN (11, 61);
 
 -- 2) Productos sin configuración activa (deben aparecer en INCOMPLETOS)
 SELECT a.id, a.codigo, a.nombre
 FROM alm_producto a
 WHERE a.estado = 'HAB'
-  AND a.ind_permite_comandar = 71
-  AND (a.id_categoria IS NULL OR a.id_categoria NOT IN (10,11,13,14,15,17,18,19,20))
+  AND a.p_unidad_medida IN (11, 61)
   AND NOT EXISTS (
     SELECT 1
     FROM app_producto_pesaje_config_api p
@@ -510,8 +510,7 @@ INNER JOIN app_producto_pesaje_config_api p
  AND p.estado = 'HAB'
  AND p.pesable = 0
 WHERE a.estado = 'HAB'
-  AND a.ind_permite_comandar = 71
-  AND (a.id_categoria IS NULL OR a.id_categoria NOT IN (10,11,13,14,15,17,18,19,20))
+  AND a.p_unidad_medida IN (11, 61)
 ORDER BY a.nombre ASC;
 
 -- 4) Auditoría: primer perfil activo distinto a Estándar

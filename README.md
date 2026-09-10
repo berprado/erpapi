@@ -186,24 +186,27 @@ Reglas de barra operativa:
 |---|---|---|
 | `POST` | `/api/pesaje/perfiles` | Crea (o reactiva si existe uno eliminado con el mismo nombre) un modelo de botella para producto pesable. Regla general: calcula `gramos_por_oz` en el backend a partir del volumen estandar del producto. Excepción categoria VINOS (`id_categoria=6`): no se calcula por volumen; se fuerza `tara=0` y `gramos_por_oz=1`, y `peso_bruto` representa copas disponibles. El primer modelo activo de un producto se registra siempre como `Estándar`, alineado con el default de `app_producto_pesaje_config_api.nombre_perfil`; los modelos adicionales pueden tener nombre libre |
 | `GET` | `/api/pesaje/categorias` | Lista de categorias habilitadas (todas; ver nota de 2026-09-08 abajo), para el filtro del modulo PESAJE |
-| `GET` | `/api/pesaje/config` | Lista perfiles de pesaje (tabla `app_producto_pesaje_config_api`), con filtros opcionales `nombre`, `id_categoria`, `pesable`. Desde 2026-09-08 ya no excluye las categorias de `CATEGORIAS_EXCLUIDAS_PESAJE` (ver nota abajo). Para `pesable=1`, además de los perfiles existentes, incluye productos pesables habilitados (`alm_producto.ind_permite_comandar=71`, fuera de `CATEGORIAS_EXCLUIDAS_PESAJE`) que todavía no tienen ninguna configuración activa, para que aparezcan en INCOMPLETOS. Ademas de los campos propios del perfil, hace `LEFT JOIN` a `vw_alm_producto_con_nombres` (por `id_producto`) para sumar `medida`, `nombre_unidad_medida`, `nombre_unidad_medida_detalle` y `nombre_ind_permite_comandar` — datos del producto que no dependen de la barra (a diferencia de existencias/cantidades, el peso bruto/tara/codigo de barras es el mismo sin importar donde este el producto), por eso no se usa `nombre_barra` de esa vista |
-| `PUT` | `/api/pesaje/config/{id}` | Edita `peso_bruto`/`tara`/`barcode` de un perfil existente. `peso_bruto` y `tara` ya no son obligatorios juntos: alcanza con `peso_bruto` (la tara recien se conoce cuando se termina el contenido de la botella) y se puede completar despues con una segunda edicion. "Promover": si el perfil esta en `pesable=0` pero el catalogo dice que deberia ser pesable (`ind_permite_comandar=71` y categoria fuera de `CATEGORIAS_EXCLUIDAS_PESAJE`), cargar `peso_bruto` lo pasa a `pesable=1` directo desde aca — ya no hace falta editar la BD a mano para destrabar una fila fantasma (ver "Triggers de base de datos"). Si el catalogo no lo marca pesable, se sigue rechazando cualquier intento de tocar `peso_bruto`/`tara` (solo se permite `barcode`). En categoria VINOS (`id_categoria=6`) se valida y fuerza `tara=0` y `gramos_por_oz=1` (consistencia operativa por copas) — con `peso_bruto` alcanza para completarlo en un solo paso |
+| `GET` | `/api/pesaje/config` | Lista perfiles de pesaje (tabla `app_producto_pesaje_config_api`), con filtros opcionales `nombre`, `id_categoria`, `pesable`. Desde 2026-09-08 ya no excluye categorias del listado (ver nota abajo). Para `pesable=1`, además de los perfiles existentes, incluye productos pesables habilitados (`alm_producto.p_unidad_medida IN (11, 61)`, ver nota de 2026-09-09) que todavía no tienen ninguna configuración activa, para que aparezcan en INCOMPLETOS. Ademas de los campos propios del perfil, hace `LEFT JOIN` a `vw_alm_producto_con_nombres` (por `id_producto`) para sumar `medida`, `nombre_unidad_medida`, `nombre_unidad_medida_detalle` y `nombre_ind_permite_comandar` — datos del producto que no dependen de la barra (a diferencia de existencias/cantidades, el peso bruto/tara/codigo de barras es el mismo sin importar donde este el producto), por eso no se usa `nombre_barra` de esa vista |
+| `PUT` | `/api/pesaje/config/{id}` | Edita `peso_bruto`/`tara`/`barcode` de un perfil existente. `peso_bruto` y `tara` ya no son obligatorios juntos: alcanza con `peso_bruto` (la tara recien se conoce cuando se termina el contenido de la botella) y se puede completar despues con una segunda edicion. "Promover": si el perfil esta en `pesable=0` pero el catalogo dice que deberia ser pesable (`p_unidad_medida IN (11, 61)`, ver nota de 2026-09-09), cargar `peso_bruto` lo pasa a `pesable=1` directo desde aca — ya no hace falta editar la BD a mano para destrabar una fila fantasma (ver "Triggers de base de datos"). Si el catalogo no lo marca pesable, se sigue rechazando cualquier intento de tocar `peso_bruto`/`tara` (solo se permite `barcode`). En categoria VINOS (`id_categoria=6`) se valida y fuerza `tara=0` y `gramos_por_oz=1` (consistencia operativa por copas) — con `peso_bruto` alcanza para completarlo en un solo paso |
 | `DELETE` | `/api/pesaje/config/{id}` | Elimina (soft-delete, `estado='DES'`) un perfil. Rechaza la eliminacion si es el ultimo perfil activo del producto |
 
 Todos los endpoints de Pesaje requieren ademas que el usuario tenga el rol `ROLE_ADMIN` (verificado contra `seg_permiso`/`seg_rol`), devolviendo `403` si no lo tiene.
 
-**Nota (2026-09-08) — `CATEGORIAS_EXCLUIDAS_PESAJE` ya no filtra listados existentes:** hasta esa fecha, `GET /api/pesaje/categorias` y el listado principal de `GET /api/pesaje/config` excluian siempre las categorias 10, 11, 13, 14, 15, 17, 18, 19 y 20 — heredado de una epoca en que `app_producto_pesaje_config_api` solo contenia productos pesables. Tras el backfill de esa fecha (`querys/backfill_productos_no_pesables_pesaje_config_api.sql` y `querys/backfill_producto_barril_pesable_pesaje_config_api.sql`), la tabla tiene fila real (`pesable=0` o `1`) para todo el catalogo `HAB`, categorias antes excluidas incluidas — por ejemplo CERVEZAS (`id_categoria=11`) tiene productos `pesable=0` (la mayoria) y un `pesable=1` real (BARRIL PACEÑA 50L, la excepcion que se pesa/palotea aunque la categoria en general no se pese). Filtrar por esa constante en el listado escondia esas filas de ambas pestañas del modulo PESAJE (Pesables / No pesables) y del selector de categoria. `CATEGORIAS_EXCLUIDAS_PESAJE` sigue vigente donde describe una regla de negocio real: que categoria no se deriva como pesable por defecto (triggers de BD, `_producto_deberia_ser_pesable`, y el bloque de INCOMPLETOS de `/api/pesaje/config` que solo sugiere productos sin configuracion que "deberian" ser pesables).
+**Nota (2026-09-08) — las categorias excluidas ya no filtran listados existentes:** hasta esa fecha, `GET /api/pesaje/categorias` y el listado principal de `GET /api/pesaje/config` excluian siempre las categorias 10, 11, 13, 14, 15, 17, 18, 19 y 20 — heredado de una epoca en que `app_producto_pesaje_config_api` solo contenia productos pesables. Tras el backfill de esa fecha (`querys/backfill_productos_no_pesables_pesaje_config_api.sql` y `querys/backfill_producto_barril_pesable_pesaje_config_api.sql`), la tabla tiene fila real (`pesable=0` o `1`) para todo el catalogo `HAB`, categorias antes excluidas incluidas — por ejemplo CERVEZAS (`id_categoria=11`) tiene productos `pesable=0` (la mayoria) y un `pesable=1` real (BARRIL PACEÑA 50L, la excepcion que se pesa/palotea aunque la categoria en general no se pese). Filtrar por categoria en el listado escondia esas filas de ambas pestañas del modulo PESAJE (Pesables / No pesables) y del selector de categoria.
+
+**Nota (2026-09-09) — criterio de "deberia ser pesable" cambiado de categoria a unidad de medida:** la constante `CATEGORIAS_EXCLUIDAS_PESAJE` (que hasta esta fecha describia, via `ind_permite_comandar=71` + lista negra de categorias, que productos el catalogo deriva como pesables por defecto — usada por los triggers, `_producto_deberia_ser_pesable` y el bloque INCOMPLETOS) fue reemplazada por `UNIDADES_MEDIDA_PESABLES = (11, 61)` en `main.py`. Ver el detalle completo (por que, y la verificacion 1:1 contra el catalogo real) en "Triggers de base de datos" mas abajo. Categoria e `ind_permite_comandar` ya no influyen en si un producto es candidato a pesable.
 
 #### Consultas SQL de auditoría (PESAJE)
 
-Universo objetivo del módulo (habilitados, pesables por catálogo y fuera de categorías excluidas):
+**Nota de vigencia (2026-09-09):** las 3 consultas que siguen usan `p_unidad_medida IN (11, 61)` (`UNIDADES_MEDIDA_PESABLES`), el criterio vigente desde esa fecha. **Solo reflejan lo que corre en el entorno donde `trg_alm_producto_after_insert`/`after_update` ya fueron re-aplicados con esa definición** — al momento de escribir esto, únicamente `test` (ver "Triggers de base de datos" más abajo para el estado exacto por entorno). Contra un entorno que todavía tiene la versión 2026-07-30 del trigger, reemplazar `p_unidad_medida IN (11,61)` por `ind_permite_comandar = 71 AND (id_categoria IS NULL OR id_categoria NOT IN (10,11,13,14,15,17,18,19,20))` para que la consulta refleje lo que ese entorno realmente deriva.
+
+Universo objetivo del módulo (habilitados, pesables por catálogo):
 
 ```sql
 SELECT COUNT(*) AS total_objetivo
 FROM alm_producto a
 WHERE a.estado = 'HAB'
-  AND a.ind_permite_comandar = 71
-  AND (a.id_categoria IS NULL OR a.id_categoria NOT IN (10,11,13,14,15,17,18,19,20));
+  AND a.p_unidad_medida IN (11, 61);
 ```
 
 Productos que deberían verse en INCOMPLETOS por no tener configuración activa:
@@ -213,8 +216,7 @@ SELECT a.id, a.codigo, a.nombre, a.id_categoria, c.nombre AS categoria, a.cantid
 FROM alm_producto a
 LEFT JOIN alm_categoria c ON c.id = a.id_categoria
 WHERE a.estado = 'HAB'
-  AND a.ind_permite_comandar = 71
-  AND (a.id_categoria IS NULL OR a.id_categoria NOT IN (10,11,13,14,15,17,18,19,20))
+  AND a.p_unidad_medida IN (11, 61)
   AND NOT EXISTS (
     SELECT 1
     FROM app_producto_pesaje_config_api p
@@ -228,7 +230,7 @@ Conflictos excepcionales (catálogo pesable vs configuración activa `pesable=0`
 
 ```sql
 SELECT DISTINCT a.id AS id_producto, a.codigo, a.nombre, a.id_categoria, c.nombre AS categoria,
-       a.ind_permite_comandar, p.id AS id_pesaje_config, p.nombre_perfil, p.pesable, p.estado
+       a.p_unidad_medida, p.id AS id_pesaje_config, p.nombre_perfil, p.pesable, p.estado
 FROM alm_producto a
 INNER JOIN app_producto_pesaje_config_api p
   ON p.id_producto_almacen = a.id
@@ -236,8 +238,7 @@ INNER JOIN app_producto_pesaje_config_api p
  AND p.pesable = 0
 LEFT JOIN alm_categoria c ON c.id = a.id_categoria
 WHERE a.estado = 'HAB'
-  AND a.ind_permite_comandar = 71
-  AND (a.id_categoria IS NULL OR a.id_categoria NOT IN (10,11,13,14,15,17,18,19,20))
+  AND a.p_unidad_medida IN (11, 61)
 ORDER BY a.nombre ASC;
 ```
 
@@ -272,12 +273,25 @@ Nota operativa: el valor `Estándar` se usa de forma intencional y centralizada 
 
 Esta API no tiene ningun hook sobre altas/bajas de `alm_producto` (lo gestiona el ERP/POS), asi que dos triggers de MySQL sobre esa tabla mantienen `app_producto_pesaje_config_api` (y la tabla legacy `app_producto_pesaje_config`, no usada por esta API) sincronizada con el catalogo. **Viven en la base de datos de cada entorno, fuera de este repo** — no hay migraciones versionadas de DB; la definicion actual se guarda en `querys/` como fuente de verdad y hay que re-aplicarla manualmente si algun entorno se recrea:
 
-- **`trg_alm_producto_after_insert`** (AFTER INSERT en `alm_producto`): al crear un producto, inserta una fila base en `app_producto_pesaje_config_api` con `pesable` derivado de `ind_permite_comandar=71` **y** de que la categoria no este en `CATEGORIAS_EXCLUIDAS_PESAJE` (la misma constante que usa `main.py`), `nombre_perfil='Estándar'` (default de columna) y `peso_bruto`/`tara`/`gramos_por_oz` en `NULL`. Un producto pesable nuevo cae asi directo en la pestaña INCOMPLETOS, visible y editable desde el primer momento.
-- **`trg_alm_producto_after_update`** (AFTER UPDATE en `alm_producto`): sincroniza `estado` (HAB/DES) y re-evalua `pesable` con el mismo criterio cada vez que cambia el catalogo (ej. se habilita/deshabilita un producto, o cambia `ind_permite_comandar`). Solo promueve `pesable` de `0` a `1` si el perfil ya tiene `peso_bruto` y `gramos_por_oz > 0` reales cargados; en cualquier otro caso deja `pesable` como estaba — nunca auto-habilita un perfil con datos invalidos.
+- **`trg_alm_producto_after_insert`** (AFTER INSERT en `alm_producto`): al crear un producto, inserta una fila base en `app_producto_pesaje_config_api` con `pesable` derivado de `p_unidad_medida IN (11, 61)` (`UNIDADES_MEDIDA_PESABLES` en `main.py` — ver nota de 2026-09-09 abajo), `nombre_perfil='Estándar'` (default de columna) y `peso_bruto`/`tara`/`gramos_por_oz` en `NULL`. Un producto pesable nuevo cae asi directo en la pestaña INCOMPLETOS, visible y editable desde el primer momento.
+- **`trg_alm_producto_after_update`** (AFTER UPDATE en `alm_producto`): sincroniza `estado` (HAB/DES) y re-evalua `pesable` con el mismo criterio cada vez que cambia el catalogo (ej. se habilita/deshabilita un producto, o cambia `p_unidad_medida`). Solo promueve `pesable` de `0` a `1` si el perfil ya tiene `peso_bruto` y `gramos_por_oz > 0` reales cargados; en cualquier otro caso deja `pesable` como estaba — nunca auto-habilita un perfil con datos invalidos.
 
-Definicion actual, aplicada y verificada (`SHOW CREATE TRIGGER`) en `test_pos` y produccion el 2026-07-30:
+**Fix (2026-09-09) — criterio de `pesable` cambiado de categoria a unidad de medida:** hasta esa fecha, `pesable` se derivaba de `ind_permite_comandar=71` **y** de que la categoria no estuviera en una lista negra de 9 categorias (`CATEGORIAS_EXCLUIDAS_PESAJE`). Esa lista negra existia porque `ind_permite_comandar=71` solo no alcanzaba (CERVEZAS/AGUAS Y JUGOS tambien lo tienen sin ser pesables) y requeria mantenimiento manual cada vez que aparecia una categoria nueva no-pesable con ese flag. Reemplazado por `p_unidad_medida IN (11, 61)`: verificado 1:1 contra el catalogo real que `11` es la unidad de todo producto pesable existente (incluye VINOS) y `61` es la unica excepcion pesable dentro de una categoria que en general no pesa (BARRIL PACEÑA 50L, CERVEZAS) — antes esa excepcion requeria el backfill manual de `querys/backfill_producto_barril_pesable_pesaje_config_api.sql`; con el criterio nuevo la deriva sola cualquier producto futuro con esa unidad. Categoria e `ind_permite_comandar` ya no influyen en `pesable`. El mismo cambio se aplico junto con `_producto_deberia_ser_pesable()`, el bloque INCOMPLETOS de `GET /api/pesaje/config` y el frontend del modulo PESAJE (`catalogo_permite_pesar` en la respuesta de la API, ya no derivado en JS) en `main.py`/`schemas.py`/`static/app.js`, para no reabrir la inconsistencia que motivo el fix de categorias excluidas del listado (nota de arriba, PR #7).
+
+**⚠️ Estado de aplicacion por entorno — los dos scripts de abajo tienen DOS definiciones distintas en su historial, IMPORTANTE no asumir cual corre en cada entorno sin verificar:**
+
+| Entorno | Version de trigger que corre hoy | Verificado con |
+|---|---|---|
+| `test` (WAMP local) | 2026-09-09 (`p_unidad_medida IN (11,61)`) | `SHOW CREATE TRIGGER` + INSERT de sanity check, 2026-09-09 |
+| `test_pos` | 2026-07-30 (`ind_permite_comandar=71` + categoria excluida) — **pendiente re-aplicar** la version 2026-09-09 | `SHOW CREATE TRIGGER`, 2026-07-30 |
+| `production` | 2026-07-30 (`ind_permite_comandar=71` + categoria excluida) — **pendiente re-aplicar** la version 2026-09-09 | `SHOW CREATE TRIGGER`, 2026-07-30 |
+
+Los archivos `querys/fix_trigger_alm_producto_after_insert.sql` y `querys/fix_trigger_alm_producto_after_update.sql` contienen **la definicion 2026-09-09** (la mas reciente — cada re-aplicacion sobrescribe la anterior via `DROP TRIGGER IF EXISTS` + `CREATE TRIGGER`, no hay versionado paralelo). Correrlos contra `test_pos`/`production` deja esos entornos al dia. Hasta que eso pase, un producto nuevo o modificado en esos dos entornos sigue derivando `pesable` con el criterio 2026-07-30 (categoria), no con el criterio 2026-09-09 (unidad de medida) — la app (`main.py`) ya asume el criterio nuevo en cuanto se despliegue el codigo de este cambio, independientemente de si el trigger de ese entorno ya fue actualizado: la unica pieza fuera de sync durante la ventana entre "deploy de codigo" y "re-aplicar trigger" es el trigger mismo, no la API.
+
 [querys/fix_trigger_alm_producto_after_insert.sql](querys/fix_trigger_alm_producto_after_insert.sql),
 [querys/fix_trigger_alm_producto_after_update.sql](querys/fix_trigger_alm_producto_after_update.sql).
+
+**Guía paso a paso para aplicar todo esto (backfills + triggers) en `test_pos` y en cada base de producción**: [documentos/runbook_despliegue_pesaje_unidad_medida.md](documentos/runbook_despliegue_pesaje_unidad_medida.md).
 
 **Antecedente (por que la validacion de `pesable=1` importa):** antes de este fix, versiones anteriores de estos triggers podian dejar una fila "fantasma" en `pesable=0` con `nombre_perfil='Estándar'` para un producto que el catalogo si marca pesable. Como `app_producto_pesaje_config_api` tiene una clave unica real (`uk_producto_perfil` sobre `id_producto_almacen, nombre_perfil`), esa fila fantasma bloqueaba cualquier arreglo desde la app (`POST /perfiles` respondia 409 porque `'Estándar'` ya existia; `DELETE` respondia 400 por ser el ultimo perfil activo; `PUT` con `pesable=0` solo permitia editar `barcode`) — la unica salida era editar la BD directo, que es como se origino el bug de `PATRON SILVER 750ML` corregido en v10.94 (ver CHANGELOG). La limpieza puntual de los productos afectados en produccion quedo en `querys/fix_12_productos_atascados_produccion.sql`. **Desde v10.98, `PUT /api/pesaje/config/{id}` ya permite "promover" una fila fantasma directo desde la app** (ver la fila de esa ruta en la seccion de endpoints, mas arriba) — ya no hace falta SQL directo para este caso. Historial completo en `TODO.md` ("conflictos excepcionales de pesable").
 

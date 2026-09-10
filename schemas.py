@@ -91,6 +91,12 @@ class PesajeConfigItem(BaseModel):
     nombre_unidad_medida: Optional[str] = None
     nombre_unidad_medida_detalle: Optional[str] = None
     nombre_ind_permite_comandar: Optional[str] = None
+    # Resultado de _producto_deberia_ser_pesable (p_unidad_medida en
+    # UNIDADES_MEDIDA_PESABLES). El frontend lo usa para decidir si mostrar
+    # los campos de peso en un perfil pesable=0 ("promover") -- reemplaza a
+    # derivar la misma decision en JS desde nombre_ind_permite_comandar, que
+    # quedo desalineado del criterio real tras el cambio de 2026-09-09.
+    catalogo_permite_pesar: bool = False
 
 class ActualizarPesajeConfigRequest(BaseModel):
     peso_bruto: Optional[float] = Field(None, gt=0)

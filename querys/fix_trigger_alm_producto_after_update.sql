@@ -27,6 +27,16 @@
 -- producto el 2026-07-30 al ver que rompia la captura en vivo de la
 -- operativa 1263).
 --
+-- Fix (2026-09-09): v_pesable se deriva ahora de
+-- `p_unidad_medida IN (11, 61)` (UNIDADES_MEDIDA_PESABLES en main.py) en vez
+-- del criterio de arriba (ind_permite_comandar + lista negra de categorias)
+-- -- mismo cambio y mismo motivo que en trg_alm_producto_after_insert (ver
+-- ese script para el detalle completo). La asimetria "pesable=0 siempre se
+-- aplica, pesable=1 solo si el perfil ya tiene datos reales" que corrigio
+-- este trigger en 2026-07-30 se mantiene intacta -- ese es un problema
+-- distinto (no auto-promover con datos invalidos) y no depende de cual sea
+-- el criterio de v_pesable.
+--
 -- Ejecutar UNA VEZ por entorno. Ver documentos/redondeo_y_tolerancia.md y
 -- TODO.md ("conflictos excepcionales") para el contexto de negocio.
 
@@ -42,9 +52,7 @@ BEGIN
     DECLARE v_estado VARCHAR(3);
 
     SET v_pesable = CASE
-                        WHEN NEW.ind_permite_comandar = 71
-                             AND (NEW.id_categoria IS NULL OR NEW.id_categoria NOT IN (10,11,13,14,15,17,18,19,20))
-                            THEN 1
+                        WHEN NEW.p_unidad_medida IN (11, 61) THEN 1
                         ELSE 0
                      END;
     SET v_estado = CASE WHEN NEW.estado = 'HAB' THEN 'HAB' ELSE 'DES' END;
