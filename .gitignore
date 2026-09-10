@@ -51,3 +51,4 @@ querys/*
 !querys/create_views_pourcost.sql
 !querys/backfill_productos_no_pesables_pesaje_config_api.sql
 !querys/backfill_producto_barril_pesable_pesaje_config_api.sql
+!querys/fix_esquema_legacy_app_producto_pesaje_config.sql
