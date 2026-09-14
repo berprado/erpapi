@@ -11,6 +11,9 @@ separado con git tags semanticos (`vMAJOR.MINOR.PATCH`) — ver seccion
 version productiva en uso real), corresponde a este mismo punto de la
 historia, `## 12.2` de abajo.
 
+## 12.15
+- Docs: agregado `documentos/proceso_paloteo_multiples_botellas_y_estimacion_categorias.md` que detalla el flujo de paloteo con múltiples botellas abiertas por producto (captura en UI, selector de perfil, acumulación, auditoría y consolidación POS) y el análisis comparativo técnico y práctico entre las categorías VINOS y MEZCLADORES.
+
 ## 12.14
 - BD: backfills y criterio nuevo de `pesable` aplicados y verificados en `production` casa matriz (tras backup previo del usuario) — falta solo el smoke test funcional en la PWA real. Detalle completo en `README.md` y en el runbook. Solo queda `production` Beer Garden pendiente.
 
