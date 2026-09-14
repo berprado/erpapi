@@ -11,6 +11,9 @@ separado con git tags semanticos (`vMAJOR.MINOR.PATCH`) — ver seccion
 version productiva en uso real), corresponde a este mismo punto de la
 historia, `## 12.2` de abajo.
 
+## 12.16
+- Docs: agregado `documentos/validaciones_datos_paloteo_pesaje_pourcost.md` detallando las validaciones de datos aplicadas en frontend (PWA / Vanilla JS) y backend (FastAPI / Pydantic) para Paloteo, Pesaje y Pour Cost, así como las reglas transversales de seguridad.
+
 ## 12.15
 - Docs: agregado `documentos/proceso_paloteo_multiples_botellas_y_estimacion_categorias.md` que detalla el flujo de paloteo con múltiples botellas abiertas por producto (captura en UI, selector de perfil, acumulación, auditoría y consolidación POS) y el análisis comparativo técnico y práctico entre las categorías VINOS y MEZCLADORES.
 
