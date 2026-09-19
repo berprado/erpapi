@@ -195,6 +195,16 @@ class AjusteDeltaPreview(BaseModel):
     delta_paq: float
     delta_det_exacto: float
     delta_det_operativo: float
+    id_almacen_wac: int
+    rendimiento_por_envase: Optional[float] = None
+    unidad_detalle: Optional[str] = None
+    wac_snapshot: Optional[float] = None
+    fecha_actualizacion_wac: Optional[datetime] = None
+    origen_wac: str
+    estado_valoracion: str
+    valor_paq: Optional[float] = None
+    valor_detalle_operativo: Optional[float] = None
+    valor_neto: Optional[float] = None
 
 
 class ConsolidarAjustesPreviewResponse(BaseModel):
@@ -230,6 +240,23 @@ class AplicarAjustesResponse(BaseModel):
     productos_afectados: int
     igualacion_verificada: bool
     mensaje: str
+
+
+class VarianzaHistoricaPeriodo(BaseModel):
+    periodo: date
+    productos_con_varianza: int
+    faltantes: float
+    sobrantes: float
+    neto: float
+    productos_sin_valoracion: int
+
+
+class ReporteVarianzasHistoricasResponse(BaseModel):
+    fecha_inicio: date
+    fecha_fin: date
+    agrupacion: Literal['dia', 'semana', 'mes']
+    resumen: VarianzaHistoricaPeriodo
+    periodos: List[VarianzaHistoricaPeriodo] = Field(default_factory=list)
 
 
 # --- POUR COST (solo lectura, ver documentos/pour_cost/pourcost.md) ---

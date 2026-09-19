@@ -82,6 +82,12 @@
 - [x] **Ampliar la suite de integracion a login y paloteo**
   - Resuelto (v10.78): `tests/test_integracion_login.py` (login correcto con JWT usable y rastro en `seg_acceso`/auditoria, 401 generico, 403 deshabilitado, `is_admin`, rate limit 429 por usuario) y `tests/test_integracion_paloteo.py` (captura valida con perfil real, redondeo de la suma, omitidos/no pesables, 400 por estado/barra/peso bruto/sobrecapacidad, 409 duplicado). Los modulos de PESAJE (perfiles/config) siguen sin cobertura automatizada.
 
+- [x] **Valoracion y reporte historico de varianzas de ajustes**
+  - Resuelto (v12.28): `analytics_varianza_inventario` congela WAC, rendimiento, deltas e importes dentro de la transaccion de aplicacion.
+  - La tabla AJUSTES y el PDF conservan los valores historicos despues de igualar `bar_inventario`; las filas muestran `AJUSTE REGISTRADO` y los iconos PAQ/DET/MONTO definidos para la interfaz.
+  - `GET /api/ajustes/varianzas` agrega por dia, semana o mes, separando faltantes, sobrantes, neto y productos sin valoracion.
+  - Pruebas: formula, preview, aplicacion, PDF posterior a aplicar y reporte historico cubiertos en `tests/test_calculos_varianza_inventario.py` y `tests/test_integracion_ajustes.py`.
+
 - [ ] **Modulo de reportes historicos de paloteos ya registrados (operativas cerradas)**
   - Motivacion: hoy el PDF de diferencias (REPORTE, `/api/paloteo3/exportar-pdf`) solo puede generarse durante la sesion viva del paloteo, porque las filas se arman en el navegador desde las tarjetas de PALOTEO 1/2. Una vez cerrada la operativa (o cerrado el navegador) ya no se puede regenerar el reporte.
   - Los datos necesarios ya se persisten; el reporte historico se arma cruzando dos fuentes por `(id_operacion, id_barra, id_producto)`:

@@ -686,6 +686,36 @@ Estos estados son propios de la PWA y no deben confundirse con `parameter_table`
 > `ya_aplicado`/`aplicado_por`/`aplicado_en` del preview para mostrar un badge en vez del botón
 > cuando ya existe una fila `APLICADO` para esa operativa/barra/inventario físico.
 
+### Valoración histórica y reporte posterior a la aplicación
+
+La tabla analítica propia `analytics_varianza_inventario` conserva una fila por
+producto incluido en una consolidación aplicada. Guarda los deltas exacto y
+operativo, el WAC y rendimiento utilizados, el estado de valoración y los
+importes de envase, detalle y neto. No modifica `bar_inventario` ni ninguna
+tabla legacy del POS.
+
+El comportamiento del módulo AJUSTES es el siguiente:
+
+1. Antes de aplicar, el preview calcula las diferencias actuales contra el
+  inventario ideal y la PWA muestra su valoración.
+2. Al aplicar, `bar_inventario` se iguala al físico, pero los snapshots quedan
+  congelados para auditoría.
+3. Al volver a consultar una operativa ya aplicada, el preview recupera los
+  snapshots en lugar de volver a mostrar ceros derivados de `bar_inventario`.
+4. La tabla conserva las diferencias y montos históricos y marca cada fila
+  como `AJUSTE REGISTRADO`.
+5. El PDF usa el cálculo actual antes de aplicar y los snapshots después de
+  aplicar; por ello puede generarse antes o después de registrar el ajuste.
+
+El reporte agregado se consulta mediante:
+
+```text
+GET /api/ajustes/varianzas?fecha_inicio=YYYY-MM-DD&fecha_fin=YYYY-MM-DD&agrupacion=dia|semana|mes
+```
+
+El resultado separa faltantes, sobrantes, neto y productos sin WAC o
+rendimiento válido. Estos últimos nunca se convierten silenciosamente en Bs 0.
+
 ---
 
 ## 10. Recomendación de constantes backend

@@ -80,6 +80,21 @@ const ajustesEstadoMsg = document.getElementById('ajustes-estado-msg');
 const ajustesAplicadoBadge = document.getElementById('ajustes-aplicado-badge');
 const ajustesAplicadoTexto = document.getElementById('ajustes-aplicado-texto');
 const ajustesBtnAplicar = document.getElementById('ajustes-btn-aplicar');
+const ajustesValoracionResumen = document.getElementById('ajustes-valoracion-resumen');
+const ajustesValorFaltantes = document.getElementById('ajustes-valor-faltantes');
+const ajustesValorSobrantes = document.getElementById('ajustes-valor-sobrantes');
+const ajustesValorNeto = document.getElementById('ajustes-valor-neto');
+const ajustesValorPendientes = document.getElementById('ajustes-valor-pendientes');
+const ajustesHistoricoInicio = document.getElementById('ajustes-historico-inicio');
+const ajustesHistoricoFin = document.getElementById('ajustes-historico-fin');
+const ajustesHistoricoAgrupacion = document.getElementById('ajustes-historico-agrupacion');
+const ajustesHistoricoConsultar = document.getElementById('ajustes-historico-consultar');
+const ajustesHistoricoEstado = document.getElementById('ajustes-historico-estado');
+const ajustesHistoricoResumen = document.getElementById('ajustes-historico-resumen');
+const ajustesHistoricoFaltantes = document.getElementById('ajustes-historico-faltantes');
+const ajustesHistoricoSobrantes = document.getElementById('ajustes-historico-sobrantes');
+const ajustesHistoricoNeto = document.getElementById('ajustes-historico-neto');
+const ajustesHistoricoLista = document.getElementById('ajustes-historico-lista');
 const btnTopbarMenu = document.getElementById('btn-topbar-menu');
 const topbarMenuDropdown = document.getElementById('topbar-menu-dropdown');
 const dummyContentDialog = document.getElementById('dummy-content-dialog');
@@ -3470,6 +3485,9 @@ function refrescarPaloteo3DesdeInventario() {
 
 function obtenerFilasReportePaloteo3() {
     const filas = [];
+    const varianzasRegistradas = ajustesPreviewActual?.ya_aplicado
+        ? new Map((ajustesPreviewActual.deltas || []).map((delta) => [delta.id_producto, delta]))
+        : null;
 
     document.querySelectorAll('#stock-list .stock-row').forEach(row => {
         const inputUnidades = row.querySelector('.stock-input-unidades');
@@ -3521,7 +3539,7 @@ function obtenerFilasReportePaloteo3() {
             }
         }
 
-        filas.push({
+        const fila = {
             idProducto,
             codigo,
             nombre,
@@ -3534,7 +3552,19 @@ function obtenerFilasReportePaloteo3() {
             difUnidades: unidadesReales - idealUnidades,
             difOnzas,
             difOnzasExactas,
-        });
+        };
+
+        // Después de aplicar, bar_inventario ya coincide con el físico y sus
+        // diferencias son cero. La tabla debe conservar la evidencia del
+        // ajuste, por lo que sustituimos esos ceros por el snapshot persistido.
+        const varianzaRegistrada = varianzasRegistradas?.get(Number(idProducto));
+        if (varianzaRegistrada) {
+            fila.difUnidades = varianzaRegistrada.delta_paq;
+            fila.difOnzas = varianzaRegistrada.delta_det_operativo;
+            fila.difOnzasExactas = varianzaRegistrada.delta_det_exacto;
+        }
+
+        filas.push(fila);
     });
 
     return filas;
@@ -3565,6 +3595,17 @@ function cuantizarDeltaOnzas(valor, toleranciaOz = 0) {
 function aplicarEstadoReporte(filasBase) {
     const filasNormalizadas = filasBase.map((fila) => {
         const clon = { ...fila };
+
+        const snapshotAplicado = ajustesPreviewActual?.ya_aplicado
+            ? ajustesPreviewActual.deltas?.find((delta) => delta.id_producto === Number(clon.idProducto))
+            : null;
+
+        if (snapshotAplicado) {
+            clon.difUnidades = snapshotAplicado.delta_paq;
+            clon.difOnzas = snapshotAplicado.delta_det_operativo;
+            clon.difOnzasExactas = snapshotAplicado.delta_det_exacto;
+            return clon;
+        }
 
         // difOnzasExactas ya viene crudo desde obtenerFilasReportePaloteo3 (auditoria/exportacion).
         // difOnzas ya viene en base al total redondeado a grilla POS; acá solo se le aplica
@@ -3658,6 +3699,113 @@ function actualizarUIOrdenReporte() {
     });
 }
 
+function formatearValorVarianza(valor) {
+    const monto = Number(valor);
+    if (!Number.isFinite(monto)) return '—';
+    const signo = monto > 0 ? '+' : monto < 0 ? '-' : '';
+    return `${signo}${Math.abs(monto).toLocaleString('es-BO', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    })} Bs`;
+}
+
+function actualizarResumenValoracionAjustes(valoracion) {
+    if (!ajustesValoracionResumen) return;
+    if (!valoracion) {
+        ajustesValoracionResumen.classList.add('hidden');
+        return;
+    }
+
+    ajustesValorFaltantes.textContent = `-${Number(valoracion.faltantes || 0).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs`;
+    ajustesValorSobrantes.textContent = `+${Number(valoracion.sobrantes || 0).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs`;
+    ajustesValorNeto.textContent = formatearValorVarianza(valoracion.neto || 0);
+    const pendientes = Number(valoracion.productos_sin_valoracion || 0);
+    ajustesValorPendientes.textContent = pendientes
+        ? `${pendientes} producto(s) sin valoración por WAC o rendimiento inválido`
+        : '';
+    ajustesValorPendientes.classList.toggle('hidden', !pendientes);
+    ajustesValoracionResumen.classList.remove('hidden');
+}
+
+function formatearValorAbsoluto(valor) {
+    return `${Number(valor || 0).toLocaleString('es-BO', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    })} Bs`;
+}
+
+function formatearFechaLocal(fecha) {
+    const anio = fecha.getFullYear();
+    const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+    const dia = String(fecha.getDate()).padStart(2, '0');
+    return `${anio}-${mes}-${dia}`;
+}
+
+function inicializarFiltrosHistoricoAjustes() {
+    if (!ajustesHistoricoInicio || ajustesHistoricoInicio.value) return;
+    const hoy = new Date();
+    ajustesHistoricoInicio.value = formatearFechaLocal(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
+    ajustesHistoricoFin.value = formatearFechaLocal(hoy);
+}
+
+function renderizarHistoricoAjustes(data) {
+    if (!ajustesHistoricoResumen || !ajustesHistoricoLista) return;
+    const resumen = data.resumen;
+    ajustesHistoricoFaltantes.textContent = `-${formatearValorAbsoluto(resumen.faltantes)}`;
+    ajustesHistoricoSobrantes.textContent = `+${formatearValorAbsoluto(resumen.sobrantes)}`;
+    ajustesHistoricoNeto.textContent = formatearValorVarianza(resumen.neto);
+    ajustesHistoricoResumen.classList.remove('hidden');
+
+    ajustesHistoricoLista.innerHTML = '';
+    data.periodos.forEach((periodo) => {
+        const fila = document.createElement('div');
+        fila.className = 'grid grid-cols-[minmax(0,1fr)_auto] gap-sm px-sm py-xs text-[10px] items-center';
+        const pendientes = Number(periodo.productos_sin_valoracion || 0);
+        fila.innerHTML = `
+            <span class="font-data-tabular text-on-surface-variant">${escapeHtml(periodo.periodo)}</span>
+            <span class="text-right font-semibold font-data-tabular ${periodo.neto < 0 ? 'text-error' : periodo.neto > 0 ? 'text-primary-fixed' : 'text-on-surface'}">${escapeHtml(formatearValorVarianza(periodo.neto))}</span>
+            ${pendientes ? `<span class="col-span-2 text-[9px] text-on-surface-variant">${pendientes} sin valoración</span>` : ''}
+        `;
+        ajustesHistoricoLista.appendChild(fila);
+    });
+    ajustesHistoricoLista.classList.toggle('hidden', data.periodos.length === 0);
+}
+
+async function consultarHistoricoAjustes() {
+    if (!ajustesHistoricoInicio?.value || !ajustesHistoricoFin?.value) return;
+    const parametros = new URLSearchParams({
+        fecha_inicio: ajustesHistoricoInicio.value,
+        fecha_fin: ajustesHistoricoFin.value,
+        agrupacion: ajustesHistoricoAgrupacion.value,
+        id_barra: String(idBarraActual),
+    });
+    ajustesHistoricoConsultar.disabled = true;
+    ajustesHistoricoEstado.textContent = 'Consultando historial...';
+    ajustesHistoricoEstado.classList.remove('hidden');
+
+    try {
+        const respuesta = await fetchAutenticado(`${API_BASE}/ajustes/varianzas?${parametros}`);
+        const data = await respuesta.json();
+        if (!respuesta.ok) {
+            ajustesHistoricoEstado.textContent = typeof data.detail === 'string'
+                ? data.detail
+                : 'No se pudo consultar el historial.';
+            return;
+        }
+        renderizarHistoricoAjustes(data);
+        const pendientes = Number(data.resumen.productos_sin_valoracion || 0);
+        ajustesHistoricoEstado.textContent = data.periodos.length
+            ? `${data.resumen.productos_con_varianza} producto(s) con variación.${pendientes ? ` ${pendientes} sin valoración.` : ''}`
+            : 'No hay variaciones aplicadas en el período seleccionado.';
+    } catch (_) {
+        if (_ instanceof SesionExpiradaError) return;
+        ajustesHistoricoEstado.textContent = 'Error de conexión al consultar el historial.';
+    } finally {
+        ajustesHistoricoConsultar.disabled = false;
+        ajustesHistoricoEstado.classList.remove('hidden');
+    }
+}
+
 function renderizarReportePaloteo3() {
     const reporteList = document.getElementById('reporte-list');
     const emptyState = document.getElementById('reporte-empty-state');
@@ -3709,9 +3857,24 @@ function renderizarReportePaloteo3() {
             ? ''
             : `${fila.difOnzas > 0 ? '+' : ''}${fila.difOnzas.toFixed(2)} oz`;
 
+        const valoracion = ajustesPreviewActual?.deltas?.find(
+            (delta) => delta.id_producto === Number(fila.idProducto)
+        );
+        const valorNeto = valoracion?.valor_neto;
+        const textoValor = valorNeto == null
+            ? (valoracion ? 'SIN WAC' : '—')
+            : formatearValorVarianza(valorNeto);
+        const colorValor = valorNeto == null
+            ? 'var(--on-surface-variant)'
+            : valorNeto < 0
+                ? 'var(--semantic-danger)'
+                : valorNeto > 0
+                    ? 'var(--semantic-warning)'
+                    : 'var(--semantic-action)';
+
         const row = document.createElement('div');
-        row.className = 'grid gap-[2px] px-xs py-xs items-center hover:bg-surface-container-highest transition-colors';
-        row.style.gridTemplateColumns = '2rem 2.9rem minmax(0, 1fr) clamp(3.2rem, 14vw, 4.5rem) clamp(4rem, 17vw, 5.25rem)';
+        row.className = `grid gap-[2px] px-xs py-xs items-center hover:bg-surface-container-highest transition-colors${ajustesPreviewActual?.ya_aplicado ? ' bg-surface-container-low/50' : ''}`;
+        row.style.gridTemplateColumns = '2rem 2.9rem minmax(0, 1fr) clamp(2.8rem, 11vw, 4rem) clamp(3.5rem, 14vw, 4.8rem) clamp(4.5rem, 17vw, 5.6rem)';
         const codigoUpper = String(fila.codigo ?? '').toUpperCase();
         const nombreUpper = String(fila.nombre ?? '').toUpperCase();
         row.innerHTML = `
@@ -3720,6 +3883,8 @@ function renderizarReportePaloteo3() {
             <span class="text-[12px] sm:text-[13px] font-semibold text-on-surface truncate uppercase" title="${escapeHtml(nombreUpper)}">${escapeHtml(nombreUpper)}</span>
             <span class="text-right text-[11px] font-semibold" style="color: ${colorUnid}">${textoUnid}</span>
             <span class="text-right text-[11px] font-semibold" style="color: ${colorOz}">${textoOz}</span>
+            <span class="text-right text-[10px] font-semibold font-data-tabular truncate" style="color: ${colorValor}" title="${escapeHtml(textoValor)}">${escapeHtml(textoValor)}</span>
+            ${ajustesPreviewActual?.ya_aplicado ? '<span class="col-span-6 text-[9px] font-label-mono uppercase tracking-wide text-primary-fixed">Ajuste registrado</span>' : ''}
         `;
         reporteList.appendChild(row);
     });
@@ -3833,12 +3998,14 @@ async function actualizarPanelAjustes() {
         return;
     }
     ajustesAdminBlock.classList.remove('hidden');
+    inicializarFiltrosHistoricoAjustes();
 
     if (ajustesBtnAplicar) ajustesBtnAplicar.classList.add('hidden');
     if (ajustesAplicadoBadge) ajustesAplicadoBadge.classList.add('hidden');
     ajustesPreviewActual = null;
 
     if (!currentOperacionId || currentEstadoOperacion !== 23) {
+        actualizarResumenValoracionAjustes(null);
         _mostrarEstadoAjustes('Disponible solo cuando la operativa está CERRADA (estado 23).');
         return;
     }
@@ -3864,6 +4031,9 @@ async function actualizarPanelAjustes() {
         }
 
         if (data.ya_aplicado) {
+            ajustesPreviewActual = data;
+            actualizarResumenValoracionAjustes(data.resumen?.valoracion);
+            renderizarReportePaloteo3();
             _ocultarEstadoAjustes();
             if (ajustesAplicadoTexto) {
                 const fecha = data.aplicado_en ? new Date(data.aplicado_en).toLocaleString() : '';
@@ -3874,11 +4044,14 @@ async function actualizarPanelAjustes() {
         }
 
         if (data.status === 'skipped') {
+            actualizarResumenValoracionAjustes(data.resumen?.valoracion);
             _mostrarEstadoAjustes('El inventario físico coincide con el ideal. No hay diferencias que ajustar.');
             return;
         }
 
         ajustesPreviewActual = data;
+    actualizarResumenValoracionAjustes(data.resumen?.valoracion);
+    renderizarReportePaloteo3();
         _ocultarEstadoAjustes();
         if (ajustesBtnAplicar) ajustesBtnAplicar.classList.remove('hidden');
     } catch (_) {
@@ -3893,7 +4066,9 @@ async function aplicarAjustesInventario() {
     const { productos_con_diferencia, movimientos_generados } = ajustesPreviewActual.resumen || {};
     const confirmar = await mostrarDialogoConfirmacion({
         titulo: 'Aplicar ajustes de inventario',
-        mensaje: `Se generarán ${movimientos_generados ?? '?'} movimiento(s) sobre ${productos_con_diferencia ?? '?'} producto(s) y se actualizará el inventario vivo. Esta acción es irreversible. ¿Continuar?`,
+        mensaje: `Se generarán ${movimientos_generados ?? '?'} movimiento(s) sobre ${productos_con_diferencia ?? '?'} producto(s) y se actualizará el inventario vivo. Esta acción es irreversible.
+
+Revisa o exporta el PDF antes de continuar. Luego podrás volver a exportarlo con los valores históricos congelados del ajuste. ¿Continuar?`,
     });
     if (!confirmar) return;
 
@@ -3935,6 +4110,10 @@ async function aplicarAjustesInventario() {
 
 if (ajustesBtnAplicar) {
     ajustesBtnAplicar.addEventListener('click', aplicarAjustesInventario);
+}
+
+if (ajustesHistoricoConsultar) {
+    ajustesHistoricoConsultar.addEventListener('click', consultarHistoricoAjustes);
 }
 
 function syncFilaPaloteo3ConInventario(row) {

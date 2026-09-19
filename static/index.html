@@ -955,13 +955,30 @@
                 <button id="reporte-filtro-salida" type="button" class="reporte-filtro-btn bg-surface border border-outline-variant text-on-surface px-sm py-[6px] rounded-sharp text-[10px] font-label-mono uppercase tracking-widest">Salida (-)</button>
             </div>
 
+            <div id="ajustes-valoracion-resumen" class="hidden mb-sm grid grid-cols-3 gap-xs border border-outline-variant bg-surface-container-low px-sm py-sm text-center">
+                <div>
+                    <p class="text-[9px] font-label-mono tracking-widest uppercase text-on-surface-variant">Faltantes</p>
+                    <p id="ajustes-valor-faltantes" class="mt-[2px] text-[11px] font-semibold font-data-tabular text-error">-</p>
+                </div>
+                <div>
+                    <p class="text-[9px] font-label-mono tracking-widest uppercase text-on-surface-variant">Sobrantes</p>
+                    <p id="ajustes-valor-sobrantes" class="mt-[2px] text-[11px] font-semibold font-data-tabular text-primary-fixed">-</p>
+                </div>
+                <div>
+                    <p class="text-[9px] font-label-mono tracking-widest uppercase text-on-surface-variant">Neto</p>
+                    <p id="ajustes-valor-neto" class="mt-[2px] text-[11px] font-semibold font-data-tabular text-on-surface">-</p>
+                </div>
+                <p id="ajustes-valor-pendientes" class="hidden col-span-3 text-[9px] font-label-mono tracking-wide uppercase text-on-surface-variant"></p>
+            </div>
+
             <div class="bg-surface-container border border-outline-variant rounded-md overflow-hidden shadow-lg">
-                <div class="grid gap-[2px] px-xs py-sm border-b border-outline-variant bg-surface-container-low text-[10px] font-label-mono font-semibold tracking-[0.12em] uppercase text-on-surface-variant" style="grid-template-columns: 2rem 2.9rem minmax(0, 1fr) clamp(3.2rem, 14vw, 4.5rem) clamp(4rem, 17vw, 5.25rem);">
+                <div class="grid gap-[2px] px-xs py-sm border-b border-outline-variant bg-surface-container-low text-[10px] font-label-mono font-semibold tracking-[0.12em] uppercase text-on-surface-variant" style="grid-template-columns: 2rem 2.9rem minmax(0, 1fr) clamp(2.8rem, 11vw, 4rem) clamp(3.5rem, 14vw, 4.8rem) clamp(4.5rem, 17vw, 5.6rem);">
                     <button type="button" data-reporte-sort="idProducto" class="reporte-sort-btn text-left font-medium">ID</button>
                     <button type="button" data-reporte-sort="codigo" class="reporte-sort-btn text-left font-medium">COD</button>
                     <button type="button" data-reporte-sort="nombre" class="reporte-sort-btn text-left font-medium">PRODUCTO</button>
-                    <span class="justify-end inline-flex items-center gap-[2px]"><span class="material-symbols-outlined text-[12px]">difference</span>DIF. PAQ.</span>
-                    <span class="justify-end inline-flex items-center gap-[2px]"><span class="material-symbols-outlined text-[12px]">difference</span>DIF. DET.</span>
+                    <span class="justify-end inline-flex items-center gap-[2px]"><span class="material-symbols-outlined text-[12px]">mobiledata_arrows</span>PAQ</span>
+                    <span class="justify-end inline-flex items-center gap-[2px]"><span class="material-symbols-outlined text-[12px]">contrast_square</span>DET</span>
+                    <span class="justify-end inline-flex items-center gap-[2px]"><span class="material-symbols-outlined text-[12px]">price_change</span>MONTO</span>
                 </div>
                 <div id="reporte-list" class="divide-y divide-outline-variant"></div>
             </div>
@@ -990,6 +1007,35 @@
                     <span class="material-symbols-outlined text-sm">fact_check</span>
                     Aplicar Ajustes
                 </button>
+
+                <section class="mt-md pt-md border-t border-outline-variant" aria-labelledby="ajustes-historico-titulo">
+                    <h3 id="ajustes-historico-titulo" class="text-[10px] font-label-mono uppercase tracking-widest text-on-surface-variant">Historial de varianzas</h3>
+                    <div class="mt-sm grid grid-cols-2 gap-xs sm:grid-cols-4">
+                        <label class="text-[9px] font-label-mono uppercase tracking-wide text-on-surface-variant">Desde
+                            <input id="ajustes-historico-inicio" type="date" class="mt-[2px] w-full h-8 bg-surface border border-outline-variant rounded-sm px-xs text-[11px] text-on-surface font-data-tabular focus:border-primary-fixed-dim focus:outline-none">
+                        </label>
+                        <label class="text-[9px] font-label-mono uppercase tracking-wide text-on-surface-variant">Hasta
+                            <input id="ajustes-historico-fin" type="date" class="mt-[2px] w-full h-8 bg-surface border border-outline-variant rounded-sm px-xs text-[11px] text-on-surface font-data-tabular focus:border-primary-fixed-dim focus:outline-none">
+                        </label>
+                        <label class="text-[9px] font-label-mono uppercase tracking-wide text-on-surface-variant">Agrupar
+                            <select id="ajustes-historico-agrupacion" class="mt-[2px] w-full h-8 bg-surface border border-outline-variant rounded-sm px-xs text-[11px] text-on-surface focus:border-primary-fixed-dim focus:outline-none">
+                                <option value="dia">Día</option>
+                                <option value="semana">Semana</option>
+                                <option value="mes">Mes</option>
+                            </select>
+                        </label>
+                        <button id="ajustes-historico-consultar" type="button" class="self-end h-8 bg-surface border border-outline-variant text-on-surface rounded-sm text-[10px] font-label-mono uppercase tracking-widest hover:border-primary-fixed-dim hover:text-primary-fixed transition-colors">
+                            Consultar
+                        </button>
+                    </div>
+                    <p id="ajustes-historico-estado" class="hidden mt-sm text-[10px] text-on-surface-variant"></p>
+                    <div id="ajustes-historico-resumen" class="hidden mt-sm grid grid-cols-3 gap-xs bg-surface-container-low border border-outline-variant px-sm py-sm text-center">
+                        <div><p class="text-[9px] font-label-mono uppercase tracking-wide text-on-surface-variant">Faltantes</p><p id="ajustes-historico-faltantes" class="mt-[2px] text-[11px] font-semibold font-data-tabular text-error">-</p></div>
+                        <div><p class="text-[9px] font-label-mono uppercase tracking-wide text-on-surface-variant">Sobrantes</p><p id="ajustes-historico-sobrantes" class="mt-[2px] text-[11px] font-semibold font-data-tabular text-primary-fixed">-</p></div>
+                        <div><p class="text-[9px] font-label-mono uppercase tracking-wide text-on-surface-variant">Neto</p><p id="ajustes-historico-neto" class="mt-[2px] text-[11px] font-semibold font-data-tabular text-on-surface">-</p></div>
+                    </div>
+                    <div id="ajustes-historico-lista" class="hidden mt-xs divide-y divide-outline-variant border border-outline-variant"></div>
+                </section>
             </div>
 
             <!-- FAB: volver al inicio de la página -->
@@ -1462,7 +1508,7 @@
         </div>
     </div>
 
-    <script src="/assets/app.js?v=12.16"></script>
+    <script src="/assets/app.js?v=12.29"></script>
 
     <script>
         (function () {
@@ -1511,7 +1557,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/assets/sw.js?v=12.16')
+                navigator.serviceWorker.register('/assets/sw.js?v=12.29')
                     .then(reg => console.log('[PWA] Service Worker registrado:', reg.scope))
                     .catch(err => console.error('[PWA] Error al registrar SW:', err));
             });

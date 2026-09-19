@@ -213,3 +213,37 @@ class PaloteoAjusteControl(Base):
     usuario_reg = Column(String(255))
     fecha_reg = Column(DateTime)
     fecha_mod = Column(DateTime)
+
+
+class VarianzaInventario(Base):
+    """Snapshot analítico inmutable de la valoración de un ajuste aplicado.
+
+    Es una tabla propia de la PWA; guarda las entradas usadas en el cálculo para
+    que los reportes históricos no dependan del WAC vigente ni de tablas legacy.
+    """
+    __tablename__ = "analytics_varianza_inventario"
+
+    id = Column(Integer, primary_key=True, index=True)
+    id_operacion = Column(Integer, index=True)
+    id_barra = Column(Integer, index=True)
+    id_inventario_fisico = Column(Integer)
+    id_control_ajuste = Column(Integer, index=True)
+    id_producto = Column(Integer, index=True)
+    id_categoria = Column(Integer, index=True)
+    fecha_operacion = Column(Date)
+    fecha_aplicacion = Column(DateTime, index=True)
+    id_almacen = Column(Integer)
+    delta_paq = Column(Numeric(12, 2))
+    delta_det_exacto = Column(Numeric(14, 6))
+    delta_det_operativo = Column(Numeric(12, 2))
+    rendimiento_por_envase = Column(Numeric(14, 4))
+    unidad_detalle = Column(String(100))
+    wac_snapshot = Column(Numeric(12, 4))
+    fecha_actualizacion_wac = Column(DateTime)
+    origen_wac = Column(String(50))
+    estado_valoracion = Column(String(30))
+    valor_paq = Column(Numeric(14, 4))
+    valor_detalle_operativo = Column(Numeric(14, 4))
+    valor_neto = Column(Numeric(14, 4))
+    usuario_reg = Column(String(255))
+    fecha_reg = Column(DateTime)

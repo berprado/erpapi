@@ -11,7 +11,7 @@ import schemas
 from typing import List, Optional
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import jwt
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, date
 import logging
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -1621,6 +1621,149 @@ def _calcular_diferencias_paloteo(db: Session, id_barra: int, id_inventario_fisi
     return deltas
 
 
+ALMACEN_WAC_AJUSTES_ID = 1
+
+
+def _calcular_valor_varianza(delta: dict, costo: dict | None) -> dict:
+    """Valora un delta operativo con el WAC y rendimiento capturados.
+
+    El signo se conserva como real - ideal: un importe negativo representa un
+    faltante. El delta exacto se guarda para auditoría, pero no altera el monto
+    que explica los movimientos de ajuste del POS.
+    """
+    wac = None if costo is None else costo.get("wac_snapshot")
+    if wac is None:
+        return {"estado_valoracion": "SIN_WAC", "valor_paq": None,
+                "valor_detalle_operativo": None, "valor_neto": None}
+
+    wac_decimal = Decimal(str(wac))
+    if wac_decimal <= 0:
+        return {"estado_valoracion": "WAC_INVALIDO", "valor_paq": None,
+                "valor_detalle_operativo": None, "valor_neto": None}
+
+    valor_paq = Decimal(str(delta["delta_paq"])) * wac_decimal
+    delta_detalle = Decimal(str(delta["delta_det_operativo"]))
+    if delta_detalle == 0:
+        return {
+            "estado_valoracion": "VALORIZADO",
+            "valor_paq": valor_paq,
+            "valor_detalle_operativo": Decimal("0"),
+            "valor_neto": valor_paq,
+        }
+
+    rendimiento = None if costo is None else costo.get("rendimiento_por_envase")
+    if rendimiento is None or Decimal(str(rendimiento)) <= 0:
+        return {"estado_valoracion": "RENDIMIENTO_INVALIDO", "valor_paq": valor_paq,
+                "valor_detalle_operativo": None, "valor_neto": None}
+
+    valor_detalle = delta_detalle / Decimal(str(rendimiento)) * wac_decimal
+    return {
+        "estado_valoracion": "VALORIZADO",
+        "valor_paq": valor_paq,
+        "valor_detalle_operativo": valor_detalle,
+        "valor_neto": valor_paq + valor_detalle,
+    }
+
+
+def _enriquecer_deltas_con_valoracion(db: Session, deltas: list[dict]) -> list[dict]:
+    """Añade snapshots de WAC/rendimiento y su valoración a los deltas dados."""
+    if not deltas:
+        return deltas
+
+    ids_producto = [delta["id_producto"] for delta in deltas]
+    query_costos = text("""
+        SELECT p.id AS id_producto, p.cantidad_detalle AS rendimiento_por_envase,
+               umd.nombre AS unidad_detalle, w.wac_actual AS wac_snapshot,
+               w.fecha_actualizacion AS fecha_actualizacion_wac
+        FROM alm_producto p
+        LEFT JOIN parameter_table umd
+               ON umd.id = p.p_unidad_medida_detalle
+              AND umd.id_master = 4
+              AND umd.estado = 'HAB'
+        LEFT JOIN cache_wac_producto w
+               ON w.id_producto = p.id
+              AND w.id_almacen = :id_almacen
+        WHERE p.id IN :ids_producto
+    """).bindparams(bindparam("ids_producto", expanding=True))
+    filas = db.execute(query_costos, {
+        "ids_producto": ids_producto,
+        "id_almacen": ALMACEN_WAC_AJUSTES_ID,
+    }).mappings().all()
+    costos = {fila["id_producto"]: dict(fila) for fila in filas}
+
+    for delta in deltas:
+        costo = costos.get(delta["id_producto"])
+        valoracion = _calcular_valor_varianza(delta, costo)
+        delta.update({
+            "id_almacen_wac": ALMACEN_WAC_AJUSTES_ID,
+            "rendimiento_por_envase": (
+                float(costo["rendimiento_por_envase"])
+                if costo and costo["rendimiento_por_envase"] is not None else None
+            ),
+            "unidad_detalle": costo["unidad_detalle"] if costo else None,
+            "wac_snapshot": (
+                float(costo["wac_snapshot"])
+                if costo and costo["wac_snapshot"] is not None else None
+            ),
+            "fecha_actualizacion_wac": (
+                costo["fecha_actualizacion_wac"] if costo else None
+            ),
+            "origen_wac": "cache_wac_producto",
+            **{
+                clave: float(valor) if isinstance(valor, Decimal) else valor
+                for clave, valor in valoracion.items()
+            },
+        })
+    return deltas
+
+
+def _resumir_valoracion_varianzas(deltas: list[dict]) -> dict:
+    """Resume importes operativos sin mezclar líneas no valorizables con Bs 0."""
+    valores = [
+        Decimal(str(delta["valor_neto"]))
+        for delta in deltas
+        if delta.get("estado_valoracion") == "VALORIZADO"
+        and delta.get("valor_neto") is not None
+    ]
+    return {
+        "faltantes": float(sum((-valor for valor in valores if valor < 0), Decimal("0"))),
+        "sobrantes": float(sum((valor for valor in valores if valor > 0), Decimal("0"))),
+        "neto": float(sum(valores, Decimal("0"))),
+        "productos_sin_valoracion": sum(
+            1 for delta in deltas if delta.get("estado_valoracion") != "VALORIZADO"
+        ),
+    }
+
+
+def _serializar_snapshot_varianza(snapshot: models.VarianzaInventario) -> dict:
+    """Adapta un snapshot persistido al contrato de deltas del preview."""
+    return {
+        "id_producto": snapshot.id_producto,
+        "id_categoria": snapshot.id_categoria,
+        "pesable": 0,
+        "tolerancia_oz": 0.0,
+        "delta_paq": float(snapshot.delta_paq),
+        "delta_det_exacto": float(snapshot.delta_det_exacto),
+        "delta_det_operativo": float(snapshot.delta_det_operativo),
+        "id_almacen_wac": snapshot.id_almacen,
+        "rendimiento_por_envase": (
+            float(snapshot.rendimiento_por_envase)
+            if snapshot.rendimiento_por_envase is not None else None
+        ),
+        "unidad_detalle": snapshot.unidad_detalle,
+        "wac_snapshot": float(snapshot.wac_snapshot) if snapshot.wac_snapshot is not None else None,
+        "fecha_actualizacion_wac": snapshot.fecha_actualizacion_wac,
+        "origen_wac": snapshot.origen_wac,
+        "estado_valoracion": snapshot.estado_valoracion,
+        "valor_paq": float(snapshot.valor_paq) if snapshot.valor_paq is not None else None,
+        "valor_detalle_operativo": (
+            float(snapshot.valor_detalle_operativo)
+            if snapshot.valor_detalle_operativo is not None else None
+        ),
+        "valor_neto": float(snapshot.valor_neto) if snapshot.valor_neto is not None else None,
+    }
+
+
 def _obtener_control_aplicado(db: Session, id_operacion: int, id_barra: int, id_inventario_fisico: int) -> models.PaloteoAjusteControl | None:
     return db.query(models.PaloteoAjusteControl).filter(
         models.PaloteoAjusteControl.id_operacion == id_operacion,
@@ -1711,7 +1854,15 @@ def previsualizar_consolidacion_ajustes(
         "aplicado_en": control_aplicado.fecha_reg if control_aplicado else None,
     }
 
-    deltas = _calcular_diferencias_paloteo(db, payload.id_barra, inv_fisico_cabecera.id)
+    if control_aplicado:
+        snapshots = db.query(models.VarianzaInventario).filter(
+            models.VarianzaInventario.id_control_ajuste == control_aplicado.id
+        ).all()
+        deltas = [_serializar_snapshot_varianza(snapshot) for snapshot in snapshots]
+    else:
+        deltas = _enriquecer_deltas_con_valoracion(
+            db, _calcular_diferencias_paloteo(db, payload.id_barra, inv_fisico_cabecera.id)
+        )
 
     ids_con_diferencia = [d["id_producto"] for d in deltas if abs(d["delta_paq"]) > 0 or abs(d["delta_det_operativo"]) > 0]
     # La cardinalidad se valida sobre el MISMO conjunto que aplicar escribira en
@@ -1733,6 +1884,7 @@ def previsualizar_consolidacion_ajustes(
                 "productos_evaluados": 0,
                 "productos_con_diferencia": 0,
                 "movimientos_generados": 0,
+                "valoracion": _resumir_valoracion_varianzas([]),
             },
             "sobrantes_paq": [],
             "sobrantes_det": [],
@@ -1788,6 +1940,7 @@ def previsualizar_consolidacion_ajustes(
             "productos_evaluados": len(deltas),
             "productos_con_diferencia": productos_con_diferencia,
             "movimientos_generados": movimientos_generados,
+            "valoracion": _resumir_valoracion_varianzas(deltas),
         },
         "sobrantes_paq": sobrantes_paq,
         "sobrantes_det": sobrantes_det,
@@ -1839,7 +1992,9 @@ def aplicar_ajustes_inventario(
             detail="Los ajustes para esta operativa/barra ya fueron aplicados anteriormente."
         )
 
-    deltas = _calcular_diferencias_paloteo(db, payload.id_barra, inv_fisico_cabecera.id)
+    deltas = _enriquecer_deltas_con_valoracion(
+        db, _calcular_diferencias_paloteo(db, payload.id_barra, inv_fisico_cabecera.id)
+    )
     deltas_con_diferencia = [
         d for d in deltas if abs(d["delta_paq"]) > 0 or abs(d["delta_det_operativo"]) > 0
     ]
@@ -1871,6 +2026,9 @@ def aplicar_ajustes_inventario(
     username_actual = current_user.usuario
     fecha_actual = datetime.now(timezone.utc)
     fecha_hoy = fecha_actual.date()
+    fecha_operacion = db.query(models.Operacion.fecha).filter(
+        models.Operacion.id == payload.id_operacion
+    ).scalar()
     obs_final = payload.observaciones if payload.observaciones else "AJUSTE GENERADO VÍA API"
 
     try:
@@ -2030,6 +2188,49 @@ def aplicar_ajustes_inventario(
             fecha_reg=fecha_actual,
         )
         db.add(control)
+        db.flush()
+
+        # Snapshot analítico propio: se persiste dentro de la misma transacción
+        # que los movimientos POS, sin escribir ni reinterpretar tablas legacy.
+        for d in deltas_a_igualar:
+            db.add(models.VarianzaInventario(
+                id_operacion=payload.id_operacion,
+                id_barra=payload.id_barra,
+                id_inventario_fisico=inv_fisico_cabecera.id,
+                id_control_ajuste=control.id,
+                id_producto=d["id_producto"],
+                id_categoria=d["id_categoria"],
+                fecha_operacion=fecha_operacion,
+                fecha_aplicacion=fecha_actual,
+                id_almacen=d["id_almacen_wac"],
+                delta_paq=_decimal2(d["delta_paq"]),
+                delta_det_exacto=Decimal(str(d["delta_det_exacto"])),
+                delta_det_operativo=_decimal2(d["delta_det_operativo"]),
+                rendimiento_por_envase=(
+                    Decimal(str(d["rendimiento_por_envase"]))
+                    if d["rendimiento_por_envase"] is not None else None
+                ),
+                unidad_detalle=d["unidad_detalle"],
+                wac_snapshot=(
+                    Decimal(str(d["wac_snapshot"]))
+                    if d["wac_snapshot"] is not None else None
+                ),
+                fecha_actualizacion_wac=d["fecha_actualizacion_wac"],
+                origen_wac=d["origen_wac"],
+                estado_valoracion=d["estado_valoracion"],
+                valor_paq=(
+                    Decimal(str(d["valor_paq"])) if d["valor_paq"] is not None else None
+                ),
+                valor_detalle_operativo=(
+                    Decimal(str(d["valor_detalle_operativo"]))
+                    if d["valor_detalle_operativo"] is not None else None
+                ),
+                valor_neto=(
+                    Decimal(str(d["valor_neto"])) if d["valor_neto"] is not None else None
+                ),
+                usuario_reg=username_actual,
+                fecha_reg=fecha_actual,
+            ))
 
         db.commit()
     except HTTPException:
@@ -2053,6 +2254,80 @@ def aplicar_ajustes_inventario(
         "productos_afectados": len(deltas_con_diferencia),
         "igualacion_verificada": True,
         "mensaje": _mensaje_ajuste_aplicado(len(deltas_con_diferencia), len(deltas_a_igualar)),
+    }
+
+
+@app.get("/api/ajustes/varianzas", response_model=schemas.ReporteVarianzasHistoricasResponse)
+def reportar_varianzas_historicas(
+    fecha_inicio: date = Query(..., description="Inicio inclusivo del periodo"),
+    fecha_fin: date = Query(..., description="Fin inclusivo del periodo"),
+    agrupacion: str = Query("dia", pattern="^(dia|semana|mes)$"),
+    id_barra: Optional[int] = Query(None, gt=0),
+    id_producto: Optional[int] = Query(None, gt=0),
+    id_categoria: Optional[int] = Query(None, gt=0),
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_usuario_administrador),
+):
+    """Agrega snapshots históricos de varianzas, sin consultar WAC vigente."""
+    if fecha_fin < fecha_inicio:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="fecha_fin no puede ser anterior a fecha_inicio.",
+        )
+
+    expresiones_periodo = {
+        "dia": "DATE(fecha_aplicacion)",
+        "semana": "DATE_SUB(DATE(fecha_aplicacion), INTERVAL WEEKDAY(fecha_aplicacion) DAY)",
+        "mes": "DATE_FORMAT(fecha_aplicacion, '%Y-%m-01')",
+    }
+    periodo_sql = expresiones_periodo[agrupacion]
+    filtros = ["fecha_aplicacion >= :fecha_inicio", "fecha_aplicacion < :fecha_fin_exclusiva"]
+    parametros = {
+        "fecha_inicio": fecha_inicio,
+        "fecha_fin_exclusiva": fecha_fin + timedelta(days=1),
+    }
+    for campo, valor in (("id_barra", id_barra), ("id_producto", id_producto), ("id_categoria", id_categoria)):
+        if valor is not None:
+            filtros.append(f"{campo} = :{campo}")
+            parametros[campo] = valor
+
+    select_resumen = """
+        COUNT(*) AS productos_con_varianza,
+        COALESCE(SUM(CASE WHEN estado_valoracion = 'VALORIZADO' AND valor_neto < 0 THEN -valor_neto ELSE 0 END), 0) AS faltantes,
+        COALESCE(SUM(CASE WHEN estado_valoracion = 'VALORIZADO' AND valor_neto > 0 THEN valor_neto ELSE 0 END), 0) AS sobrantes,
+        COALESCE(SUM(CASE WHEN estado_valoracion = 'VALORIZADO' THEN valor_neto ELSE 0 END), 0) AS neto,
+        COALESCE(SUM(CASE WHEN estado_valoracion <> 'VALORIZADO' THEN 1 ELSE 0 END), 0) AS productos_sin_valoracion
+    """
+    where_sql = " AND ".join(filtros)
+    resumen = db.execute(text(f"""
+        SELECT {select_resumen}
+        FROM analytics_varianza_inventario
+        WHERE {where_sql}
+    """), parametros).mappings().one()
+    filas_periodo = db.execute(text(f"""
+        SELECT {periodo_sql} AS periodo, {select_resumen}
+        FROM analytics_varianza_inventario
+        WHERE {where_sql}
+        GROUP BY {periodo_sql}
+        ORDER BY periodo ASC
+    """), parametros).mappings().all()
+
+    def serializar(fila, periodo):
+        return {
+            "periodo": periodo,
+            "productos_con_varianza": int(fila["productos_con_varianza"] or 0),
+            "faltantes": float(fila["faltantes"] or 0),
+            "sobrantes": float(fila["sobrantes"] or 0),
+            "neto": float(fila["neto"] or 0),
+            "productos_sin_valoracion": int(fila["productos_sin_valoracion"] or 0),
+        }
+
+    return {
+        "fecha_inicio": fecha_inicio,
+        "fecha_fin": fecha_fin,
+        "agrupacion": agrupacion,
+        "resumen": serializar(resumen, fecha_inicio),
+        "periodos": [serializar(fila, fila["periodo"]) for fila in filas_periodo],
     }
 
 # --- EXPORTACIÓN PDF PALOTEO 3 ---
@@ -2100,6 +2375,13 @@ def _fmt_diff_oz(valor):
     return "" if valor is None else f"{'+' if valor > 0 else ''}{valor:.2f} oz"
 
 
+def _fmt_valor_varianza(valor, estado_valoracion):
+    if estado_valoracion != "VALORIZADO" or valor is None:
+        return "SIN WAC"
+    monto = Decimal(str(valor))
+    return f"{'+' if monto > 0 else ''}{monto:.2f} Bs"
+
+
 class _ReportePDF(FPDF):
     """FPDF con footer discreto de numero de pagina ("PÁGINA n / N") en cada
     hoja. fpdf2 invoca footer() automaticamente al cerrar cada pagina; el
@@ -2115,8 +2397,41 @@ class _ReportePDF(FPDF):
 @app.post("/api/paloteo3/exportar-pdf")
 def exportar_pdf_paloteo3(
     payload: schemas.ExportarPdfRequest,
+    db: Session = Depends(get_db),
     current_user: models.Usuario = Depends(get_usuario_actual),
 ):
+    inventario_fisico = db.query(models.InventarioFisicoPOS).filter(
+        models.InventarioFisicoPOS.id_operacion == payload.id_operacion,
+        models.InventarioFisicoPOS.id_barra == payload.id_barra,
+        models.InventarioFisicoPOS.estado == 'HAB',
+    ).first()
+    control_aplicado = (
+        _obtener_control_aplicado(db, payload.id_operacion, payload.id_barra, inventario_fisico.id)
+        if inventario_fisico else None
+    )
+    if control_aplicado:
+        snapshots = db.query(models.VarianzaInventario).filter(
+            models.VarianzaInventario.id_control_ajuste == control_aplicado.id
+        ).all()
+        deltas_valorados = [
+            {
+                "id_producto": snapshot.id_producto,
+                "estado_valoracion": snapshot.estado_valoracion,
+                "valor_neto": snapshot.valor_neto,
+            }
+            for snapshot in snapshots
+        ]
+    else:
+        deltas_valorados = _enriquecer_deltas_con_valoracion(
+            db,
+            _calcular_diferencias_paloteo(db, payload.id_barra, inventario_fisico.id)
+            if inventario_fisico else [],
+        )
+    valoracion_por_producto = {
+        delta["id_producto"]: delta for delta in deltas_valorados
+    }
+    resumen_valoracion = _resumir_valoracion_varianzas(deltas_valorados)
+
     tipo_reporte = payload.tipo_reporte
     if tipo_reporte == 'ingreso':
         sufijo_archivo = '_INGRESO'
@@ -2185,13 +2500,13 @@ def exportar_pdf_paloteo3(
     pdf.ln(6)
 
     # — Tabla —
-    # ID | COD | Producto | Paq.Pos | Paq.Bar | Det.Pos | Peso | Det.Bar | Dif.Paq | Dif.Real | Dif.Op
-    col_widths = [10, 16, 62, 18, 18, 22, 23, 22, 18, 24, 24]  # suma = 257mm = ancho_util
-    headers    = ["ID", "COD", "PRODUCTO", "PAQ POS", "PAQ BAR", "DET POS", "PESO", "DET BAR", "DIF. PAQ.", "DIF REAL", "DIF OP"]
-    aligns     = ["R", "L", "L", "R", "R", "R", "R", "R", "R", "R", "R"]
+    # ID | COD | Producto | Paq.Pos | Paq.Bar | Det.Pos | Peso | Det.Bar | Dif.Paq | Dif.Real | Dif.Op | Valor
+    col_widths = [8, 14, 48, 16, 16, 19, 18, 19, 15, 20, 20, 44]  # suma = 257mm = ancho_util
+    headers    = ["ID", "COD", "PRODUCTO", "PAQ POS", "PAQ BAR", "DET POS", "PESO", "DET BAR", "DIF. PAQ.", "DIF REAL", "DIF OP", "VALOR"]
+    aligns     = ["R", "L", "L", "R", "R", "R", "R", "R", "R", "R", "R", "R"]
     # Jerarquía visual: ID/COD con menor peso, PRODUCTO en negrita, cantidades
     # absolutas (paq/det/peso) en texto neutro, diferencias con color semántico.
-    jerarquias = ["muted", "muted", "primary", "neutral", "neutral", "neutral", "neutral", "neutral", "diff", "diff", "diff"]
+    jerarquias = ["muted", "muted", "primary", "neutral", "neutral", "neutral", "neutral", "neutral", "diff", "diff", "diff", "diff"]
     row_h = 7
 
     # cabecera de tabla (definida como helper para redibujarla en cada pagina
@@ -2222,6 +2537,10 @@ def exportar_pdf_paloteo3(
             # Unificamos granularidad con POS: incrementos de 0.5 oz.
             dif_oz_pos = round(dif_oz_exacta * 2.0) * 0.5
 
+        valoracion = valoracion_por_producto.get(int(fila.idProducto))
+        valor_neto = valoracion["valor_neto"] if valoracion else None
+        estado_valoracion = valoracion["estado_valoracion"] if valoracion else "SIN_WAC"
+
         valores = [
             fila.idProducto,
             fila.codigo,
@@ -2234,6 +2553,7 @@ def exportar_pdf_paloteo3(
             _fmt_diff_paq(fila.difUnidades),
             _fmt_diff_oz(dif_oz_exacta),
             _fmt_diff_oz(dif_oz_pos),
+            _fmt_valor_varianza(valor_neto, estado_valoracion),
         ]
         colores = [
             None, None, None,
@@ -2241,6 +2561,7 @@ def exportar_pdf_paloteo3(
             _color_diferencia(fila.difUnidades) if fila.difUnidades is not None else None,
             _color_diferencia(dif_oz_exacta) if dif_oz_exacta is not None else None,
             _color_diferencia(dif_oz_pos) if dif_oz_pos is not None else None,
+            _color_diferencia(valor_neto) if valor_neto is not None else None,
         ]
 
         fondo = (245, 245, 245) if idx % 2 == 1 else (255, 255, 255)
@@ -2264,6 +2585,26 @@ def exportar_pdf_paloteo3(
                 pdf.set_font(_FONT_FAMILY, "", 7.5)
             pdf.cell(w, row_h, str(val), border=1, align=align, fill=True)
         pdf.ln()
+
+    pdf.ln(4)
+    pdf.set_font(_FONT_FAMILY, "B", 8)
+    pdf.set_text_color(51, 51, 51)
+    resumen_pdf = (
+        f"FALTANTES: -{resumen_valoracion['faltantes']:.2f} Bs    "
+        f"SOBRANTES: +{resumen_valoracion['sobrantes']:.2f} Bs    "
+        f"NETO: {resumen_valoracion['neto']:+.2f} Bs"
+    )
+    pdf.cell(ancho_util, 5, resumen_pdf, align="R")
+    if resumen_valoracion["productos_sin_valoracion"]:
+        pdf.ln(5)
+        pdf.set_font(_FONT_FAMILY, "", 7)
+        pdf.set_text_color(90, 90, 90)
+        pdf.cell(
+            ancho_util,
+            4,
+            f"{resumen_valoracion['productos_sin_valoracion']} producto(s) sin valoración por WAC o rendimiento inválido.",
+            align="R",
+        )
 
     pdf_bytes = bytes(pdf.output())
 
