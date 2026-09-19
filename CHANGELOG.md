@@ -11,6 +11,33 @@ separado con git tags semanticos (`vMAJOR.MINOR.PATCH`) — ver seccion
 version productiva en uso real), corresponde a este mismo punto de la
 historia, `## 12.2` de abajo.
 
+## 12.26
+- Ajustes: agregado reporte histórico por rango (día, semana o mes) sobre snapshots persistidos y controles de consulta en la PWA. Documentada la valoración inmutable por WAC/rendimiento y su manejo multialmacén.
+
+## 12.25
+- Ajustes: agregada la columna de valor de varianza y sus totales separados en la PWA y el PDF; el importe se vuelve a calcular en backend desde WAC y rendimiento, sin aceptar montos del navegador.
+
+## 12.23
+- Test: agregada cobertura unitaria de la valoración de varianzas, incluyendo el cálculo mixto envase/detalle y datos de costo o rendimiento inválidos.
+
+## 12.22
+- Ajustes: al aplicar una consolidación se congela una fila analítica por producto igualado, con deltas, WAC/rendimiento, estado de valoración e importes dentro de la misma transacción.
+
+## 12.21
+- Test: actualizado el contrato de integración de AJUSTES para verificar el resumen de valoración cuando los productos no tienen WAC.
+
+## 12.20
+- Ajustes: el preview incorpora importes de varianza por producto y un resumen separado de faltantes, sobrantes, neto y productos no valorizados.
+
+## 12.19
+- Ajustes: incorporada la fuente de valoración con WAC y rendimiento por producto, preparada para exponer y congelar importes de varianza sin usar datos enviados por el navegador.
+
+## 12.18
+- BD: agregado el DDL y modelo de `analytics_varianza_inventario`, tabla analítica aislada para congelar la valoración de variaciones sin alterar tablas legacy del POS.
+
+## 12.17
+- Docs: definida la política de WAC multialmacén para la futura valoración de varianzas, incluyendo la separación por almacén, traspasos y la compatibilidad de snapshots históricos.
+
 ## 12.16
 - Docs: agregado `documentos/validaciones_datos_paloteo_pesaje_pourcost.md` detallando las validaciones de datos aplicadas en frontend (PWA / Vanilla JS) y backend (FastAPI / Pydantic) para Paloteo, Pesaje y Pour Cost, así como las reglas transversales de seguridad.
 

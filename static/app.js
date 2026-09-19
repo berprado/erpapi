@@ -80,6 +80,21 @@ const ajustesEstadoMsg = document.getElementById('ajustes-estado-msg');
 const ajustesAplicadoBadge = document.getElementById('ajustes-aplicado-badge');
 const ajustesAplicadoTexto = document.getElementById('ajustes-aplicado-texto');
 const ajustesBtnAplicar = document.getElementById('ajustes-btn-aplicar');
+const ajustesValoracionResumen = document.getElementById('ajustes-valoracion-resumen');
+const ajustesValorFaltantes = document.getElementById('ajustes-valor-faltantes');
+const ajustesValorSobrantes = document.getElementById('ajustes-valor-sobrantes');
+const ajustesValorNeto = document.getElementById('ajustes-valor-neto');
+const ajustesValorPendientes = document.getElementById('ajustes-valor-pendientes');
+const ajustesHistoricoInicio = document.getElementById('ajustes-historico-inicio');
+const ajustesHistoricoFin = document.getElementById('ajustes-historico-fin');
+const ajustesHistoricoAgrupacion = document.getElementById('ajustes-historico-agrupacion');
+const ajustesHistoricoConsultar = document.getElementById('ajustes-historico-consultar');
+const ajustesHistoricoEstado = document.getElementById('ajustes-historico-estado');
+const ajustesHistoricoResumen = document.getElementById('ajustes-historico-resumen');
+const ajustesHistoricoFaltantes = document.getElementById('ajustes-historico-faltantes');
+const ajustesHistoricoSobrantes = document.getElementById('ajustes-historico-sobrantes');
+const ajustesHistoricoNeto = document.getElementById('ajustes-historico-neto');
+const ajustesHistoricoLista = document.getElementById('ajustes-historico-lista');
 const btnTopbarMenu = document.getElementById('btn-topbar-menu');
 const topbarMenuDropdown = document.getElementById('topbar-menu-dropdown');
 const dummyContentDialog = document.getElementById('dummy-content-dialog');
@@ -3658,6 +3673,113 @@ function actualizarUIOrdenReporte() {
     });
 }
 
+function formatearValorVarianza(valor) {
+    const monto = Number(valor);
+    if (!Number.isFinite(monto)) return '—';
+    const signo = monto > 0 ? '+' : monto < 0 ? '-' : '';
+    return `${signo}${Math.abs(monto).toLocaleString('es-BO', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    })} Bs`;
+}
+
+function actualizarResumenValoracionAjustes(valoracion) {
+    if (!ajustesValoracionResumen) return;
+    if (!valoracion) {
+        ajustesValoracionResumen.classList.add('hidden');
+        return;
+    }
+
+    ajustesValorFaltantes.textContent = `-${Number(valoracion.faltantes || 0).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs`;
+    ajustesValorSobrantes.textContent = `+${Number(valoracion.sobrantes || 0).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs`;
+    ajustesValorNeto.textContent = formatearValorVarianza(valoracion.neto || 0);
+    const pendientes = Number(valoracion.productos_sin_valoracion || 0);
+    ajustesValorPendientes.textContent = pendientes
+        ? `${pendientes} producto(s) sin valoración por WAC o rendimiento inválido`
+        : '';
+    ajustesValorPendientes.classList.toggle('hidden', !pendientes);
+    ajustesValoracionResumen.classList.remove('hidden');
+}
+
+function formatearValorAbsoluto(valor) {
+    return `${Number(valor || 0).toLocaleString('es-BO', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    })} Bs`;
+}
+
+function formatearFechaLocal(fecha) {
+    const anio = fecha.getFullYear();
+    const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+    const dia = String(fecha.getDate()).padStart(2, '0');
+    return `${anio}-${mes}-${dia}`;
+}
+
+function inicializarFiltrosHistoricoAjustes() {
+    if (!ajustesHistoricoInicio || ajustesHistoricoInicio.value) return;
+    const hoy = new Date();
+    ajustesHistoricoInicio.value = formatearFechaLocal(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
+    ajustesHistoricoFin.value = formatearFechaLocal(hoy);
+}
+
+function renderizarHistoricoAjustes(data) {
+    if (!ajustesHistoricoResumen || !ajustesHistoricoLista) return;
+    const resumen = data.resumen;
+    ajustesHistoricoFaltantes.textContent = `-${formatearValorAbsoluto(resumen.faltantes)}`;
+    ajustesHistoricoSobrantes.textContent = `+${formatearValorAbsoluto(resumen.sobrantes)}`;
+    ajustesHistoricoNeto.textContent = formatearValorVarianza(resumen.neto);
+    ajustesHistoricoResumen.classList.remove('hidden');
+
+    ajustesHistoricoLista.innerHTML = '';
+    data.periodos.forEach((periodo) => {
+        const fila = document.createElement('div');
+        fila.className = 'grid grid-cols-[minmax(0,1fr)_auto] gap-sm px-sm py-xs text-[10px] items-center';
+        const pendientes = Number(periodo.productos_sin_valoracion || 0);
+        fila.innerHTML = `
+            <span class="font-data-tabular text-on-surface-variant">${escapeHtml(periodo.periodo)}</span>
+            <span class="text-right font-semibold font-data-tabular ${periodo.neto < 0 ? 'text-error' : periodo.neto > 0 ? 'text-primary-fixed' : 'text-on-surface'}">${escapeHtml(formatearValorVarianza(periodo.neto))}</span>
+            ${pendientes ? `<span class="col-span-2 text-[9px] text-on-surface-variant">${pendientes} sin valoración</span>` : ''}
+        `;
+        ajustesHistoricoLista.appendChild(fila);
+    });
+    ajustesHistoricoLista.classList.toggle('hidden', data.periodos.length === 0);
+}
+
+async function consultarHistoricoAjustes() {
+    if (!ajustesHistoricoInicio?.value || !ajustesHistoricoFin?.value) return;
+    const parametros = new URLSearchParams({
+        fecha_inicio: ajustesHistoricoInicio.value,
+        fecha_fin: ajustesHistoricoFin.value,
+        agrupacion: ajustesHistoricoAgrupacion.value,
+        id_barra: String(idBarraActual),
+    });
+    ajustesHistoricoConsultar.disabled = true;
+    ajustesHistoricoEstado.textContent = 'Consultando historial...';
+    ajustesHistoricoEstado.classList.remove('hidden');
+
+    try {
+        const respuesta = await fetchAutenticado(`${API_BASE}/ajustes/varianzas?${parametros}`);
+        const data = await respuesta.json();
+        if (!respuesta.ok) {
+            ajustesHistoricoEstado.textContent = typeof data.detail === 'string'
+                ? data.detail
+                : 'No se pudo consultar el historial.';
+            return;
+        }
+        renderizarHistoricoAjustes(data);
+        const pendientes = Number(data.resumen.productos_sin_valoracion || 0);
+        ajustesHistoricoEstado.textContent = data.periodos.length
+            ? `${data.resumen.productos_con_varianza} producto(s) con variación.${pendientes ? ` ${pendientes} sin valoración.` : ''}`
+            : 'No hay variaciones aplicadas en el período seleccionado.';
+    } catch (_) {
+        if (_ instanceof SesionExpiradaError) return;
+        ajustesHistoricoEstado.textContent = 'Error de conexión al consultar el historial.';
+    } finally {
+        ajustesHistoricoConsultar.disabled = false;
+        ajustesHistoricoEstado.classList.remove('hidden');
+    }
+}
+
 function renderizarReportePaloteo3() {
     const reporteList = document.getElementById('reporte-list');
     const emptyState = document.getElementById('reporte-empty-state');
@@ -3709,9 +3831,24 @@ function renderizarReportePaloteo3() {
             ? ''
             : `${fila.difOnzas > 0 ? '+' : ''}${fila.difOnzas.toFixed(2)} oz`;
 
+        const valoracion = ajustesPreviewActual?.deltas?.find(
+            (delta) => delta.id_producto === Number(fila.idProducto)
+        );
+        const valorNeto = valoracion?.valor_neto;
+        const textoValor = valorNeto == null
+            ? (valoracion ? 'SIN WAC' : '—')
+            : formatearValorVarianza(valorNeto);
+        const colorValor = valorNeto == null
+            ? 'var(--on-surface-variant)'
+            : valorNeto < 0
+                ? 'var(--semantic-danger)'
+                : valorNeto > 0
+                    ? 'var(--semantic-warning)'
+                    : 'var(--semantic-action)';
+
         const row = document.createElement('div');
         row.className = 'grid gap-[2px] px-xs py-xs items-center hover:bg-surface-container-highest transition-colors';
-        row.style.gridTemplateColumns = '2rem 2.9rem minmax(0, 1fr) clamp(3.2rem, 14vw, 4.5rem) clamp(4rem, 17vw, 5.25rem)';
+        row.style.gridTemplateColumns = '2rem 2.9rem minmax(0, 1fr) clamp(2.8rem, 11vw, 4rem) clamp(3.5rem, 14vw, 4.8rem) clamp(4.5rem, 17vw, 5.6rem)';
         const codigoUpper = String(fila.codigo ?? '').toUpperCase();
         const nombreUpper = String(fila.nombre ?? '').toUpperCase();
         row.innerHTML = `
@@ -3720,6 +3857,7 @@ function renderizarReportePaloteo3() {
             <span class="text-[12px] sm:text-[13px] font-semibold text-on-surface truncate uppercase" title="${escapeHtml(nombreUpper)}">${escapeHtml(nombreUpper)}</span>
             <span class="text-right text-[11px] font-semibold" style="color: ${colorUnid}">${textoUnid}</span>
             <span class="text-right text-[11px] font-semibold" style="color: ${colorOz}">${textoOz}</span>
+            <span class="text-right text-[10px] font-semibold font-data-tabular truncate" style="color: ${colorValor}" title="${escapeHtml(textoValor)}">${escapeHtml(textoValor)}</span>
         `;
         reporteList.appendChild(row);
     });
@@ -3833,12 +3971,14 @@ async function actualizarPanelAjustes() {
         return;
     }
     ajustesAdminBlock.classList.remove('hidden');
+    inicializarFiltrosHistoricoAjustes();
 
     if (ajustesBtnAplicar) ajustesBtnAplicar.classList.add('hidden');
     if (ajustesAplicadoBadge) ajustesAplicadoBadge.classList.add('hidden');
     ajustesPreviewActual = null;
 
     if (!currentOperacionId || currentEstadoOperacion !== 23) {
+        actualizarResumenValoracionAjustes(null);
         _mostrarEstadoAjustes('Disponible solo cuando la operativa está CERRADA (estado 23).');
         return;
     }
@@ -3864,6 +4004,7 @@ async function actualizarPanelAjustes() {
         }
 
         if (data.ya_aplicado) {
+            actualizarResumenValoracionAjustes(null);
             _ocultarEstadoAjustes();
             if (ajustesAplicadoTexto) {
                 const fecha = data.aplicado_en ? new Date(data.aplicado_en).toLocaleString() : '';
@@ -3874,11 +4015,14 @@ async function actualizarPanelAjustes() {
         }
 
         if (data.status === 'skipped') {
+            actualizarResumenValoracionAjustes(data.resumen?.valoracion);
             _mostrarEstadoAjustes('El inventario físico coincide con el ideal. No hay diferencias que ajustar.');
             return;
         }
 
         ajustesPreviewActual = data;
+    actualizarResumenValoracionAjustes(data.resumen?.valoracion);
+    renderizarReportePaloteo3();
         _ocultarEstadoAjustes();
         if (ajustesBtnAplicar) ajustesBtnAplicar.classList.remove('hidden');
     } catch (_) {
@@ -3935,6 +4079,10 @@ async function aplicarAjustesInventario() {
 
 if (ajustesBtnAplicar) {
     ajustesBtnAplicar.addEventListener('click', aplicarAjustesInventario);
+}
+
+if (ajustesHistoricoConsultar) {
+    ajustesHistoricoConsultar.addEventListener('click', consultarHistoricoAjustes);
 }
 
 function syncFilaPaloteo3ConInventario(row) {

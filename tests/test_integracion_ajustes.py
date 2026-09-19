@@ -20,6 +20,10 @@ garantia: si NINGUN producto genera movimientos, aplicar responde skipped sin
 escribir nada — no hay consolidacion, y las diferencias toleradas quedan como
 estaban (test_aplicar_todo_tolerado_responde_skipped_sin_escribir).
 """
+from io import BytesIO
+from datetime import date
+
+from pypdf import PdfReader
 from sqlalchemy import text
 
 
@@ -79,6 +83,12 @@ def test_preview_calcula_deltas_y_buckets(client, crear_usuario, escenario_ajust
         "productos_evaluados": 5,
         "productos_con_diferencia": 3,
         "movimientos_generados": 4,
+        "valoracion": {
+            "faltantes": 0.0,
+            "sobrantes": 0.0,
+            "neto": 0.0,
+            "productos_sin_valoracion": 5,
+        },
     }
 
     deltas = {d["id_producto"]: d for d in data["deltas"]}
@@ -132,6 +142,86 @@ def test_preview_sin_diferencias_reporta_skipped(client, crear_usuario, escenari
     assert data["status"] == "skipped"
     assert data["resumen"]["productos_evaluados"] == 1
     assert data["resumen"]["productos_con_diferencia"] == 0
+
+
+def test_exportar_pdf_muestra_valor_varianza_calculado_en_backend(
+        client, crear_usuario, escenario_ajustes, db_session):
+    esc = escenario_ajustes
+    esc.crear_operacion()
+    id_producto = esc.agregar_producto(
+        "PYTEST PDF VALOR", pesable=False,
+        ideal_paq=10, ideal_det=0, real_paq=12, real_det=0,
+    )
+    db_session.execute(text("""
+        INSERT INTO cache_wac_producto
+            (id_almacen, id_producto, wac_actual)
+        VALUES (1, :id_producto, 75.0000)
+    """), {"id_producto": id_producto})
+    db_session.commit()
+    usuario = crear_usuario()
+
+    respuesta = client.post("/api/paloteo3/exportar-pdf", json={
+        "id_operacion": esc.id_operacion,
+        "id_barra": esc.id_barra,
+        "usuario": usuario.usuario,
+        "filas": [{
+            "idProducto": str(id_producto),
+            "codigo": "PYT-PDF",
+            "nombre": "PYTEST PDF VALOR",
+            "paqPos": 10,
+            "paqBar": 12,
+            "difUnidades": 2,
+            "difOnzas": 0,
+        }],
+    }, headers=usuario.headers)
+
+    assert respuesta.status_code == 200, respuesta.text
+    assert respuesta.headers["content-type"] == "application/pdf"
+    texto_pdf = "\n".join(
+        pagina.extract_text() or ""
+        for pagina in PdfReader(BytesIO(respuesta.content)).pages
+    )
+    assert "VALOR" in texto_pdf
+    assert "+150.00 Bs" in texto_pdf
+    assert "NETO: +150.00 Bs" in texto_pdf
+
+
+def test_reporte_historico_agrega_valoraciones_y_pendientes(client, crear_usuario, db_session):
+    hoy = date.today()
+    db_session.execute(text("""
+        INSERT INTO analytics_varianza_inventario (
+            id_operacion, id_barra, id_inventario_fisico, id_control_ajuste,
+            id_producto, fecha_aplicacion, id_almacen, delta_paq,
+            delta_det_exacto, delta_det_operativo, origen_wac,
+            estado_valoracion, valor_paq, valor_detalle_operativo, valor_neto,
+            usuario_reg, fecha_reg
+        ) VALUES
+            (900001, 1, 900001, 900001, 900001, :hoy, 1, -1, 0, 0,
+             'cache_wac_producto', 'VALORIZADO', -120, 0, -120, 'pytest', :hoy),
+            (900002, 1, 900002, 900002, 900002, :hoy, 1, 1, 0, 0,
+             'cache_wac_producto', 'VALORIZADO', 35, 0, 35, 'pytest', :hoy),
+            (900003, 1, 900003, 900003, 900003, :hoy, 1, 1, 0, 0,
+             'cache_wac_producto', 'SIN_WAC', NULL, NULL, NULL, 'pytest', :hoy)
+    """), {"hoy": hoy})
+    db_session.commit()
+    admin = crear_usuario(admin=True)
+
+    respuesta = client.get(
+        f"/api/ajustes/varianzas?fecha_inicio={hoy.isoformat()}&fecha_fin={hoy.isoformat()}&agrupacion=dia&id_barra=1",
+        headers=admin.headers,
+    )
+
+    assert respuesta.status_code == 200, respuesta.text
+    data = respuesta.json()
+    assert data["resumen"] == {
+        "periodo": hoy.isoformat(),
+        "productos_con_varianza": 3,
+        "faltantes": 120.0,
+        "sobrantes": 35.0,
+        "neto": -85.0,
+        "productos_sin_valoracion": 1,
+    }
+    assert data["periodos"] == [data["resumen"]]
 
 
 def test_preview_producto_excluido_no_participa(client, crear_usuario, escenario_ajustes):
@@ -214,6 +304,21 @@ def test_aplicar_genera_movimientos_e_iguala_inventario(client, crear_usuario,
         {"op": esc.id_operacion, "b": esc.id_barra, "f": esc.id_inventario_fisico}).fetchall()
     assert len(control) == 1
     assert tuple(control[0]) == ("APLICADO", data["id_ajuste"], data["id_salida_inventario"])
+
+    snapshots = db_session.execute(text("""
+        SELECT id_producto, id_almacen, estado_valoracion, delta_paq,
+               delta_det_operativo, valor_neto
+        FROM analytics_varianza_inventario
+        WHERE id_operacion = :op AND id_barra = :barra
+        ORDER BY id_producto
+    """), {"op": esc.id_operacion, "barra": esc.id_barra}).fetchall()
+    # Incluye tambien el delta tolerado: el inventario fue igualado al físico
+    # dentro de esta misma aplicación y el snapshot mantiene su evidencia.
+    assert {fila[0] for fila in snapshots} == {
+        productos["sobrante_det"], productos["mixto"], productos["paq"], productos["tolerado"]
+    }
+    assert all(fila[1] == 1 and fila[2] == "SIN_WAC" for fila in snapshots)
+    assert all(fila[5] is None for fila in snapshots)
 
 
 def test_aplicar_iguala_bar_inventario_de_producto_tolerado(client, crear_usuario,

@@ -334,6 +334,7 @@ Body ejemplo de exportacion:
 |---|---|---|
 | `POST` | `/api/inventario/consolidar/preview` | Calcula (desde BD, sin escribir nada) las diferencias paloteo-vs-POS para una operativa/barra: cuantos productos tienen diferencia, sobrantes/faltantes por paquete y por detalle (oz), y si ya existe un ajuste `APLICADO` para esa combinacion (`ya_aplicado`, `aplicado_por`, `aplicado_en`) |
 | `POST` | `/api/inventario/ajustes/aplicar` | Aplica de forma definitiva las diferencias: crea `bar_ajuste`/`bar_salida_inventario` (con sus detalles) y actualiza `bar_inventario` para igualar el stock vivo al fisico contado. Solo administrador. Requiere operativa en estado `23` (CERRADA) e inventario fisico ya registrado |
+| `GET` | `/api/ajustes/varianzas` | Reporte administrativo histórico de varianzas valoradas por rango, con `fecha_inicio`, `fecha_fin`, agrupación `dia`/`semana`/`mes` y filtros opcionales de barra, producto o categoría |
 
 Reglas:
 
@@ -342,6 +343,8 @@ Reglas:
 3. Si no hay diferencias, `aplicar` responde `status: "skipped"` sin crear nada.
 4. Idempotencia: la tabla `app_paloteo_ajuste_control` registra cada aplicacion con `UNIQUE KEY (id_operacion, id_barra, id_inventario_fisico)`. Un segundo intento sobre la misma combinacion responde `409`.
 5. Las cantidades se persisten con `Decimal`/`ROUND_HALF_UP` (nunca `float`), igual que el resto del modulo de pesaje.
+6. Cada aplicación guarda un snapshot por producto en `analytics_varianza_inventario`, tabla analítica propia de la PWA. Conserva WAC, rendimiento, deltas e importe usados para el ajuste; los reportes históricos no leen ni recalculan el WAC vigente. Los productos sin WAC o rendimiento válido quedan identificados y no se convierten silenciosamente en Bs 0. DDL: `querys/ddl_analytics_varianza_inventario.sql`.
+7. La valoración toma el WAC de `cache_wac_producto` para `id_almacen=1`, decisión actual documentada en `documentos/wac_multialmacen_varianzas.md`. Cada snapshot conserva el almacén y origen utilizados, por lo que una futura asignación explícita barra-almacén no altera la historia.
 
 ---
 
