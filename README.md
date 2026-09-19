@@ -392,7 +392,7 @@ Vista renombrada de "REPORTE" a "AJUSTES" (mismo panel `#panel-scan`, mismos dat
   - `0`: verde
   - negativo: rojo
   - positivo: amarillo
-4. Exportacion PDF coherente con filtro activo (columnas `DIF PAQ` y `DIF DET POS` unicamente; ya no incluye el valor exacto pre-redondeo):
+4. Exportacion PDF coherente con filtro activo, con columnas de diferencias y `MONTO` económico. Antes de aplicar usa la comparación actual; después de aplicar usa el snapshot histórico persistido para no mostrar ceros por la igualación de `bar_inventario`:
   - `PALOTEO_<id>.pdf`
   - `PALOTEO_<id>_INGRESO.pdf`
   - `PALOTEO_<id>_SALIDA.pdf`
@@ -406,9 +406,19 @@ Logica en `app.js` (`actualizarPanelAjustes()` / `aplicarAjustesInventario()`):
 
 1. Bloque oculto por completo si el usuario no es administrador.
 2. Si la operativa no esta en estado `23`, o no hay diferencias (`status: "skipped"`), se muestra un mensaje informativo en vez del boton.
-3. Si ya existe un ajuste `APLICADO` para esa operativa/barra (`ya_aplicado` del preview), se muestra un badge "Ajustes aplicados por X el Y" en vez del boton.
-4. Si hay diferencias sin aplicar, el boton queda habilitado; al hacer clic pide confirmacion con el resumen (productos/movimientos) antes de llamar a `POST /api/inventario/ajustes/aplicar`.
-5. Maneja exito, `skipped`, `409` (ya aplicado por otra sesion) y errores de red/servidor con los dialogos `mostrarDialogoResultado`/`mostrarDialogoConfirmacion` existentes.
+3. Si ya existe un ajuste `APLICADO`, el preview recupera los deltas y montos desde `analytics_varianza_inventario`; la tabla conserva esos valores, muestra `AJUSTE REGISTRADO` y el badge indica quién/cuándo lo aplicó.
+4. Si hay diferencias sin aplicar, el boton queda habilitado; al hacer clic pide confirmacion con recordatorio para revisar o exportar el PDF antes de aplicar.
+5. El PDF también usa los snapshots después de aplicar, por lo que puede generarse antes o después sin perder el monto histórico.
+6. Maneja exito, `skipped`, `409` (ya aplicado por otra sesion) y errores de red/servidor con los dialogos `mostrarDialogoResultado`/`mostrarDialogoConfirmacion` existentes.
+
+### Historial de varianzas
+
+El endpoint administrativo `GET /api/ajustes/varianzas` consulta únicamente
+`analytics_varianza_inventario` y permite agrupar por día, semana o mes, con
+filtros de fecha, barra, producto y categoría. Los importes se separan en
+faltantes, sobrantes, neto y productos sin valoración. No se recalculan con el
+WAC vigente, para conservar la trazabilidad del momento en que se registró el
+ajuste.
 
 ---
 

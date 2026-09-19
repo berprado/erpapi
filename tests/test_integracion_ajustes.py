@@ -186,8 +186,53 @@ def test_exportar_pdf_muestra_valor_varianza_calculado_en_backend(
     assert "NETO: +150.00 Bs" in texto_pdf
 
 
+def test_exportar_pdf_despues_de_aplicar_usa_snapshot_historico(
+        client, crear_usuario, escenario_ajustes, db_session):
+    esc = escenario_ajustes
+    esc.crear_operacion()
+    id_producto = esc.agregar_producto(
+        "PYTEST PDF SNAPSHOT", pesable=False,
+        ideal_paq=10, ideal_det=0, real_paq=12, real_det=0,
+    )
+    db_session.execute(text("""
+        INSERT INTO cache_wac_producto
+            (id_almacen, id_producto, wac_actual)
+        VALUES (1, :id_producto, 75.0000)
+    """), {"id_producto": id_producto})
+    db_session.commit()
+    admin = crear_usuario(admin=True)
+
+    aplicar = client.post(APLICAR, json=_payload(esc), headers=admin.headers)
+    assert aplicar.status_code == 200, aplicar.text
+    assert aplicar.json()["status"] == "success"
+
+    respuesta = client.post("/api/paloteo3/exportar-pdf", json={
+        "id_operacion": esc.id_operacion,
+        "id_barra": esc.id_barra,
+        "usuario": admin.usuario,
+        "filas": [{
+            "idProducto": str(id_producto),
+            "codigo": "PYT-SNAPSHOT",
+            "nombre": "PYTEST PDF SNAPSHOT",
+            "paqPos": 10,
+            "paqBar": 12,
+            "difUnidades": 2,
+            "difOnzas": 0,
+        }],
+    }, headers=admin.headers)
+
+    assert respuesta.status_code == 200, respuesta.text
+    texto_pdf = "\n".join(
+        pagina.extract_text() or ""
+        for pagina in PdfReader(BytesIO(respuesta.content)).pages
+    )
+    assert "+150.00 Bs" in texto_pdf
+    assert "NETO: +150.00 Bs" in texto_pdf
+
+
 def test_reporte_historico_agrega_valoraciones_y_pendientes(client, crear_usuario, db_session):
     hoy = date.today()
+    id_barra_historica = 999
     db_session.execute(text("""
         INSERT INTO analytics_varianza_inventario (
             id_operacion, id_barra, id_inventario_fisico, id_control_ajuste,
@@ -196,18 +241,18 @@ def test_reporte_historico_agrega_valoraciones_y_pendientes(client, crear_usuari
             estado_valoracion, valor_paq, valor_detalle_operativo, valor_neto,
             usuario_reg, fecha_reg
         ) VALUES
-            (900001, 1, 900001, 900001, 900001, :hoy, 1, -1, 0, 0,
+                (900001, :id_barra, 900001, 900001, 900001, :hoy, 1, -1, 0, 0,
              'cache_wac_producto', 'VALORIZADO', -120, 0, -120, 'pytest', :hoy),
-            (900002, 1, 900002, 900002, 900002, :hoy, 1, 1, 0, 0,
+                (900002, :id_barra, 900002, 900002, 900002, :hoy, 1, 1, 0, 0,
              'cache_wac_producto', 'VALORIZADO', 35, 0, 35, 'pytest', :hoy),
-            (900003, 1, 900003, 900003, 900003, :hoy, 1, 1, 0, 0,
+                (900003, :id_barra, 900003, 900003, 900003, :hoy, 1, 1, 0, 0,
              'cache_wac_producto', 'SIN_WAC', NULL, NULL, NULL, 'pytest', :hoy)
-    """), {"hoy": hoy})
+            """), {"hoy": hoy, "id_barra": id_barra_historica})
     db_session.commit()
     admin = crear_usuario(admin=True)
 
     respuesta = client.get(
-        f"/api/ajustes/varianzas?fecha_inicio={hoy.isoformat()}&fecha_fin={hoy.isoformat()}&agrupacion=dia&id_barra=1",
+        f"/api/ajustes/varianzas?fecha_inicio={hoy.isoformat()}&fecha_fin={hoy.isoformat()}&agrupacion=dia&id_barra={id_barra_historica}",
         headers=admin.headers,
     )
 

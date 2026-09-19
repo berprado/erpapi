@@ -1735,6 +1735,35 @@ def _resumir_valoracion_varianzas(deltas: list[dict]) -> dict:
     }
 
 
+def _serializar_snapshot_varianza(snapshot: models.VarianzaInventario) -> dict:
+    """Adapta un snapshot persistido al contrato de deltas del preview."""
+    return {
+        "id_producto": snapshot.id_producto,
+        "id_categoria": snapshot.id_categoria,
+        "pesable": 0,
+        "tolerancia_oz": 0.0,
+        "delta_paq": float(snapshot.delta_paq),
+        "delta_det_exacto": float(snapshot.delta_det_exacto),
+        "delta_det_operativo": float(snapshot.delta_det_operativo),
+        "id_almacen_wac": snapshot.id_almacen,
+        "rendimiento_por_envase": (
+            float(snapshot.rendimiento_por_envase)
+            if snapshot.rendimiento_por_envase is not None else None
+        ),
+        "unidad_detalle": snapshot.unidad_detalle,
+        "wac_snapshot": float(snapshot.wac_snapshot) if snapshot.wac_snapshot is not None else None,
+        "fecha_actualizacion_wac": snapshot.fecha_actualizacion_wac,
+        "origen_wac": snapshot.origen_wac,
+        "estado_valoracion": snapshot.estado_valoracion,
+        "valor_paq": float(snapshot.valor_paq) if snapshot.valor_paq is not None else None,
+        "valor_detalle_operativo": (
+            float(snapshot.valor_detalle_operativo)
+            if snapshot.valor_detalle_operativo is not None else None
+        ),
+        "valor_neto": float(snapshot.valor_neto) if snapshot.valor_neto is not None else None,
+    }
+
+
 def _obtener_control_aplicado(db: Session, id_operacion: int, id_barra: int, id_inventario_fisico: int) -> models.PaloteoAjusteControl | None:
     return db.query(models.PaloteoAjusteControl).filter(
         models.PaloteoAjusteControl.id_operacion == id_operacion,
@@ -1825,9 +1854,15 @@ def previsualizar_consolidacion_ajustes(
         "aplicado_en": control_aplicado.fecha_reg if control_aplicado else None,
     }
 
-    deltas = _enriquecer_deltas_con_valoracion(
-        db, _calcular_diferencias_paloteo(db, payload.id_barra, inv_fisico_cabecera.id)
-    )
+    if control_aplicado:
+        snapshots = db.query(models.VarianzaInventario).filter(
+            models.VarianzaInventario.id_control_ajuste == control_aplicado.id
+        ).all()
+        deltas = [_serializar_snapshot_varianza(snapshot) for snapshot in snapshots]
+    else:
+        deltas = _enriquecer_deltas_con_valoracion(
+            db, _calcular_diferencias_paloteo(db, payload.id_barra, inv_fisico_cabecera.id)
+        )
 
     ids_con_diferencia = [d["id_producto"] for d in deltas if abs(d["delta_paq"]) > 0 or abs(d["delta_det_operativo"]) > 0]
     # La cardinalidad se valida sobre el MISMO conjunto que aplicar escribira en
@@ -2370,11 +2405,28 @@ def exportar_pdf_paloteo3(
         models.InventarioFisicoPOS.id_barra == payload.id_barra,
         models.InventarioFisicoPOS.estado == 'HAB',
     ).first()
-    deltas_valorados = _enriquecer_deltas_con_valoracion(
-        db,
-        _calcular_diferencias_paloteo(db, payload.id_barra, inventario_fisico.id)
-        if inventario_fisico else [],
+    control_aplicado = (
+        _obtener_control_aplicado(db, payload.id_operacion, payload.id_barra, inventario_fisico.id)
+        if inventario_fisico else None
     )
+    if control_aplicado:
+        snapshots = db.query(models.VarianzaInventario).filter(
+            models.VarianzaInventario.id_control_ajuste == control_aplicado.id
+        ).all()
+        deltas_valorados = [
+            {
+                "id_producto": snapshot.id_producto,
+                "estado_valoracion": snapshot.estado_valoracion,
+                "valor_neto": snapshot.valor_neto,
+            }
+            for snapshot in snapshots
+        ]
+    else:
+        deltas_valorados = _enriquecer_deltas_con_valoracion(
+            db,
+            _calcular_diferencias_paloteo(db, payload.id_barra, inventario_fisico.id)
+            if inventario_fisico else [],
+        )
     valoracion_por_producto = {
         delta["id_producto"]: delta for delta in deltas_valorados
     }

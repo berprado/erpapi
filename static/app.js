@@ -3485,6 +3485,9 @@ function refrescarPaloteo3DesdeInventario() {
 
 function obtenerFilasReportePaloteo3() {
     const filas = [];
+    const varianzasRegistradas = ajustesPreviewActual?.ya_aplicado
+        ? new Map((ajustesPreviewActual.deltas || []).map((delta) => [delta.id_producto, delta]))
+        : null;
 
     document.querySelectorAll('#stock-list .stock-row').forEach(row => {
         const inputUnidades = row.querySelector('.stock-input-unidades');
@@ -3536,7 +3539,7 @@ function obtenerFilasReportePaloteo3() {
             }
         }
 
-        filas.push({
+        const fila = {
             idProducto,
             codigo,
             nombre,
@@ -3549,7 +3552,19 @@ function obtenerFilasReportePaloteo3() {
             difUnidades: unidadesReales - idealUnidades,
             difOnzas,
             difOnzasExactas,
-        });
+        };
+
+        // Después de aplicar, bar_inventario ya coincide con el físico y sus
+        // diferencias son cero. La tabla debe conservar la evidencia del
+        // ajuste, por lo que sustituimos esos ceros por el snapshot persistido.
+        const varianzaRegistrada = varianzasRegistradas?.get(Number(idProducto));
+        if (varianzaRegistrada) {
+            fila.difUnidades = varianzaRegistrada.delta_paq;
+            fila.difOnzas = varianzaRegistrada.delta_det_operativo;
+            fila.difOnzasExactas = varianzaRegistrada.delta_det_exacto;
+        }
+
+        filas.push(fila);
     });
 
     return filas;
@@ -3580,6 +3595,17 @@ function cuantizarDeltaOnzas(valor, toleranciaOz = 0) {
 function aplicarEstadoReporte(filasBase) {
     const filasNormalizadas = filasBase.map((fila) => {
         const clon = { ...fila };
+
+        const snapshotAplicado = ajustesPreviewActual?.ya_aplicado
+            ? ajustesPreviewActual.deltas?.find((delta) => delta.id_producto === Number(clon.idProducto))
+            : null;
+
+        if (snapshotAplicado) {
+            clon.difUnidades = snapshotAplicado.delta_paq;
+            clon.difOnzas = snapshotAplicado.delta_det_operativo;
+            clon.difOnzasExactas = snapshotAplicado.delta_det_exacto;
+            return clon;
+        }
 
         // difOnzasExactas ya viene crudo desde obtenerFilasReportePaloteo3 (auditoria/exportacion).
         // difOnzas ya viene en base al total redondeado a grilla POS; acá solo se le aplica
@@ -3847,7 +3873,7 @@ function renderizarReportePaloteo3() {
                     : 'var(--semantic-action)';
 
         const row = document.createElement('div');
-        row.className = 'grid gap-[2px] px-xs py-xs items-center hover:bg-surface-container-highest transition-colors';
+        row.className = `grid gap-[2px] px-xs py-xs items-center hover:bg-surface-container-highest transition-colors${ajustesPreviewActual?.ya_aplicado ? ' bg-surface-container-low/50' : ''}`;
         row.style.gridTemplateColumns = '2rem 2.9rem minmax(0, 1fr) clamp(2.8rem, 11vw, 4rem) clamp(3.5rem, 14vw, 4.8rem) clamp(4.5rem, 17vw, 5.6rem)';
         const codigoUpper = String(fila.codigo ?? '').toUpperCase();
         const nombreUpper = String(fila.nombre ?? '').toUpperCase();
@@ -3858,6 +3884,7 @@ function renderizarReportePaloteo3() {
             <span class="text-right text-[11px] font-semibold" style="color: ${colorUnid}">${textoUnid}</span>
             <span class="text-right text-[11px] font-semibold" style="color: ${colorOz}">${textoOz}</span>
             <span class="text-right text-[10px] font-semibold font-data-tabular truncate" style="color: ${colorValor}" title="${escapeHtml(textoValor)}">${escapeHtml(textoValor)}</span>
+            ${ajustesPreviewActual?.ya_aplicado ? '<span class="col-span-6 text-[9px] font-label-mono uppercase tracking-wide text-primary-fixed">Ajuste registrado</span>' : ''}
         `;
         reporteList.appendChild(row);
     });
@@ -4004,7 +4031,9 @@ async function actualizarPanelAjustes() {
         }
 
         if (data.ya_aplicado) {
-            actualizarResumenValoracionAjustes(null);
+            ajustesPreviewActual = data;
+            actualizarResumenValoracionAjustes(data.resumen?.valoracion);
+            renderizarReportePaloteo3();
             _ocultarEstadoAjustes();
             if (ajustesAplicadoTexto) {
                 const fecha = data.aplicado_en ? new Date(data.aplicado_en).toLocaleString() : '';
@@ -4037,7 +4066,9 @@ async function aplicarAjustesInventario() {
     const { productos_con_diferencia, movimientos_generados } = ajustesPreviewActual.resumen || {};
     const confirmar = await mostrarDialogoConfirmacion({
         titulo: 'Aplicar ajustes de inventario',
-        mensaje: `Se generarán ${movimientos_generados ?? '?'} movimiento(s) sobre ${productos_con_diferencia ?? '?'} producto(s) y se actualizará el inventario vivo. Esta acción es irreversible. ¿Continuar?`,
+        mensaje: `Se generarán ${movimientos_generados ?? '?'} movimiento(s) sobre ${productos_con_diferencia ?? '?'} producto(s) y se actualizará el inventario vivo. Esta acción es irreversible.
+
+Revisa o exporta el PDF antes de continuar. Luego podrás volver a exportarlo con los valores históricos congelados del ajuste. ¿Continuar?`,
     });
     if (!confirmar) return;
 

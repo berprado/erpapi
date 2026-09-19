@@ -11,6 +11,15 @@ separado con git tags semanticos (`vMAJOR.MINOR.PATCH`) — ver seccion
 version productiva en uso real), corresponde a este mismo punto de la
 historia, `## 12.2` de abajo.
 
+## 12.29
+- Docs: actualizado el flujo de AJUSTES para documentar snapshots históricos, montos persistentes después de aplicar, PDF antes/después del ajuste y reporte agregado por periodo.
+
+## 12.28
+- Ajustes: después de registrar un ajuste, la tabla conserva los deltas y montos históricos del snapshot, muestra la marca de ajuste registrado y actualiza los iconos de PAQ, DET y MONTO.
+
+## 12.27
+- Ajustes: el PDF usa los snapshots históricos congelados después de aplicar el ajuste, evitando que la igualación del inventario muestre valores económicos en cero. La confirmación de aplicación recuerda revisar o exportar el PDF.
+
 ## 12.26
 - Ajustes: agregado reporte histórico por rango (día, semana o mes) sobre snapshots persistidos y controles de consulta en la PWA. Documentada la valoración inmutable por WAC/rendimiento y su manejo multialmacén.
 
