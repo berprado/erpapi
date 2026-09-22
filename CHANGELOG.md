@@ -11,6 +11,9 @@ separado con git tags semanticos (`vMAJOR.MINOR.PATCH`) — ver seccion
 version productiva en uso real), corresponde a este mismo punto de la
 historia, `## 12.2` de abajo.
 
+## 12.30
+- Docs: agregado prompt de continuidad para retomar el proyecto en nuevas sesiones con el estado implementado y los pendientes de la siguiente fase.
+
 ## 12.29
 - Docs: actualizado el flujo de AJUSTES para documentar snapshots históricos, montos persistentes después de aplicar, PDF antes/después del ajuste y reporte agregado por periodo.
 

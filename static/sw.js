@@ -4,7 +4,7 @@
 //             Network First para llamadas a la API.
 // ============================================================
 
-const CACHE_NAME = 'backstage-v12.29';
+const CACHE_NAME = 'backstage-v12.30';
 
 // Archivos que se pre-cachean al instalar la PWA. Sin rutas de logo/ícono
 // hardcodeadas a una marca: este mismo sw.js sirve a cualquier instancia
