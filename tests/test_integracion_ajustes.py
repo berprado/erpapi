@@ -483,6 +483,31 @@ def test_aplicar_dos_veces_responde_409(client, crear_usuario, escenario_ajustes
     assert r3.json()["ya_aplicado"] is True
 
 
+def test_aplicar_concurrente_que_choca_con_clave_unica_responde_409(
+        client, crear_usuario, escenario_ajustes, db_session):
+    """Simula la carrera de dos aplicaciones simultaneas: la segunda pasa el
+    pre-chequeo (_obtener_control_aplicado solo busca estado APLICADO y, en la
+    carrera real, su snapshot no ve el commit de la primera) y choca recien al
+    insertar el control con uk_paloteo_ajuste_unico. Debe ser 409, no 500, y el
+    rollback no debe dejar bar_inventario a medio igualar."""
+    esc = escenario_ajustes
+    productos = _armar_escenario_base(esc)
+    admin = crear_usuario(admin=True)
+
+    db_session.execute(text("""
+        INSERT INTO app_paloteo_ajuste_control
+            (id_operacion, id_barra, id_inventario_fisico, estado, payload_json,
+             usuario_reg, fecha_reg)
+        VALUES (:op, :barra, :fisico, 'EN_CARRERA', '{}', 'pytest', NOW())
+    """), {"op": esc.id_operacion, "barra": esc.id_barra, "fisico": esc.id_inventario_fisico})
+    db_session.commit()
+
+    r = client.post(APLICAR, json=_payload(esc), headers=admin.headers)
+    assert r.status_code == 409, r.text
+    assert "ya fueron aplicados" in r.json()["detail"]
+    assert esc.inventario_de(productos["mixto"]) == [(2.0, 5.0)]
+
+
 def test_aplicar_requiere_rol_admin(client, crear_usuario, escenario_ajustes):
     esc = escenario_ajustes
     _armar_escenario_base(esc)

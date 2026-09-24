@@ -2,7 +2,7 @@
 
 Los tests unitarios (test_calculos_pesaje, test_schemas_paloteo) no usan nada
 de aqui. Estas fixtures dan soporte a los tests de INTEGRACION contra la BD
-de test local (APP_ENV=test, adminerp_copy en WAMP):
+de test local (APP_ENV=test, adminerp en WAMP):
 
 - Toda la actividad de un test ocurre dentro de UNA transaccion externa sobre
   una unica conexion. La sesion que se inyecta a la app se une a esa
@@ -40,7 +40,7 @@ def _abortar_si_entorno_inseguro():
     if settings.APP_ENV != "test":
         pytest.fail(
             "Los tests de integracion escriben fixtures en la BD y solo pueden correr con "
-            f"APP_ENV=test (adminerp_copy local). APP_ENV actual: '{settings.APP_ENV}'. "
+            f"APP_ENV=test (adminerp local). APP_ENV actual: '{settings.APP_ENV}'. "
             "Nunca ejecutarlos contra test_pos ni produccion.",
             pytrace=False,
         )

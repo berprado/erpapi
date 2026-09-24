@@ -272,8 +272,14 @@ def _verificar_rate_limit_login(db: Session, usuario: str, ip: str) -> None:
         )
 
 
-def _validar_operacion_inicio_cierre(db: Session, id_operacion: int) -> models.Operacion:
-    operacion = db.query(models.Operacion).filter(models.Operacion.id == id_operacion).first()
+def _validar_operacion_inicio_cierre(db: Session, id_operacion: int, bloquear: bool = False) -> models.Operacion:
+    # bloquear=True: SELECT ... FOR UPDATE sobre la fila de ope_operacion (por PK,
+    # una sola fila) hasta el commit/rollback del request. Serializa escrituras
+    # concurrentes de la misma operativa sin tocar ninguna otra fila del POS.
+    consulta = db.query(models.Operacion).filter(models.Operacion.id == id_operacion)
+    if bloquear:
+        consulta = consulta.with_for_update()
+    operacion = consulta.first()
     if not operacion or operacion.estado_operacion != 24:
         raise HTTPException(status_code=400, detail="Operación inválida o barra no está en INICIO CIERRE.")
     return operacion
@@ -690,8 +696,10 @@ def procesar_paloteo(
     # --- NUEVO: Lógica de Observaciones ---
     obs_final = payload.observaciones if payload.observaciones else "REGISTRADO VÍA API"
 
-    # 1. Validar Operación
-    _validar_operacion_inicio_cierre(db, payload.id_operacion)
+    # 1. Validar Operación, bloqueando su fila: dos capturas simultáneas de la
+    # misma operativa (doble tap, dos dispositivos) quedan en fila en vez de
+    # pasar ambas el chequeo de duplicado de abajo y crear dos cabeceras.
+    _validar_operacion_inicio_cierre(db, payload.id_operacion, bloquear=True)
 
     barra_operativa = _resolver_barra_operativa(request)
     if payload.id_barra != barra_operativa:
@@ -702,10 +710,15 @@ def procesar_paloteo(
 
     # Fix #5: Prevenir inventario duplicado por operación.
     # Si ya existe una cabecera HAB para este id_operacion, rechazamos el registro.
+    # with_for_update() no es por el bloqueo en sí (ya lo da la fila de
+    # ope_operacion) sino para forzar una lectura actual: con REPEATABLE READ la
+    # sesión ya tiene snapshot desde la consulta de autenticación, y un SELECT
+    # normal no vería la cabecera que el request que esperaba acaba de commitear.
+    # Usa el índice de id_operacion, así que solo bloquea el rango de esa operativa.
     inventario_existente = db.query(models.InventarioFisicoPOS).filter(
         models.InventarioFisicoPOS.id_operacion == payload.id_operacion,
         models.InventarioFisicoPOS.estado == 'HAB'
-    ).first()
+    ).with_for_update().first()
     if inventario_existente:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -1764,6 +1777,12 @@ def _serializar_snapshot_varianza(snapshot: models.VarianzaInventario) -> dict:
     }
 
 
+# Claves únicas que delatan una aplicación duplicada de ajustes (DDL en
+# documentos/DOCUMENTACION_INGRESOS_SALIDAS_AJUSTE_PWA.md y
+# querys/ddl_analytics_varianza_inventario.sql).
+CLAVES_UNICAS_AJUSTE_APLICADO = ("uk_paloteo_ajuste_unico", "uk_varianza_inventario_unica")
+
+
 def _obtener_control_aplicado(db: Session, id_operacion: int, id_barra: int, id_inventario_fisico: int) -> models.PaloteoAjusteControl | None:
     return db.query(models.PaloteoAjusteControl).filter(
         models.PaloteoAjusteControl.id_operacion == id_operacion,
@@ -2236,6 +2255,22 @@ def aplicar_ajustes_inventario(
     except HTTPException:
         db.rollback()
         raise
+    except IntegrityError as exc:
+        db.rollback()
+        # Dos aplicaciones simultáneas pasan ambas _obtener_control_aplicado (la
+        # segunda lee su snapshot previo al commit de la primera); la que llega
+        # después choca aquí con la clave única del control o de las varianzas.
+        # Es el mismo caso que el 409 de arriba, no un error del servidor.
+        if any(clave in str(exc.orig) for clave in CLAVES_UNICAS_AJUSTE_APLICADO):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Los ajustes para esta operativa/barra ya fueron aplicados anteriormente."
+            ) from exc
+        logger.exception(
+            "Error de integridad aplicando ajustes para operación %s / barra %s",
+            payload.id_operacion, payload.id_barra,
+        )
+        raise HTTPException(status_code=500, detail="No se pudo aplicar el ajuste de inventario.") from exc
     except Exception as exc:
         db.rollback()
         logger.exception(

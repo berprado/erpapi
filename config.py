@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import field_validator
+from sqlalchemy.engine import URL
 import logging
 
 from branding import BRAND_IDS, DEFAULT_BRAND_ID
@@ -138,22 +139,35 @@ class Settings(BaseSettings):
     PROD_DB_NAME: str
     PROD_DB_PORT: str
 
+    @staticmethod
+    def _url_mysql(usuario: str, contrasena: str, host: str, puerto: str, nombre_bd: str) -> URL:
+        # URL.create escapa cada componente: una contraseña con '@', ':', '/'
+        # o '#' interpolada en un f-string rompía el parseo de la URL.
+        # Contraseña vacía (root de WAMP sin clave) -> None, sin ':' colgando.
+        return URL.create(
+            "mysql+pymysql",
+            username=usuario,
+            password=contrasena or None,
+            host=host,
+            port=int(puerto) if puerto else None,
+            database=nombre_bd,
+        )
+
     @property
-    def database_url(self) -> str:
+    def database_url(self) -> URL:
         """Genera la URL de conexión de SQLAlchemy dinámicamente."""
         if self.APP_ENV == "production":
             logger.info("Conectando a BASE DE DATOS DE PRODUCCIÓN")
-            return f"mysql+pymysql://{self.PROD_DB_USER}:{self.PROD_DB_PASS}@{self.PROD_DB_HOST}:{self.PROD_DB_PORT}/{self.PROD_DB_NAME}"
+            return self._url_mysql(self.PROD_DB_USER, self.PROD_DB_PASS, self.PROD_DB_HOST,
+                                   self.PROD_DB_PORT, self.PROD_DB_NAME)
 
         if self.APP_ENV == "test_pos":
             logger.info("Conectando a BASE DE DATOS DE PRUEBAS CON POS (Remoto)")
-            if not self.TEST_POS_DB_PASS:
-                return f"mysql+pymysql://{self.TEST_POS_DB_USER}@{self.TEST_POS_DB_HOST}:{self.TEST_POS_DB_PORT}/{self.TEST_POS_DB_NAME}"
-            return f"mysql+pymysql://{self.TEST_POS_DB_USER}:{self.TEST_POS_DB_PASS}@{self.TEST_POS_DB_HOST}:{self.TEST_POS_DB_PORT}/{self.TEST_POS_DB_NAME}"
+            return self._url_mysql(self.TEST_POS_DB_USER, self.TEST_POS_DB_PASS, self.TEST_POS_DB_HOST,
+                                   self.TEST_POS_DB_PORT, self.TEST_POS_DB_NAME)
 
         logger.info("Conectando a BASE DE DATOS DE PRUEBAS (WAMP Local)")
-        if not self.TEST_DB_PASS:
-            return f"mysql+pymysql://{self.TEST_DB_USER}@{self.TEST_DB_HOST}:{self.TEST_DB_PORT}/{self.TEST_DB_NAME}"
-        return f"mysql+pymysql://{self.TEST_DB_USER}:{self.TEST_DB_PASS}@{self.TEST_DB_HOST}:{self.TEST_DB_PORT}/{self.TEST_DB_NAME}"
+        return self._url_mysql(self.TEST_DB_USER, self.TEST_DB_PASS, self.TEST_DB_HOST,
+                               self.TEST_DB_PORT, self.TEST_DB_NAME)
 
 settings = Settings()

@@ -11,6 +11,12 @@ separado con git tags semanticos (`vMAJOR.MINOR.PATCH`) — ver seccion
 version productiva en uso real), corresponde a este mismo punto de la
 historia, `## 12.2` de abajo.
 
+## 12.33
+- BD: la URL de conexion se arma con `sqlalchemy.engine.URL.create` (`config.py`), que escapa usuario/contrasena; antes una contrasena con `@`, `:`, `/` o `#` rompia el parseo.
+- Paloteo: `POST /api/inventario/paloteo` bloquea la fila de `ope_operacion` (`FOR UPDATE`) y hace lectura actual de la cabecera existente, de modo que dos capturas simultaneas de la misma operativa ya no pueden crear dos cabeceras en `bar_inventario_fisico`; la segunda recibe 409.
+- Ajustes: una doble aplicacion simultanea que choca con `uk_paloteo_ajuste_unico` / `uk_varianza_inventario_unica` responde 409 ("ya fueron aplicados") en lugar de 500.
+- Docs/tests: la BD de test local se referencia como `adminerp`.
+
 ## 12.32
 - Reportes: agregado listado de operativas con cierre historico disponible (`GET /api/paloteo3/historico/operativas`, ultimos 30 dias por defecto), PDF historico dedicado (`POST /api/paloteo3/historico/exportar-pdf`) y tab "HISTORICO" (admin-only) en la PWA para consultarlo sin depender de la sesion viva de PALOTEO 1/2/3.
 
