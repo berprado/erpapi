@@ -786,6 +786,10 @@
                             <span class="material-symbols-outlined">percent</span>
                             Pour Cost
                         </button>
+                        <button id="menu-item-historico" type="button" class="floating-menu-item hidden" data-tab="historico" role="menuitem">
+                            <span class="material-symbols-outlined">history</span>
+                            Histórico
+                        </button>
                         <div class="floating-menu-separator" role="presentation"></div>
                         <button type="button" class="floating-menu-item" data-dummy-link="guia" role="menuitem">
                             <span class="material-symbols-outlined">article</span>
@@ -1163,6 +1167,73 @@
             </button>
         </div><!-- /panel-pourcost -->
 
+        <!-- ========== PANEL HISTÓRICO (admin-only, ver GET /api/paloteo3/historico) ========== -->
+        <div id="panel-historico" class="tab-panel hidden p-md max-w-6xl mx-auto w-full">
+            <div class="flex items-start justify-between mb-sm">
+                <div>
+                    <h2 class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase flex items-center gap-xs leading-none">
+                        <span class="material-symbols-outlined text-primary-fixed" style="font-size:1rem;">history</span>
+                        Histórico
+                    </h2>
+                    <p class="text-[11px] text-on-surface-variant mt-[2px] leading-tight">Cierres de paloteo ya registrados en el POS</p>
+                </div>
+            </div>
+
+            <!-- Filtro de rango + barra para listar operativas con cierre disponible -->
+            <div class="mb-sm grid grid-cols-2 gap-xs sm:grid-cols-4">
+                <label class="text-[9px] font-label-mono uppercase tracking-wide text-on-surface-variant">Desde
+                    <input id="historico-fecha-desde" type="date" class="mt-[2px] w-full h-8 bg-surface border border-outline-variant rounded-sm px-xs text-[11px] text-on-surface font-data-tabular focus:border-primary-fixed-dim focus:outline-none">
+                </label>
+                <label class="text-[9px] font-label-mono uppercase tracking-wide text-on-surface-variant">Hasta
+                    <input id="historico-fecha-hasta" type="date" class="mt-[2px] w-full h-8 bg-surface border border-outline-variant rounded-sm px-xs text-[11px] text-on-surface font-data-tabular focus:border-primary-fixed-dim focus:outline-none">
+                </label>
+                <label class="text-[9px] font-label-mono uppercase tracking-wide text-on-surface-variant">Barra
+                    <select id="historico-filtro-barra" class="mt-[2px] w-full h-8 bg-surface border border-outline-variant rounded-sm px-xs text-[11px] text-on-surface focus:border-primary-fixed-dim focus:outline-none">
+                        <option value="">Todas</option>
+                    </select>
+                </label>
+                <button id="historico-btn-consultar" type="button" class="self-end h-8 bg-surface border border-outline-variant text-on-surface rounded-sm text-[10px] font-label-mono uppercase tracking-widest hover:border-primary-fixed-dim hover:text-primary-fixed transition-colors">
+                    Consultar
+                </button>
+            </div>
+            <p id="historico-estado-operativas" class="hidden mb-sm text-[10px] text-on-surface-variant"></p>
+
+            <!-- Selector de operativa/barra encontrada -->
+            <div class="mb-md">
+                <select id="historico-select-operativa" class="w-full bg-surface-container border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-body-base" disabled>
+                    <option value="">Selecciona una operativa...</option>
+                </select>
+            </div>
+
+            <div class="bg-surface-container border border-outline-variant rounded-md overflow-hidden shadow-lg">
+                <div class="grid gap-[2px] px-xs py-sm border-b border-outline-variant bg-surface-container-low text-[10px] font-label-mono font-semibold tracking-[0.12em] uppercase text-on-surface-variant" style="grid-template-columns: 2rem 2.9rem minmax(0, 1fr) clamp(2.8rem, 11vw, 4rem) clamp(3.5rem, 14vw, 4.8rem) clamp(3.5rem, 12vw, 4rem);">
+                    <span class="text-left">ID</span>
+                    <span class="text-left">COD</span>
+                    <span class="text-left">PRODUCTO</span>
+                    <span class="text-right">DIF PAQ</span>
+                    <span class="text-right">DIF DET</span>
+                    <span class="text-right">CAPT</span>
+                </div>
+                <div id="historico-list" class="divide-y divide-outline-variant"></div>
+            </div>
+
+            <div id="historico-empty-state" class="hidden text-center text-on-surface-variant py-md font-body-base text-sm">
+                Selecciona una operativa para ver su cierre histórico.
+            </div>
+
+            <div class="mt-sm">
+                <button id="historico-btn-pdf" type="button" disabled class="w-full bg-primary-container text-black h-10 px-sm rounded-sharp flex items-center justify-center gap-xs hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest text-[11px] font-label-mono font-semibold disabled:opacity-50 disabled:cursor-not-allowed">
+                    <span class="material-symbols-outlined text-sm">picture_as_pdf</span>
+                    Exportar PDF
+                </button>
+            </div>
+
+            <!-- FAB: volver al inicio de la página -->
+            <button id="historico-fab-scroll-top" type="button" aria-label="Volver al inicio" class="fab-scroll-top hidden bg-primary-container text-on-primary-fixed shadow-cyan-glow hover:brightness-110 active:scale-95 transition-all">
+                <span class="material-symbols-outlined">arrow_upward</span>
+            </button>
+        </div><!-- /panel-historico -->
+
 
         </main>
 
@@ -1508,7 +1579,7 @@
         </div>
     </div>
 
-    <script src="/assets/app.js?v=12.30"></script>
+    <script src="/assets/app.js?v=12.32"></script>
 
     <script>
         (function () {

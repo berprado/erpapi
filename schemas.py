@@ -259,6 +259,54 @@ class ReporteVarianzasHistoricasResponse(BaseModel):
     periodos: List[VarianzaHistoricaPeriodo] = Field(default_factory=list)
 
 
+class PaloteoHistoricoFila(BaseModel):
+    id_paloteo_cierre: int
+    id_operacion: int
+    id_barra: int
+    barra: Optional[str] = None
+    id_producto: int
+    codigo_producto: Optional[str] = None
+    producto: str
+    categoria: Optional[str] = None
+    actual_paq: Optional[float] = None
+    actual_detalle: Optional[float] = None
+    fisico_paq: Optional[float] = None
+    fisico_detalle: Optional[float] = None
+    diferencia_paq: Optional[float] = None
+    diferencia_detalle: Optional[float] = None
+    peso_gramos: Optional[float] = None
+    diferencia_exacta_oz: Optional[float] = None
+    tiene_captura_cruda: bool = False
+    tiene_diferencia: bool = False
+    fecha_reg: Optional[datetime] = None
+    estado_producto: Optional[str] = None
+
+
+class PaloteoHistoricoResponse(BaseModel):
+    id_operacion: int
+    id_barra: int
+    fecha_cierre: Optional[datetime] = None
+    filas: List[PaloteoHistoricoFila] = Field(default_factory=list)
+
+
+class PaloteoHistoricoOperativa(BaseModel):
+    id_operacion: int
+    id_barra: int
+    barra: Optional[str] = None
+    nombre_operacion: Optional[str] = None
+    fecha: Optional[date] = None
+
+
+class PaloteoHistoricoOperativasResponse(BaseModel):
+    operativas: List[PaloteoHistoricoOperativa] = Field(default_factory=list)
+
+
+class ExportarPdfHistoricoRequest(BaseModel):
+    id_operacion: int = Field(..., gt=0)
+    id_barra: int = Field(..., gt=0)
+    usuario: str
+
+
 # --- POUR COST (solo lectura, ver documentos/pour_cost/pourcost.md) ---
 
 class PourCostDia(BaseModel):

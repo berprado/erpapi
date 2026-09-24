@@ -2330,6 +2330,171 @@ def reportar_varianzas_historicas(
         "periodos": [serializar(fila, fila["periodo"]) for fila in filas_periodo],
     }
 
+
+def _peso_total_crudo(pesos_abiertas) -> Optional[float]:
+    if not isinstance(pesos_abiertas, list):
+        return None
+    pesos = []
+    for entrada in pesos_abiertas:
+        if not isinstance(entrada, dict):
+            continue
+        try:
+            pesos.append(float(entrada["peso"]))
+        except (KeyError, TypeError, ValueError):
+            continue
+    return sum(pesos) if pesos else 0.0
+
+
+def _normalizar_fila_paloteo_historico(fila) -> dict:
+    actual_detalle = fila["actual_detalle"]
+    onzas_crudas = fila["onzas_crudas"]
+    diferencia_exacta = None
+    if actual_detalle is not None and onzas_crudas is not None:
+        diferencia_exacta = float(onzas_crudas) - float(actual_detalle)
+
+    pesos_abiertas = []
+    if fila["pesos_abiertas"]:
+        try:
+            pesos_abiertas = json.loads(fila["pesos_abiertas"])
+        except (TypeError, json.JSONDecodeError):
+            pesos_abiertas = []
+
+    return {
+        "id_paloteo_cierre": fila["id_paloteo_cierre"],
+        "id_operacion": fila["id_operacion"],
+        "id_barra": fila["id_barra"],
+        "barra": fila["barra"],
+        "id_producto": fila["id_producto"],
+        "codigo_producto": fila["codigo_producto"],
+        "producto": fila["producto"],
+        "categoria": fila["categoria"],
+        "actual_paq": float(fila["actual_paq"]) if fila["actual_paq"] is not None else None,
+        "actual_detalle": float(actual_detalle) if actual_detalle is not None else None,
+        "fisico_paq": float(fila["fisico_paq"]) if fila["fisico_paq"] is not None else None,
+        "fisico_detalle": float(fila["fisico_detalle"]) if fila["fisico_detalle"] is not None else None,
+        "diferencia_paq": float(fila["diferencia_paq"]) if fila["diferencia_paq"] is not None else None,
+        "diferencia_detalle": float(fila["diferencia_detalle"]) if fila["diferencia_detalle"] is not None else None,
+        "peso_gramos": _peso_total_crudo(pesos_abiertas) if fila["id_crudo"] is not None else None,
+        "diferencia_exacta_oz": diferencia_exacta,
+        "tiene_captura_cruda": fila["id_crudo"] is not None,
+        "tiene_diferencia": bool(fila["tiene_diferencia"]),
+        "fecha_reg": fila["fecha_reg"],
+        "estado_producto": fila["estado_producto"],
+    }
+
+
+def _obtener_filas_paloteo_historico(db: Session, id_operacion: int, id_barra: int) -> list[dict]:
+    """Lee un cierre POS histórico sin depender del inventario vivo ni del navegador."""
+    query = text("""
+        SELECT
+            c.id_paloteo_cierre,
+            c.id_operacion,
+            c.id_barra,
+            c.barra,
+            c.id_producto,
+            c.codigo_producto,
+            c.producto,
+            c.categoria,
+            c.actual_paq,
+            c.actual_detalle,
+            c.fisico_paq,
+            c.fisico_detalle,
+            c.diferencia_paq,
+            c.diferencia_detalle,
+            c.tiene_diferencia,
+            c.fecha_reg,
+            c.estado_producto,
+            r.id AS id_crudo,
+            r.onzas_calculadas AS onzas_crudas,
+            r.pesos_abiertas
+        FROM v9_paloteo_cierre c
+        INNER JOIN (
+            SELECT MAX(id_paloteo_cierre) AS id_paloteo_cierre
+            FROM v9_paloteo_cierre
+            WHERE id_operacion = :id_operacion
+              AND id_barra = :id_barra
+              AND estado_paloteo = 'HAB'
+            GROUP BY id_operacion, id_barra, id_producto
+        ) ultima_cierre ON ultima_cierre.id_paloteo_cierre = c.id_paloteo_cierre
+        LEFT JOIN app_paloteo_registro_crudo r
+          ON r.id = (
+              SELECT MAX(r2.id)
+              FROM app_paloteo_registro_crudo r2
+              WHERE r2.id_operacion = c.id_operacion
+                AND r2.id_producto = c.id_producto
+          )
+        WHERE c.id_operacion = :id_operacion
+          AND c.id_barra = :id_barra
+          AND c.estado_paloteo = 'HAB'
+        ORDER BY c.id_producto ASC
+    """)
+    filas = db.execute(query, {
+        "id_operacion": id_operacion,
+        "id_barra": id_barra,
+    }).mappings().all()
+    return [_normalizar_fila_paloteo_historico(fila) for fila in filas]
+
+
+@app.get("/api/paloteo3/historico", response_model=schemas.PaloteoHistoricoResponse)
+def obtener_paloteo_historico(
+    id_operacion: int = Query(..., gt=0),
+    id_barra: int = Query(..., gt=0),
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_usuario_administrador),
+):
+    filas = _obtener_filas_paloteo_historico(db, id_operacion, id_barra)
+    if not filas:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No existe un cierre histórico para la operativa y barra solicitadas.",
+        )
+    return {
+        "id_operacion": id_operacion,
+        "id_barra": id_barra,
+        "fecha_cierre": max((fila["fecha_reg"] for fila in filas if fila["fecha_reg"]), default=None),
+        "filas": filas,
+    }
+
+
+@app.get("/api/paloteo3/historico/operativas", response_model=schemas.PaloteoHistoricoOperativasResponse)
+def listar_operativas_paloteo_historico(
+    fecha_desde: Optional[date] = Query(None, description="Inicio inclusivo del rango (default: fecha_hasta - 30 dias)"),
+    fecha_hasta: Optional[date] = Query(None, description="Fin inclusivo del rango (default: hoy)"),
+    id_barra: Optional[int] = Query(None, gt=0),
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_usuario_administrador),
+):
+    """Lista operativas/barras con cierre historico disponible en v9_paloteo_cierre,
+    acotado por defecto a los ultimos 30 dias porque el endpoint no pagina."""
+    fecha_hasta = fecha_hasta or date.today()
+    fecha_desde = fecha_desde or (fecha_hasta - timedelta(days=30))
+    if fecha_hasta < fecha_desde:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="fecha_hasta no puede ser anterior a fecha_desde.",
+        )
+
+    filtros = ["c.estado_paloteo = 'HAB'", "o.fecha >= :fecha_desde", "o.fecha < :fecha_hasta_exclusiva"]
+    parametros = {"fecha_desde": fecha_desde, "fecha_hasta_exclusiva": fecha_hasta + timedelta(days=1)}
+    if id_barra is not None:
+        filtros.append("c.id_barra = :id_barra")
+        parametros["id_barra"] = id_barra
+
+    query = text(f"""
+        SELECT DISTINCT
+            c.id_operacion,
+            c.id_barra,
+            c.barra,
+            o.nombre_operacion,
+            o.fecha
+        FROM v9_paloteo_cierre c
+        INNER JOIN ope_operacion o ON o.id = c.id_operacion
+        WHERE {' AND '.join(filtros)}
+        ORDER BY o.fecha DESC, c.id_operacion DESC, c.id_barra ASC
+    """)
+    filas = db.execute(query, parametros).mappings().all()
+    return {"operativas": [dict(fila) for fila in filas]}
+
 # --- EXPORTACIÓN PDF PALOTEO 3 ---
 
 import os
@@ -2605,6 +2770,153 @@ def exportar_pdf_paloteo3(
             f"{resumen_valoracion['productos_sin_valoracion']} producto(s) sin valoración por WAC o rendimiento inválido.",
             align="R",
         )
+
+    pdf_bytes = bytes(pdf.output())
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{nombre_archivo}"'},
+    )
+
+
+@app.post("/api/paloteo3/historico/exportar-pdf")
+def exportar_pdf_paloteo3_historico(
+    payload: schemas.ExportarPdfHistoricoRequest,
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_usuario_administrador),
+):
+    """PDF del cierre historico. A diferencia de exportar_pdf_paloteo3, las filas
+    se recalculan aqui desde v9_paloteo_cierre (fuente de verdad congelada), no
+    se reciben del cliente."""
+    filas = _obtener_filas_paloteo_historico(db, payload.id_operacion, payload.id_barra)
+    if not filas:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No existe un cierre histórico para la operativa y barra solicitadas.",
+        )
+
+    nombre_archivo = f"PALOTEO_HISTORICO_{payload.id_operacion}_{payload.id_barra}.pdf"
+    ahora = datetime.now()
+    fecha_hora = ahora.strftime("%d/%m/%Y %H:%M:%S")
+    fecha_cierre = max((fila["fecha_reg"] for fila in filas if fila["fecha_reg"]), default=None)
+
+    pdf = _ReportePDF(orientation="L", unit="mm", format="A4")
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.alias_nb_pages()
+    pdf.add_font(_FONT_FAMILY, "", _FONT_REGULAR_PATH)
+    pdf.add_font(_FONT_FAMILY, "B", _FONT_BOLD_PATH)
+    pdf.add_page()
+    pdf.set_margins(20, 15, 20)
+    ancho_util = pdf.w - 40
+    x_derecha = pdf.w - 20
+
+    if os.path.exists(_LOGO_PATH):
+        pdf.image(_LOGO_PATH, x=20, y=12, h=14)
+    pdf.set_font(_FONT_FAMILY, "B", 10)
+    pdf.set_text_color(51, 51, 51)
+    pdf.set_xy(20, 13)
+    pdf.cell(ancho_util, 5, "REPORTE HISTÓRICO DE PALOTEO", align="R")
+    pdf.set_xy(20, 18)
+    pdf.cell(ancho_util, 5, "Cierre POS congelado (v9_paloteo_cierre)", align="R")
+
+    pdf.set_draw_color(200, 200, 200)
+    pdf.line(20, 28, x_derecha, 28)
+    pdf.ln(20)
+
+    pdf.set_text_color(34, 34, 34)
+    meta = [
+        ("Generado:", fecha_hora),
+        ("Usuario:", payload.usuario),
+        ("Operativa:", str(payload.id_operacion)),
+        ("Barra:", str(payload.id_barra)),
+        ("Cierre POS:", fecha_cierre.strftime("%d/%m/%Y %H:%M:%S") if fecha_cierre else "N/D"),
+    ]
+    label_w, value_w, row_h = 24, 61, 6
+    meta_y0 = pdf.get_y()
+    for i, (etiqueta, valor) in enumerate(meta):
+        x = 20 + (label_w + value_w) * (i % 2)
+        y = meta_y0 + (i // 2) * row_h
+        pdf.set_xy(x, y)
+        pdf.set_font(_FONT_FAMILY, "B", 9)
+        pdf.cell(label_w, row_h, etiqueta)
+        pdf.set_font(_FONT_FAMILY, "", 9)
+        pdf.cell(value_w, row_h, valor)
+    pdf.set_y(meta_y0 + ((len(meta) + 1) // 2) * row_h + 4)
+    pdf.ln(6)
+
+    # ID | COD | Producto | Paq.Pos | Det.Pos | Paq.Bar | Det.Bar | Dif.Paq | Dif.Det | Peso | Dif.Exacta | Capt
+    col_widths = [8, 14, 76, 16, 19, 16, 19, 16, 19, 18, 20, 16]  # suma = 257mm = ancho_util
+    headers    = ["ID", "COD", "PRODUCTO", "PAQ POS", "DET POS", "PAQ BAR", "DET BAR", "DIF PAQ", "DIF DET", "PESO", "DIF EXACTA", "CAPT"]
+    aligns     = ["R", "L", "L", "R", "R", "R", "R", "R", "R", "R", "R", "C"]
+    jerarquias = ["muted", "muted", "primary", "neutral", "neutral", "neutral", "neutral", "diff", "diff", "neutral", "diff", "muted"]
+    row_h = 7
+
+    def dibujar_cabecera_tabla():
+        pdf.set_fill_color(242, 242, 242)
+        pdf.set_draw_color(204, 204, 204)
+        pdf.set_text_color(17, 17, 17)
+        pdf.set_font(_FONT_FAMILY, "B", 7.5)
+        for w, h, a in zip(col_widths, headers, aligns):
+            pdf.cell(w, row_h, h, border=1, align=a, fill=True)
+        pdf.ln()
+
+    dibujar_cabecera_tabla()
+
+    for idx, fila in enumerate(filas):
+        if pdf.get_y() + row_h > pdf.page_break_trigger:
+            pdf.add_page()
+            dibujar_cabecera_tabla()
+
+        nombre_producto = fila["producto"]
+        if fila["estado_producto"] and fila["estado_producto"] != "HAB":
+            nombre_producto = f"{nombre_producto} (DES)"
+
+        valores = [
+            fila["id_producto"],
+            fila["codigo_producto"] or "",
+            nombre_producto,
+            _fmt_cantidad_paq(fila["actual_paq"]),
+            _fmt_cantidad_oz(fila["actual_detalle"]),
+            _fmt_cantidad_paq(fila["fisico_paq"]),
+            _fmt_cantidad_oz(fila["fisico_detalle"]),
+            _fmt_diff_paq(fila["diferencia_paq"]),
+            _fmt_diff_oz(fila["diferencia_detalle"]),
+            _fmt_peso_gramos(fila["peso_gramos"]),
+            _fmt_diff_oz(fila["diferencia_exacta_oz"]),
+            "SI" if fila["tiene_captura_cruda"] else "NO",
+        ]
+        colores = [
+            None, None, None,
+            None, None, None, None,
+            _color_diferencia(fila["diferencia_paq"]) if fila["diferencia_paq"] is not None else None,
+            _color_diferencia(fila["diferencia_detalle"]) if fila["diferencia_detalle"] is not None else None,
+            None,
+            _color_diferencia(fila["diferencia_exacta_oz"]) if fila["diferencia_exacta_oz"] is not None else None,
+            None,
+        ]
+
+        fondo = (245, 245, 245) if idx % 2 == 1 else (255, 255, 255)
+        pdf.set_fill_color(*fondo)
+
+        for w, val, align, color, jerarquia in zip(col_widths, valores, aligns, colores, jerarquias):
+            if color:
+                pdf.set_text_color(*color)
+                pdf.set_font(_FONT_FAMILY, "B", 7.5)
+            elif jerarquia == "muted":
+                pdf.set_text_color(90, 90, 90)
+                pdf.set_font(_FONT_FAMILY, "", 7)
+            elif jerarquia == "primary":
+                pdf.set_text_color(17, 17, 17)
+                pdf.set_font(_FONT_FAMILY, "B", 8)
+            elif jerarquia == "neutral":
+                pdf.set_text_color(85, 85, 85)
+                pdf.set_font(_FONT_FAMILY, "", 7.5)
+            else:
+                pdf.set_text_color(17, 17, 17)
+                pdf.set_font(_FONT_FAMILY, "", 7.5)
+            pdf.cell(w, row_h, str(val), border=1, align=align, fill=True)
+        pdf.ln()
 
     pdf_bytes = bytes(pdf.output())
 

@@ -2707,6 +2707,7 @@ document.addEventListener('DOMContentLoaded', () => {
     inicializarFabScrollTop('inventario-fab-scroll-top', 'panel-inventario');
     inicializarFabScrollTop('stock-fab-scroll-top', 'panel-stock');
     inicializarFabScrollTop('scan-fab-scroll-top', 'panel-scan');
+    inicializarFabScrollTop('historico-fab-scroll-top', 'panel-historico');
 
     // Configurar Password Toggle (El ojito)
     const togglePassword = document.getElementById('toggle-password');
@@ -2903,6 +2904,8 @@ async function mostrarPantallaApp() {
     if (menuItemPesaje) menuItemPesaje.classList.toggle('hidden', !esUsuarioAdministrador());
     const menuItemPourCost = document.getElementById('menu-item-pourcost');
     if (menuItemPourCost) menuItemPourCost.classList.toggle('hidden', !esUsuarioAdministrador());
+    const menuItemHistorico = document.getElementById('menu-item-historico');
+    if (menuItemHistorico) menuItemHistorico.classList.toggle('hidden', !esUsuarioAdministrador());
     await cargarConfiguracionPublica();
     // Asegurar que el panel de inventario sea el visible al entrar a la app
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
@@ -4116,6 +4119,255 @@ if (ajustesHistoricoConsultar) {
     ajustesHistoricoConsultar.addEventListener('click', consultarHistoricoAjustes);
 }
 
+// ==========================================
+// HISTÓRICO DE PALOTEO (admin-only)
+// Lee cierres ya congelados en v9_paloteo_cierre via GET /api/paloteo3/historico*
+// en vez de depender del estado vivo de PALOTEO 1/2/3 en el navegador.
+// ==========================================
+
+const historicoFechaDesde = document.getElementById('historico-fecha-desde');
+const historicoFechaHasta = document.getElementById('historico-fecha-hasta');
+const historicoFiltroBarra = document.getElementById('historico-filtro-barra');
+const historicoBtnConsultar = document.getElementById('historico-btn-consultar');
+const historicoEstadoOperativas = document.getElementById('historico-estado-operativas');
+const historicoSelectOperativa = document.getElementById('historico-select-operativa');
+const historicoList = document.getElementById('historico-list');
+const historicoEmptyState = document.getElementById('historico-empty-state');
+const historicoBtnPdf = document.getElementById('historico-btn-pdf');
+
+let historicoPanelPreparado = false;
+let historicoDatosActuales = null; // { id_operacion, id_barra, fecha_cierre, filas }
+
+/** Rellena el filtro de barra y precarga el rango de fechas (ultimos 30 dias)
+ * la primera vez que se entra al tab -- no repite la preparacion en cada navegacion. */
+function prepararPanelHistorico() {
+    if (historicoPanelPreparado) return;
+    historicoPanelPreparado = true;
+
+    if (historicoFiltroBarra) {
+        (configuracionPaloteo?.allowedBarras || [1]).forEach((idBarra) => {
+            const option = document.createElement('option');
+            option.value = String(idBarra);
+            option.textContent = `Barra ${idBarra}`;
+            historicoFiltroBarra.appendChild(option);
+        });
+    }
+
+    const hoy = new Date();
+    if (historicoFechaHasta && !historicoFechaHasta.value) {
+        historicoFechaHasta.value = hoy.toISOString().slice(0, 10);
+    }
+    if (historicoFechaDesde && !historicoFechaDesde.value) {
+        const hace30Dias = new Date(hoy);
+        hace30Dias.setDate(hace30Dias.getDate() - 30);
+        historicoFechaDesde.value = hace30Dias.toISOString().slice(0, 10);
+    }
+}
+
+function limpiarPaloteoHistoricoActual() {
+    historicoDatosActuales = null;
+    if (historicoList) historicoList.innerHTML = '';
+    if (historicoEmptyState) {
+        historicoEmptyState.textContent = 'Selecciona una operativa para ver su cierre histórico.';
+        historicoEmptyState.classList.remove('hidden');
+    }
+    if (historicoBtnPdf) historicoBtnPdf.disabled = true;
+}
+
+async function consultarOperativasHistorico() {
+    if (!historicoFechaDesde?.value || !historicoFechaHasta?.value) return;
+
+    historicoBtnConsultar.disabled = true;
+    historicoEstadoOperativas.textContent = 'Consultando operativas...';
+    historicoEstadoOperativas.classList.remove('hidden');
+    historicoSelectOperativa.disabled = true;
+    historicoSelectOperativa.innerHTML = '<option value="">Selecciona una operativa...</option>';
+    limpiarPaloteoHistoricoActual();
+
+    const parametros = new URLSearchParams({
+        fecha_desde: historicoFechaDesde.value,
+        fecha_hasta: historicoFechaHasta.value,
+    });
+    if (historicoFiltroBarra?.value) {
+        parametros.set('id_barra', historicoFiltroBarra.value);
+    }
+
+    try {
+        const resp = await fetchAutenticado(`${API_BASE}/paloteo3/historico/operativas?${parametros}`);
+        const data = await resp.json();
+        if (!resp.ok) {
+            historicoEstadoOperativas.textContent = typeof data.detail === 'string'
+                ? data.detail
+                : 'No se pudo consultar el listado de operativas.';
+            return;
+        }
+
+        const operativas = data.operativas || [];
+        operativas.forEach((op) => {
+            const option = document.createElement('option');
+            option.value = `${op.id_operacion}|${op.id_barra}`;
+            const etiquetaBarra = op.barra || `Barra ${op.id_barra}`;
+            const etiquetaFecha = op.fecha || 'sin fecha';
+            option.textContent = `#${op.id_operacion} · ${etiquetaBarra} · ${op.nombre_operacion || 'Operativa'} · ${etiquetaFecha}`;
+            historicoSelectOperativa.appendChild(option);
+        });
+        historicoSelectOperativa.disabled = operativas.length === 0;
+        historicoEstadoOperativas.textContent = operativas.length
+            ? `${operativas.length} operativa(s) encontrada(s).`
+            : 'No hay cierres históricos en el rango seleccionado.';
+    } catch (_) {
+        if (_ instanceof SesionExpiradaError) return;
+        historicoEstadoOperativas.textContent = 'Error de conexión al consultar operativas.';
+    } finally {
+        historicoBtnConsultar.disabled = false;
+        historicoEstadoOperativas.classList.remove('hidden');
+    }
+}
+
+async function cargarPaloteoHistoricoSeleccionado() {
+    const valor = historicoSelectOperativa?.value;
+    if (!valor) {
+        limpiarPaloteoHistoricoActual();
+        return;
+    }
+    const [idOperacion, idBarra] = valor.split('|');
+
+    if (historicoEmptyState) {
+        historicoEmptyState.textContent = 'Cargando cierre histórico...';
+        historicoEmptyState.classList.remove('hidden');
+    }
+    if (historicoList) historicoList.innerHTML = '';
+    if (historicoBtnPdf) historicoBtnPdf.disabled = true;
+
+    try {
+        const parametros = new URLSearchParams({ id_operacion: idOperacion, id_barra: idBarra });
+        const resp = await fetchAutenticado(`${API_BASE}/paloteo3/historico?${parametros}`);
+        const data = await resp.json();
+        if (!resp.ok) {
+            if (historicoEmptyState) {
+                historicoEmptyState.textContent = typeof data.detail === 'string'
+                    ? data.detail
+                    : 'No se pudo cargar el cierre histórico.';
+                historicoEmptyState.classList.remove('hidden');
+            }
+            return;
+        }
+        historicoDatosActuales = data;
+        renderizarPaloteoHistorico(data);
+    } catch (_) {
+        if (_ instanceof SesionExpiradaError) return;
+        if (historicoEmptyState) {
+            historicoEmptyState.textContent = 'Error de conexión al cargar el cierre histórico.';
+            historicoEmptyState.classList.remove('hidden');
+        }
+    }
+}
+
+function renderizarPaloteoHistorico(data) {
+    if (!historicoList) return;
+    historicoList.innerHTML = '';
+
+    const filas = data.filas || [];
+    if (!filas.length) {
+        if (historicoEmptyState) {
+            historicoEmptyState.textContent = 'La operativa seleccionada no tiene filas en el cierre histórico.';
+            historicoEmptyState.classList.remove('hidden');
+        }
+        if (historicoBtnPdf) historicoBtnPdf.disabled = true;
+        return;
+    }
+
+    if (historicoEmptyState) historicoEmptyState.classList.add('hidden');
+    if (historicoBtnPdf) historicoBtnPdf.disabled = false;
+
+    filas.forEach((fila) => {
+        const difPaq = fila.diferencia_paq;
+        const difDet = fila.diferencia_detalle;
+
+        const colorPaq = difPaq == null
+            ? 'var(--on-surface-variant)'
+            : difPaq > 0 ? 'var(--semantic-warning)' : difPaq < 0 ? 'var(--semantic-danger)' : 'var(--semantic-action)';
+        const colorDet = difDet == null
+            ? 'var(--on-surface-variant)'
+            : difDet > 0 ? 'var(--semantic-warning)' : difDet < 0 ? 'var(--semantic-danger)' : 'var(--semantic-action)';
+
+        const textoPaq = difPaq == null ? '' : `${difPaq > 0 ? '+' : ''}${Math.round(difPaq)}`;
+        const textoDet = difDet == null ? '' : `${difDet > 0 ? '+' : ''}${difDet.toFixed(2)} oz`;
+
+        const nombreProducto = `${fila.producto || ''}${fila.estado_producto && fila.estado_producto !== 'HAB' ? ' (DES)' : ''}`;
+
+        const row = document.createElement('div');
+        row.className = 'grid gap-[2px] px-xs py-xs items-center hover:bg-surface-container-highest transition-colors';
+        row.style.gridTemplateColumns = '2rem 2.9rem minmax(0, 1fr) clamp(2.8rem, 11vw, 4rem) clamp(3.5rem, 14vw, 4.8rem) clamp(3.5rem, 12vw, 4rem)';
+        row.innerHTML = `
+            <span class="text-data-tabular text-on-surface-variant/80 text-left text-[10px] font-normal truncate" title="${escapeHtml(String(fila.id_producto))}">${escapeHtml(String(fila.id_producto))}</span>
+            <span class="text-data-tabular text-on-surface-variant text-left text-[10px] font-normal truncate" title="${escapeHtml(String(fila.codigo_producto || ''))}">${escapeHtml(String(fila.codigo_producto || '').toUpperCase())}</span>
+            <span class="text-[12px] sm:text-[13px] font-semibold text-on-surface truncate uppercase" title="${escapeHtml(nombreProducto)}">${escapeHtml(nombreProducto)}</span>
+            <span class="text-right text-[11px] font-semibold" style="color: ${colorPaq}">${textoPaq}</span>
+            <span class="text-right text-[11px] font-semibold" style="color: ${colorDet}">${textoDet}</span>
+            <span class="text-right text-[10px] font-label-mono uppercase text-on-surface-variant">${fila.tiene_captura_cruda ? 'SI' : 'NO'}</span>
+        `;
+        historicoList.appendChild(row);
+    });
+}
+
+async function exportarPaloteoHistoricoPdf() {
+    if (!historicoDatosActuales) return;
+    const textoOriginal = historicoBtnPdf ? historicoBtnPdf.innerHTML : '';
+    if (historicoBtnPdf) {
+        historicoBtnPdf.disabled = true;
+        historicoBtnPdf.setAttribute('aria-busy', 'true');
+        historicoBtnPdf.innerHTML = `${renderCriticalIcon('refresh', 'ui-icon animate-spin-ccw')} Generando PDF...`;
+    }
+
+    try {
+        const payload = {
+            id_operacion: historicoDatosActuales.id_operacion,
+            id_barra: historicoDatosActuales.id_barra,
+            usuario: localStorage.getItem('nombres') || 'No identificado',
+        };
+        const resp = await fetchAutenticado(`${API_BASE}/paloteo3/historico/exportar-pdf`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+
+        if (!resp.ok) {
+            await mostrarDialogoResultado({ tipo: 'error', titulo: 'Error al generar PDF', mensaje: `El servidor respondió con error ${resp.status}.` });
+            return;
+        }
+
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `PALOTEO_HISTORICO_${historicoDatosActuales.id_operacion}_${historicoDatosActuales.id_barra}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    } catch (_) {
+        if (_ instanceof SesionExpiradaError) return;
+        await mostrarDialogoResultado({ tipo: 'error', titulo: 'Error de red', mensaje: 'No se pudo conectar con el servidor para generar el PDF.' });
+    } finally {
+        if (historicoBtnPdf) {
+            historicoBtnPdf.disabled = !historicoDatosActuales;
+            historicoBtnPdf.removeAttribute('aria-busy');
+            historicoBtnPdf.innerHTML = textoOriginal;
+        }
+    }
+}
+
+if (historicoBtnConsultar) {
+    historicoBtnConsultar.addEventListener('click', consultarOperativasHistorico);
+}
+if (historicoSelectOperativa) {
+    historicoSelectOperativa.addEventListener('change', cargarPaloteoHistoricoSeleccionado);
+}
+if (historicoBtnPdf) {
+    historicoBtnPdf.addEventListener('click', exportarPaloteoHistoricoPdf);
+}
+
 function syncFilaPaloteo3ConInventario(row) {
     if (!row) return;
 
@@ -4530,6 +4782,7 @@ const TAB_PANEL_MAP = {
     logs:       'panel-logs',
     pesaje:     'panel-pesaje',
     pourcost:   'panel-pourcost',
+    historico:  'panel-historico',
 };
 
 // ==========================================
@@ -5016,6 +5269,10 @@ function navegarATab(tabName) {
 
     if (tabName === 'pourcost') {
         cargarPourCost();
+    }
+
+    if (tabName === 'historico') {
+        prepararPanelHistorico();
     }
 
     // Actualizar estado visual de tabs (excepto btn-guardar que tiene su propio estado)

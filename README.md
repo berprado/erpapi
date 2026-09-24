@@ -305,6 +305,23 @@ Los archivos `querys/fix_trigger_alm_producto_after_insert.sql` y `querys/fix_tr
 | Metodo | Ruta | Descripcion |
 |---|---|---|
 | `POST` | `/api/paloteo3/exportar-pdf` | Genera y descarga PDF del reporte (general, ingreso o salida) |
+| `GET` | `/api/paloteo3/historico?id_operacion=42&id_barra=1` | Lee el cierre historico deduplicado desde `v9_paloteo_cierre`, conservando `NULL` cuando no hubo captura fisica y enriqueciendo con el ultimo registro crudo disponible. Solo administrador. |
+| `GET` | `/api/paloteo3/historico/operativas?fecha_desde=&fecha_hasta=&id_barra=` | Lista pares operativa/barra con cierre historico disponible en el rango (`fecha_desde`/`fecha_hasta` son opcionales; por defecto los ultimos 30 dias, porque el endpoint no pagina). `id_barra` es opcional. Solo administrador. |
+| `POST` | `/api/paloteo3/historico/exportar-pdf` | PDF del cierre historico de una operativa/barra. A diferencia de `exportar-pdf`, las filas se recalculan en el servidor desde `v9_paloteo_cierre` (body solo lleva `id_operacion`, `id_barra`, `usuario`); no se reciben filas del cliente. Solo administrador. |
+
+El reporte historico usa `v9_paloteo_cierre` como fuente principal. Las filas se
+deduplican por `id_operacion + id_barra + id_producto`, conservando el mayor
+`id_paloteo_cierre`. Los campos `fisico_*` y `diferencia_*` permanecen en
+`null` cuando el cierre no tiene captura fisica; no se convierten a cero.
+`app_paloteo_registro_crudo` solo aporta peso y diferencia exacta cuando existe
+una captura asociada. Como esa tabla no guarda `id_barra`, una misma captura
+cruda puede aparecer enriqueciendo el mismo producto en mas de una barra.
+
+En la PWA, el tab "HISTORICO" (visible solo para administradores, en el menu
+flotante del topbar junto a Pesaje y Pour Cost) consume estos tres endpoints:
+filtra por rango de fechas + barra opcional, deja elegir una operativa del
+listado resultante, muestra sus filas (diferencias PAQ/DET y si tiene captura
+cruda asociada) y permite exportar el PDF historico correspondiente.
 
 Body ejemplo de exportacion:
 

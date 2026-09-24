@@ -11,6 +11,12 @@ separado con git tags semanticos (`vMAJOR.MINOR.PATCH`) — ver seccion
 version productiva en uso real), corresponde a este mismo punto de la
 historia, `## 12.2` de abajo.
 
+## 12.32
+- Reportes: agregado listado de operativas con cierre historico disponible (`GET /api/paloteo3/historico/operativas`, ultimos 30 dias por defecto), PDF historico dedicado (`POST /api/paloteo3/historico/exportar-pdf`) y tab "HISTORICO" (admin-only) en la PWA para consultarlo sin depender de la sesion viva de PALOTEO 1/2/3.
+
+## 12.31
+- Reportes: agregado endpoint administrativo para leer cierres historicos de paloteo desde `v9_paloteo_cierre`, con deduplicacion y conservacion de capturas faltantes.
+
 ## 12.30
 - Docs: agregado prompt de continuidad para retomar el proyecto en nuevas sesiones con el estado implementado y los pendientes de la siguiente fase.
 
