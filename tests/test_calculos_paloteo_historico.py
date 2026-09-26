@@ -70,3 +70,27 @@ def test_normalizar_fila_ignora_pesos_crudos_invalidos():
     ))
 
     assert fila["peso_gramos"] == 500.0
+
+def test_clasifica_contado_con_y_sin_diferencia():
+    assert _normalizar_fila_paloteo_historico(_fila())["clasificacion"] == "con_diferencia"
+    cuadrado = _normalizar_fila_paloteo_historico(_fila(diferencia_detalle=0, tiene_diferencia=0))
+    assert cuadrado["clasificacion"] == "cuadrado"
+
+
+def test_clasifica_movimiento_sin_contar_como_alerta():
+    fila = _normalizar_fila_paloteo_historico(_fila(
+        fisico_paq=None, fisico_detalle=None, diferencia_paq=None,
+        diferencia_detalle=None, tiene_diferencia=0, ventas_paq=1,
+    ))
+    assert fila["tuvo_movimiento"] is True
+    assert fila["clasificacion"] == "con_movimiento_sin_contar"
+
+
+def test_clasifica_sin_movimiento_ni_conteo():
+    fila = _normalizar_fila_paloteo_historico(_fila(
+        fisico_paq=None, fisico_detalle=None, diferencia_paq=None,
+        diferencia_detalle=None, tiene_diferencia=0,
+        ventas_paq=0, ventas_detalle=0, ingreso_paq=0, ingreso_detalle=0,
+    ))
+    assert fila["tuvo_movimiento"] is False
+    assert fila["clasificacion"] == "sin_movimiento"

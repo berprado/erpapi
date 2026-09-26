@@ -305,9 +305,9 @@ Los archivos `querys/fix_trigger_alm_producto_after_insert.sql` y `querys/fix_tr
 | Metodo | Ruta | Descripcion |
 |---|---|---|
 | `POST` | `/api/paloteo3/exportar-pdf` | Genera y descarga PDF del reporte (general, ingreso o salida). Desde v12.34 las filas se arman en el servidor desde el paloteo registrado (ver abajo); responde `404` si la operativa/barra no tiene paloteo registrado o si el tipo pedido no tiene filas. |
-| `GET` | `/api/paloteo3/historico?id_operacion=42&id_barra=1` | Lee el cierre historico deduplicado desde `v9_paloteo_cierre`, conservando `NULL` cuando no hubo captura fisica y enriqueciendo con el ultimo registro crudo disponible. Solo administrador. |
-| `GET` | `/api/paloteo3/historico/operativas?fecha_desde=&fecha_hasta=&id_barra=` | Lista pares operativa/barra con cierre historico disponible en el rango (`fecha_desde`/`fecha_hasta` son opcionales; por defecto los ultimos 30 dias, porque el endpoint no pagina). `id_barra` es opcional. Solo administrador. |
-| `POST` | `/api/paloteo3/historico/exportar-pdf` | PDF del cierre historico de una operativa/barra. A diferencia de `exportar-pdf`, las filas se recalculan en el servidor desde `v9_paloteo_cierre` (body solo lleva `id_operacion`, `id_barra`, `usuario`); no se reciben filas del cliente. Solo administrador. |
+| `GET` | `/api/paloteo3/historico?id_operacion=42&id_barra=1` | Cierre historico de una operativa/barra desde `v9_paloteo_cierre`: devuelve solo los productos contados (con diferencia o cuadrados) y los que tuvieron movimiento sin contarse, con su `clasificacion`, el VALOR del ajuste aplicado y los conteos por grupo en `resumen` (los sin movimiento solo se cuentan). Solo administrador. |
+| `GET` | `/api/paloteo3/historico/operativas?fecha_desde=&fecha_hasta=&id_barra=` | Lista pares operativa/barra con cierre historico en el rango (`fecha_desde`/`fecha_hasta` opcionales; por defecto los ultimos 30 dias, porque el endpoint no pagina). Desde v12.35 solo barras que **operaron**: con comandas (en cualquier estado), con paloteo registrado o con ventas/ingresos distintos de cero en su cierre. `id_barra` es opcional. Solo administrador. |
+| `POST` | `/api/paloteo3/historico/exportar-pdf` | PDF del cierre historico con la **misma estructura que el PDF de Ajustes** (mismo renderer, mismas columnas). Las filas se recalculan en el servidor desde `v9_paloteo_cierre` (body solo lleva `id_operacion`, `id_barra`, `usuario`). Solo administrador. |
 
 El reporte historico usa `v9_paloteo_cierre` como fuente principal. Las filas se
 deduplican por `id_operacion + id_barra + id_producto`, conservando el mayor
@@ -317,11 +317,31 @@ deduplican por `id_operacion + id_barra + id_producto`, conservando el mayor
 una captura asociada. Como esa tabla no guarda `id_barra`, una misma captura
 cruda puede aparecer enriqueciendo el mismo producto en mas de una barra.
 
+**Clasificacion de filas (desde v12.35):** `con_diferencia` y `cuadrado` (hubo
+captura fisica), `con_movimiento_sin_contar` (sin captura, pero con ventas o
+ingresos en el propio cierre: alerta de auditoria) y `sin_movimiento` (el resto
+del catalogo, que el POS escribe igual para toda barra; solo se cuenta).
+
+**VALOR en el historico:** sale del snapshot congelado del ajuste aplicado
+(`analytics_varianza_inventario`), nunca del WAC de hoy. Un producto cuadrado
+sin snapshot vale `0.00 Bs`; uno con diferencia en el cierre pero sin snapshot
+(el ajuste se aplico sobre otros datos) queda vacio. Si la operativa no tuvo
+ajuste aplicado, la columna queda vacia y el PDF lo aclara.
+
+**PDF historico:** mismas columnas que el de Ajustes (`DIF OP` = la
+`diferencia_detalle` del cierre, ya en grilla de 0.5 oz; `DIF REAL` = la
+diferencia exacta del registro crudo). Una linea arriba con los conteos por
+grupo, una tabla con todo producto contado (por nombre), una seccion aparte
+"CON MOVIMIENTO SIN CONTAR" si hay alguno, y FALTANTES/SOBRANTES/NETO si hubo
+ajuste aplicado.
+
 En la PWA, el tab "HISTORICO" (visible solo para administradores, en el menu
 flotante del topbar junto a Pesaje y Pour Cost) consume estos tres endpoints:
 filtra por rango de fechas + barra opcional, deja elegir una operativa del
-listado resultante, muestra sus filas (diferencias PAQ/DET y si tiene captura
-cruda asociada) y permite exportar el PDF historico correspondiente.
+listado resultante y muestra la misma lectura que el modulo Ajustes (resumen en
+Bs, columnas PAQ / DET / MONTO), con un boton "Solo con diferencia" para ocultar
+los cuadrados en pantalla (el PDF siempre los incluye) y los productos con
+movimiento sin contar agrupados al final.
 
 Body ejemplo de exportacion:
 

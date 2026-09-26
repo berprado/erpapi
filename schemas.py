@@ -275,13 +275,39 @@ class PaloteoHistoricoFila(BaseModel):
     tiene_diferencia: bool = False
     fecha_reg: Optional[datetime] = None
     estado_producto: Optional[str] = None
+    pesable: bool = True
+    tuvo_movimiento: bool = False
+    # con_diferencia | cuadrado | con_movimiento_sin_contar (sin_movimiento no se devuelve)
+    clasificacion: Literal['con_diferencia', 'cuadrado', 'con_movimiento_sin_contar', 'sin_movimiento']
+    # Del snapshot del ajuste aplicado; None si no hay ajuste aplicado o la fila no se valora.
+    valor_neto: Optional[float] = None
+    estado_valoracion: Optional[str] = None
+
+
+class PaloteoHistoricoResumen(BaseModel):
+    con_diferencia: int = 0
+    cuadrados: int = 0
+    con_movimiento_sin_contar: int = 0
+    sin_movimiento: int = 0
+
+
+class ResumenValoracionVarianzas(BaseModel):
+    faltantes: float
+    sobrantes: float
+    neto: float
+    productos_sin_valoracion: int
 
 
 class PaloteoHistoricoResponse(BaseModel):
     id_operacion: int
     id_barra: int
     fecha_cierre: Optional[datetime] = None
+    # Solo productos contados y con movimiento sin contar; los sin movimiento
+    # (la gran mayoria del catalogo) se cuentan en resumen.sin_movimiento.
     filas: List[PaloteoHistoricoFila] = Field(default_factory=list)
+    resumen: PaloteoHistoricoResumen = Field(default_factory=PaloteoHistoricoResumen)
+    ajuste_aplicado: bool = False
+    valoracion: Optional[ResumenValoracionVarianzas] = None
 
 
 class PaloteoHistoricoOperativa(BaseModel):

@@ -1205,14 +1205,37 @@
                 </select>
             </div>
 
+            <!-- Resumen de la operativa elegida: misma lectura que el modulo Ajustes -->
+            <div id="historico-resumen" class="hidden mb-sm">
+                <div class="flex flex-wrap items-center justify-between gap-xs mb-xs">
+                    <p id="historico-resumen-conteos" class="text-[10px] font-label-mono uppercase tracking-wide text-on-surface-variant"></p>
+                    <button id="historico-toggle-diferencias" type="button" aria-pressed="false" class="bg-surface border border-outline-variant text-on-surface px-sm py-[6px] rounded-sharp text-[10px] font-label-mono uppercase tracking-widest">Solo con diferencia</button>
+                </div>
+                <div id="historico-valoracion" class="hidden grid grid-cols-3 gap-xs border border-outline-variant bg-surface-container-low px-sm py-sm text-center">
+                    <div>
+                        <p class="text-[9px] font-label-mono tracking-widest uppercase text-on-surface-variant">Faltantes</p>
+                        <p id="historico-valor-faltantes" class="mt-[2px] text-[11px] font-semibold font-data-tabular text-error">-</p>
+                    </div>
+                    <div>
+                        <p class="text-[9px] font-label-mono tracking-widest uppercase text-on-surface-variant">Sobrantes</p>
+                        <p id="historico-valor-sobrantes" class="mt-[2px] text-[11px] font-semibold font-data-tabular text-primary-fixed">-</p>
+                    </div>
+                    <div>
+                        <p class="text-[9px] font-label-mono tracking-widest uppercase text-on-surface-variant">Neto</p>
+                        <p id="historico-valor-neto" class="mt-[2px] text-[11px] font-semibold font-data-tabular text-on-surface">-</p>
+                    </div>
+                </div>
+                <p id="historico-valoracion-nota" class="hidden mt-xs text-[9px] font-label-mono tracking-wide uppercase text-on-surface-variant"></p>
+            </div>
+
             <div class="bg-surface-container border border-outline-variant rounded-md overflow-hidden shadow-lg">
-                <div class="grid gap-[2px] px-xs py-sm border-b border-outline-variant bg-surface-container-low text-[10px] font-label-mono font-semibold tracking-[0.12em] uppercase text-on-surface-variant" style="grid-template-columns: 2rem 2.9rem minmax(0, 1fr) clamp(2.8rem, 11vw, 4rem) clamp(3.5rem, 14vw, 4.8rem) clamp(3.5rem, 12vw, 4rem);">
+                <div class="grid gap-[2px] px-xs py-sm border-b border-outline-variant bg-surface-container-low text-[10px] font-label-mono font-semibold tracking-[0.12em] uppercase text-on-surface-variant" style="grid-template-columns: 2rem 2.9rem minmax(0, 1fr) clamp(2.8rem, 11vw, 4rem) clamp(3.5rem, 14vw, 4.8rem) clamp(4.5rem, 17vw, 5.6rem);">
                     <span class="text-left">ID</span>
                     <span class="text-left">COD</span>
                     <span class="text-left">PRODUCTO</span>
-                    <span class="text-right">DIF PAQ</span>
-                    <span class="text-right">DIF DET</span>
-                    <span class="text-right">CAPT</span>
+                    <span class="justify-end inline-flex items-center gap-[2px]"><span class="material-symbols-outlined text-[12px]">mobiledata_arrows</span>PAQ</span>
+                    <span class="justify-end inline-flex items-center gap-[2px]"><span class="material-symbols-outlined text-[12px]">contrast_square</span>DET</span>
+                    <span class="justify-end inline-flex items-center gap-[2px]"><span class="material-symbols-outlined text-[12px]">price_change</span>MONTO</span>
                 </div>
                 <div id="historico-list" class="divide-y divide-outline-variant"></div>
             </div>
@@ -1579,7 +1602,7 @@
         </div>
     </div>
 
-    <script src="/assets/app.js?v=12.34"></script>
+    <script src="/assets/app.js?v=12.35"></script>
 
     <script>
         (function () {

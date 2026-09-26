@@ -11,6 +11,9 @@ separado con git tags semanticos (`vMAJOR.MINOR.PATCH`) — ver seccion
 version productiva en uso real), corresponde a este mismo punto de la
 historia, `## 12.2` de abajo.
 
+## 12.35
+- Historico: el PDF y la pantalla toman la estructura del reporte de Ajustes (mismo renderer y columnas, VALOR desde el snapshot del ajuste aplicado, totales en Bs); muestran solo los productos contados (con o sin diferencia) y aparte los que tuvieron movimiento sin contarse. El listado de operativas ofrece solo las barras que operaron (comandas, paloteo o ventas/ingresos en su cierre).
+
 ## 12.34
 - Ajustes: el PDF arma sus filas en el servidor desde el paloteo registrado, con la misma fuente que los totales; incluye todo producto contado (con o sin diferencia). Antes las filas salian de la pantalla y en la operativa 1306 faltaba HAVANA 7A (-140 Bs) aunque el total la contaba.
 - Paloteo: `/pendientes?id_operacion=` suma los productos ya contados sin movimiento (agregados a mano), que desaparecian de PALOTEO al recargar. Una variacion operativa cero vale 0 Bs aunque falte WAC (ya no cuenta como "sin valoracion").

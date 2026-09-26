@@ -4130,6 +4130,18 @@ const historicoSelectOperativa = document.getElementById('historico-select-opera
 const historicoList = document.getElementById('historico-list');
 const historicoEmptyState = document.getElementById('historico-empty-state');
 const historicoBtnPdf = document.getElementById('historico-btn-pdf');
+const historicoResumen = document.getElementById('historico-resumen');
+const historicoResumenConteos = document.getElementById('historico-resumen-conteos');
+const historicoToggleDiferencias = document.getElementById('historico-toggle-diferencias');
+const historicoValoracion = document.getElementById('historico-valoracion');
+const historicoValorFaltantes = document.getElementById('historico-valor-faltantes');
+const historicoValorSobrantes = document.getElementById('historico-valor-sobrantes');
+const historicoValorNeto = document.getElementById('historico-valor-neto');
+const historicoValoracionNota = document.getElementById('historico-valoracion-nota');
+
+// Filtro de pantalla: el PDF siempre lleva todos los contados (con y sin
+// diferencia); en pantalla se pueden ocultar los que cuadran para leer rapido.
+let historicoSoloDiferencias = false;
 
 let historicoPanelPreparado = false;
 let historicoDatosActuales = null; // { id_operacion, id_barra, fecha_cierre, filas }
@@ -4162,6 +4174,7 @@ function prepararPanelHistorico() {
 
 function limpiarPaloteoHistoricoActual() {
     historicoDatosActuales = null;
+    if (historicoResumen) historicoResumen.classList.add('hidden');
     if (historicoList) historicoList.innerHTML = '';
     if (historicoEmptyState) {
         historicoEmptyState.textContent = 'Selecciona una operativa para ver su cierre histórico.';
@@ -4259,52 +4272,135 @@ async function cargarPaloteoHistoricoSeleccionado() {
     }
 }
 
+function colorDiferenciaHistorico(valor) {
+    if (valor == null) return 'var(--on-surface-variant)';
+    return valor > 0 ? 'var(--semantic-warning)' : valor < 0 ? 'var(--semantic-danger)' : 'var(--semantic-action)';
+}
+
+function textoMontoHistorico(fila) {
+    // Sin estado: no hubo ajuste aplicado (o la fila no se valora): celda vacia.
+    if (!fila.estado_valoracion) return '';
+    if (fila.estado_valoracion !== 'VALORIZADO' || fila.valor_neto == null) return 'SIN WAC';
+    return formatearValorVarianza(fila.valor_neto);
+}
+
+function actualizarResumenHistorico(data) {
+    if (!historicoResumen) return;
+    const resumen = data.resumen || {};
+    const partes = [
+        `${resumen.con_diferencia || 0} con diferencia`,
+        `${resumen.cuadrados || 0} cuadrados`,
+    ];
+    if (resumen.con_movimiento_sin_contar) {
+        partes.push(`${resumen.con_movimiento_sin_contar} con movimiento sin contar`);
+    }
+    partes.push(`${resumen.sin_movimiento || 0} sin movimiento`);
+    historicoResumenConteos.textContent = partes.join(' · ');
+
+    const valoracion = data.valoracion;
+    if (valoracion) {
+        historicoValorFaltantes.textContent = `-${formatearValorAbsoluto(valoracion.faltantes)}`;
+        historicoValorSobrantes.textContent = `+${formatearValorAbsoluto(valoracion.sobrantes)}`;
+        historicoValorNeto.textContent = formatearValorVarianza(valoracion.neto || 0);
+        historicoValoracion.classList.remove('hidden');
+    } else {
+        historicoValoracion.classList.add('hidden');
+    }
+
+    const pendientes = Number(valoracion?.productos_sin_valoracion || 0);
+    const nota = !data.ajuste_aplicado
+        ? 'Sin ajuste aplicado: la valoración se congela recién al aplicar el ajuste.'
+        : pendientes
+            ? `${pendientes} producto(s) sin valoración por WAC o rendimiento inválido`
+            : '';
+    historicoValoracionNota.textContent = nota;
+    historicoValoracionNota.classList.toggle('hidden', !nota);
+
+    if (historicoToggleDiferencias) {
+        historicoToggleDiferencias.setAttribute('aria-pressed', String(historicoSoloDiferencias));
+        historicoToggleDiferencias.classList.toggle('bg-primary-container', historicoSoloDiferencias);
+        historicoToggleDiferencias.classList.toggle('text-black', historicoSoloDiferencias);
+        historicoToggleDiferencias.classList.toggle('border-primary-fixed-dim', historicoSoloDiferencias);
+        historicoToggleDiferencias.classList.toggle('bg-surface', !historicoSoloDiferencias);
+        historicoToggleDiferencias.classList.toggle('text-on-surface', !historicoSoloDiferencias);
+    }
+    historicoResumen.classList.remove('hidden');
+}
+
+function crearFilaPaloteoHistorico(fila) {
+    const sinContar = fila.clasificacion === 'con_movimiento_sin_contar';
+    const difPaq = sinContar ? null : fila.diferencia_paq;
+    // DIF OP: en el cierre POS diferencia_detalle ya esta en grilla de 0.5 oz;
+    // los no pesables se cuentan en unidades y no llevan onzas (igual que el PDF).
+    const difDet = sinContar || !fila.pesable ? null : fila.diferencia_detalle;
+
+    const textoPaq = difPaq == null ? '' : `${difPaq > 0 ? '+' : ''}${Math.round(difPaq)}`;
+    const textoDet = difDet == null ? '' : `${difDet > 0 ? '+' : ''}${difDet.toFixed(2)} oz`;
+    const textoMonto = textoMontoHistorico(fila);
+    const colorMonto = fila.estado_valoracion === 'VALORIZADO' && fila.valor_neto != null
+        ? colorDiferenciaHistorico(fila.valor_neto)
+        : 'var(--on-surface-variant)';
+
+    const nombreProducto = `${fila.producto || ''}${fila.estado_producto && fila.estado_producto !== 'HAB' ? ' (DES)' : ''}`;
+    const insignia = sinContar
+        ? '<span class="badge-danger text-[9px] font-label-mono uppercase tracking-widest px-xs py-[1px] rounded shrink-0">Sin contar</span>'
+        : '';
+
+    const row = document.createElement('div');
+    row.className = 'grid gap-[2px] px-xs py-xs items-center hover:bg-surface-container-highest transition-colors';
+    row.style.gridTemplateColumns = '2rem 2.9rem minmax(0, 1fr) clamp(2.8rem, 11vw, 4rem) clamp(3.5rem, 14vw, 4.8rem) clamp(4.5rem, 17vw, 5.6rem)';
+    row.innerHTML = `
+        <span class="text-data-tabular text-on-surface-variant/80 text-left text-[10px] font-normal truncate" title="${escapeHtml(String(fila.id_producto))}">${escapeHtml(String(fila.id_producto))}</span>
+        <span class="text-data-tabular text-on-surface-variant text-left text-[10px] font-normal truncate" title="${escapeHtml(String(fila.codigo_producto || ''))}">${escapeHtml(String(fila.codigo_producto || '').toUpperCase())}</span>
+        <span class="flex items-center gap-xs min-w-0">
+            <span class="text-[12px] sm:text-[13px] font-semibold text-on-surface truncate uppercase" title="${escapeHtml(nombreProducto)}">${escapeHtml(nombreProducto)}</span>
+            ${insignia}
+        </span>
+        <span class="text-right text-[11px] font-semibold" style="color: ${colorDiferenciaHistorico(difPaq)}">${textoPaq}</span>
+        <span class="text-right text-[11px] font-semibold" style="color: ${colorDiferenciaHistorico(difDet)}">${textoDet}</span>
+        <span class="text-right text-[10px] font-semibold font-data-tabular truncate" style="color: ${colorMonto}" title="${escapeHtml(textoMonto)}">${escapeHtml(textoMonto)}</span>
+    `;
+    return row;
+}
+
 function renderizarPaloteoHistorico(data) {
     if (!historicoList) return;
     historicoList.innerHTML = '';
 
     const filas = data.filas || [];
+    actualizarResumenHistorico(data);
     if (!filas.length) {
         if (historicoEmptyState) {
-            historicoEmptyState.textContent = 'La operativa seleccionada no tiene filas en el cierre histórico.';
+            historicoEmptyState.textContent = 'La operativa no tiene productos contados ni con movimiento en esta barra.';
             historicoEmptyState.classList.remove('hidden');
         }
         if (historicoBtnPdf) historicoBtnPdf.disabled = true;
         return;
     }
 
-    if (historicoEmptyState) historicoEmptyState.classList.add('hidden');
+    // Mismo orden que el PDF: por nombre; los sin contar aparte, al final.
+    const porNombre = (a, b) => String(a.producto || '').localeCompare(String(b.producto || ''), 'es', { sensitivity: 'base' })
+        || (a.id_producto - b.id_producto);
+    const contados = filas
+        .filter((f) => f.clasificacion === 'con_diferencia' || (!historicoSoloDiferencias && f.clasificacion === 'cuadrado'))
+        .sort(porNombre);
+    const sinContar = filas.filter((f) => f.clasificacion === 'con_movimiento_sin_contar').sort(porNombre);
+
+    contados.forEach((fila) => historicoList.appendChild(crearFilaPaloteoHistorico(fila)));
+    if (sinContar.length) {
+        const cabecera = document.createElement('div');
+        cabecera.className = 'px-xs py-[6px] bg-surface-container-low text-[9px] font-label-mono uppercase tracking-widest text-error';
+        cabecera.textContent = 'Con movimiento sin contar (vendido o traspasado, sin captura física)';
+        historicoList.appendChild(cabecera);
+        sinContar.forEach((fila) => historicoList.appendChild(crearFilaPaloteoHistorico(fila)));
+    }
+
+    if (historicoEmptyState) {
+        const vacio = !contados.length && !sinContar.length;
+        historicoEmptyState.textContent = 'Ningún producto con diferencia en esta operativa.';
+        historicoEmptyState.classList.toggle('hidden', !vacio);
+    }
     if (historicoBtnPdf) historicoBtnPdf.disabled = false;
-
-    filas.forEach((fila) => {
-        const difPaq = fila.diferencia_paq;
-        const difDet = fila.diferencia_detalle;
-
-        const colorPaq = difPaq == null
-            ? 'var(--on-surface-variant)'
-            : difPaq > 0 ? 'var(--semantic-warning)' : difPaq < 0 ? 'var(--semantic-danger)' : 'var(--semantic-action)';
-        const colorDet = difDet == null
-            ? 'var(--on-surface-variant)'
-            : difDet > 0 ? 'var(--semantic-warning)' : difDet < 0 ? 'var(--semantic-danger)' : 'var(--semantic-action)';
-
-        const textoPaq = difPaq == null ? '' : `${difPaq > 0 ? '+' : ''}${Math.round(difPaq)}`;
-        const textoDet = difDet == null ? '' : `${difDet > 0 ? '+' : ''}${difDet.toFixed(2)} oz`;
-
-        const nombreProducto = `${fila.producto || ''}${fila.estado_producto && fila.estado_producto !== 'HAB' ? ' (DES)' : ''}`;
-
-        const row = document.createElement('div');
-        row.className = 'grid gap-[2px] px-xs py-xs items-center hover:bg-surface-container-highest transition-colors';
-        row.style.gridTemplateColumns = '2rem 2.9rem minmax(0, 1fr) clamp(2.8rem, 11vw, 4rem) clamp(3.5rem, 14vw, 4.8rem) clamp(3.5rem, 12vw, 4rem)';
-        row.innerHTML = `
-            <span class="text-data-tabular text-on-surface-variant/80 text-left text-[10px] font-normal truncate" title="${escapeHtml(String(fila.id_producto))}">${escapeHtml(String(fila.id_producto))}</span>
-            <span class="text-data-tabular text-on-surface-variant text-left text-[10px] font-normal truncate" title="${escapeHtml(String(fila.codigo_producto || ''))}">${escapeHtml(String(fila.codigo_producto || '').toUpperCase())}</span>
-            <span class="text-[12px] sm:text-[13px] font-semibold text-on-surface truncate uppercase" title="${escapeHtml(nombreProducto)}">${escapeHtml(nombreProducto)}</span>
-            <span class="text-right text-[11px] font-semibold" style="color: ${colorPaq}">${textoPaq}</span>
-            <span class="text-right text-[11px] font-semibold" style="color: ${colorDet}">${textoDet}</span>
-            <span class="text-right text-[10px] font-label-mono uppercase text-on-surface-variant">${fila.tiene_captura_cruda ? 'SI' : 'NO'}</span>
-        `;
-        historicoList.appendChild(row);
-    });
 }
 
 async function exportarPaloteoHistoricoPdf() {
@@ -4362,6 +4458,12 @@ if (historicoSelectOperativa) {
 }
 if (historicoBtnPdf) {
     historicoBtnPdf.addEventListener('click', exportarPaloteoHistoricoPdf);
+}
+if (historicoToggleDiferencias) {
+    historicoToggleDiferencias.addEventListener('click', () => {
+        historicoSoloDiferencias = !historicoSoloDiferencias;
+        if (historicoDatosActuales) renderizarPaloteoHistorico(historicoDatosActuales);
+    });
 }
 
 function syncFilaPaloteo3ConInventario(row) {
