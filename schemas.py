@@ -119,6 +119,10 @@ class ProductoPendiente(BaseModel):
     pesable: Optional[int] = None
     perfiles: List[PerfilPesaje] = Field(default_factory=list)
     onzas_por_botella_llena: float
+    # True cuando el producto no tuvo movimiento pero ya fue contado en esta
+    # operativa (agregado a mano desde el catalogo): /pendientes lo devuelve
+    # para que no desaparezca de PALOTEO al recargar la pagina.
+    sin_movimiento: bool = False
 
 
 class InventarioDetalleRegistrado(BaseModel):
@@ -153,26 +157,17 @@ class EliminarProductoPaloteoResponse(BaseModel):
     mensaje: str
 
 
-class FilaDiferenciaPdf(BaseModel):
-    idProducto: str
-    codigo: str
-    nombre: str
-    paqPos: Optional[float] = None
-    paqBar: Optional[float] = None
-    detPos: Optional[float] = None
-    pesoGramos: Optional[float] = None
-    detBar: Optional[float] = None
-    difUnidades: Optional[float] = None
-    difOnzas: Optional[float] = None
-    difOnzasExactas: Optional[float] = None
-    difOnzasPos: Optional[float] = None
-
 class ExportarPdfRequest(BaseModel):
+    # Las filas ya no viajan desde el navegador: el servidor las arma desde BD
+    # con la misma fuente que los totales (ver _obtener_filas_reporte_ajustes).
+    # Un cliente con app.js viejo en cache que todavia mande "filas" no falla:
+    # Pydantic ignora campos extra.
     id_operacion: int = Field(..., gt=0)
     id_barra: int = Field(..., gt=0)
     usuario: str
     tipo_reporte: Literal['general', 'ingreso', 'salida'] = 'general'
-    filas: List[FilaDiferenciaPdf] = Field(..., min_length=1)
+    ordenar_por: Optional[Literal['idProducto', 'codigo', 'nombre']] = None
+    orden_dir: Literal['asc', 'desc'] = 'asc'
 
 
 class ConsolidarAjustesRequest(BaseModel):

@@ -3020,11 +3020,18 @@ async function iniciarDashboard() {
 
 async function cargarProductos() {
     try {
-        const response = await fetchAutenticado(`${API_BASE}/inventario/pendientes`, {
+        // id_operacion: el backend suma los productos ya contados en esta
+        // operativa aunque no tengan movimiento (agregados a mano), para que no
+        // desaparezcan al recargar; llegan con sin_movimiento=true.
+        const paramOperacion = currentOperacionId ? `?id_operacion=${encodeURIComponent(currentOperacionId)}` : '';
+        const response = await fetchAutenticado(`${API_BASE}/inventario/pendientes${paramOperacion}`, {
             headers: { 'X-Barra-Id': String(idBarraActual) }
         });
 
         const productos = await response.json();
+        if (Array.isArray(productos)) {
+            productos.forEach((p) => { if (p.sin_movimiento) p._agregadoManual = true; });
+        }
 
         if (response.ok && productos.length > 0) {
             productosInventario = productos;
@@ -3901,8 +3908,6 @@ async function exportarReportePaloteo3Pdf() {
         reporteBtnPdf.innerHTML = `${renderCriticalIcon('refresh', 'ui-icon animate-spin-ccw')} Generando PDF...`;
     }
 
-    const todasLasFilas = obtenerFilasReporteProcesadas();
-    const filas = todasLasFilas.filter(f => (f.difUnidades ?? 0) !== 0 || (f.difOnzas ?? 0) !== 0);
     const tipoReporte = reporteEstado.filtro === 'ingreso'
         ? 'ingreso'
         : reporteEstado.filtro === 'salida'
@@ -3910,34 +3915,15 @@ async function exportarReportePaloteo3Pdf() {
             : 'general';
 
     try {
-        if (!filas.length) {
-            const mensaje = todasLasFilas.length === 0
-                ? 'No hay productos cargados en Paloteo 3.'
-                : 'Todos los productos coinciden con el inventario ideal. No hay diferencias que reportar.';
-            await mostrarDialogoResultado({ tipo: 'warning', titulo: 'Sin diferencias para exportar', mensaje });
-            return;
-        }
-
+        // Las filas las arma el servidor desde BD (paloteo registrado), con la
+        // misma fuente que los totales: el navegador solo elige tipo y orden.
         const payload = {
             id_operacion: currentOperacionId,
             id_barra: idBarraActual,
             usuario: localStorage.getItem('nombres') || 'No identificado',
             tipo_reporte: tipoReporte,
-            filas: filas.map(f => ({
-                // Exacta para analisis y operativa para comparacion con POS (paso 0.5 oz)
-                difOnzasExactas: f.difOnzasExactas ?? f.difOnzas,
-                difOnzasPos: f.difOnzas,
-                idProducto: f.idProducto,
-                codigo: f.codigo,
-                nombre: f.nombre,
-                paqPos: f.paqPos,
-                paqBar: f.paqBar,
-                detPos: f.detPos,
-                pesoGramos: f.pesoGramos,
-                detBar: f.detBar,
-                difUnidades: f.difUnidades,
-                difOnzas: f.difOnzas,
-            })),
+            ordenar_por: reporteEstado.sortBy,
+            orden_dir: reporteEstado.sortDir,
         };
 
         const resp = await fetchAutenticado('/api/paloteo3/exportar-pdf', {
@@ -3945,6 +3931,16 @@ async function exportarReportePaloteo3Pdf() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
         });
+
+        if (resp.status === 404) {
+            const detalle = await resp.json().catch(() => null);
+            await mostrarDialogoResultado({
+                tipo: 'warning',
+                titulo: 'Nada para exportar',
+                mensaje: detalle?.detail || 'No hay productos para exportar en este reporte.',
+            });
+            return;
+        }
 
         if (!resp.ok) {
             await mostrarDialogoResultado({ tipo: 'error', titulo: 'Error al generar PDF', mensaje: `El servidor respondió con error ${resp.status}.` });

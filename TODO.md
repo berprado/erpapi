@@ -25,6 +25,13 @@
   - `.env` sigue usando el placeholder `cambia_esto_por_una_clave_larga_y_aleatoria_en_produccion` (pasa la validación de longitud ≥32, pero no es aleatorio).
   - Generar con: `python -c "import secrets; print(secrets.token_hex(32))"`
 
+- [ ] **Decidir y corregir el criterio de "producto con movimiento" de `/api/inventario/pendientes`** (análisis 2026-09-25, caso HAVANA 7A operativa 1306)
+  - Hoy: comandas `estado_comanda = 26` de `(SELECT MAX(id_operacion) FROM bar_comanda)` + traspasos almacén→barra (tipo 83/34, estado 21) + (desde v12.34) productos ya contados en la operativa.
+  - Huecos verificados: (1) una comanda **anulada** (27) saca al producto de la lista aunque tuvo movimiento: HAVANA 7A solo tuvo la comanda 74173, anulada, y no apareció en PALOTEO; (2) las comandas **no se filtran por barra** (una venta en barra 2 hace aparecer el producto en el paloteo de barra 1); (3) usa `MAX(id_operacion)` de `bar_comanda` en vez de la operativa activa: si la operativa en curso aún no tiene comandas (ej. 1307), lista los productos de la anterior. Las cortesías (`tipo_salida = 51`) **ya** entran (el filtro no mira `tipo_salida`).
+  - Descartado como fuente única: "cambió su fila de `bar_inventario` durante la operativa". El POS no actualiza `fecha_mod` en toda venta (CAMEL ACTIVE PEQ. vendido 23:11 en la 74177 sigue con `fecha_mod` 2026-09-20), la columna solo guarda la última modificación (la pisan la operativa siguiente y el propio aplicar ajustes, que además escribe UTC mientras el POS escribe hora local), una anulación deja las cantidades iguales, y `ope_operacion` no guarda hora de inicio/fin (solo `DATE`).
+  - Propuesta: mantener el criterio por eventos, sumando comandas anuladas, filtrando comandas por `bar_comanda.id_barra` y usando la operativa activa (`id_operacion` que ya envía la PWA). Un log por trigger `AFTER UPDATE` sobre `bar_inventario` cumpliría la idea original al pie de la letra, pero es un trigger en la tabla más caliente del POS (precedente: incidente del trigger de `alm_producto`, v12.12); no recomendado por ahora.
+  - Pendiente de aprobación del usuario: cambia la lista que el bartender ve cada noche.
+
 - [x] **Reemplazar el token simulado de autenticación por JWT real en el endpoint `/api/auth/login`**
   - Confirmado: `login()` genera JWT real (`jwt.encode` con `SECRET_KEY`/`ALGORITHM`), valida usuario/contraseña/estado y registra acceso en `seg_acceso`.
 

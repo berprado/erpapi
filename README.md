@@ -158,7 +158,7 @@ Docs: `http://localhost:8000/docs`
 
 | Metodo | Ruta | Descripcion |
 |---|---|---|
-| `GET` | `/api/inventario/pendientes` | Lista productos vendidos + traspasados a barra con configuracion de pesaje |
+| `GET` | `/api/inventario/pendientes` | Lista productos vendidos + traspasados a barra con configuracion de pesaje. Con `?id_operacion=` (desde v12.34, la PWA siempre lo envia) suma los productos ya contados en el paloteo de esa operativa/barra aunque no tengan movimiento (agregados a mano), marcados `sin_movimiento: true`; sin esto desaparecian de PALOTEO al recargar la pagina |
 | `GET` | `/api/inventario/catalogo/buscar` | Busca en el catalogo completo de la barra (sin filtrar por movimiento), para agregar manualmente al conteo productos que no tuvieron movimiento esta operativa. `?busqueda=` es opcional (si se omite o va vacio, min. 2 caracteres si se especifica), devuelve resultados con la misma forma que `/pendientes`. `?limite=` (1-500, default 15) ajusta el tope de resultados; con `busqueda` vacia y `limite` alto trae el catalogo completo, para el flujo de "paloteo completo" |
 | `POST` | `/api/inventario/paloteo` | Registra inventario fisico completo |
 | `GET` | `/api/inventario/paloteo/{id_operacion}` | Obtiene inventario registrado y si puede editarse |
@@ -304,7 +304,7 @@ Los archivos `querys/fix_trigger_alm_producto_after_insert.sql` y `querys/fix_tr
 
 | Metodo | Ruta | Descripcion |
 |---|---|---|
-| `POST` | `/api/paloteo3/exportar-pdf` | Genera y descarga PDF del reporte (general, ingreso o salida) |
+| `POST` | `/api/paloteo3/exportar-pdf` | Genera y descarga PDF del reporte (general, ingreso o salida). Desde v12.34 las filas se arman en el servidor desde el paloteo registrado (ver abajo); responde `404` si la operativa/barra no tiene paloteo registrado o si el tipo pedido no tiene filas. |
 | `GET` | `/api/paloteo3/historico?id_operacion=42&id_barra=1` | Lee el cierre historico deduplicado desde `v9_paloteo_cierre`, conservando `NULL` cuando no hubo captura fisica y enriqueciendo con el ultimo registro crudo disponible. Solo administrador. |
 | `GET` | `/api/paloteo3/historico/operativas?fecha_desde=&fecha_hasta=&id_barra=` | Lista pares operativa/barra con cierre historico disponible en el rango (`fecha_desde`/`fecha_hasta` son opcionales; por defecto los ultimos 30 dias, porque el endpoint no pagina). `id_barra` es opcional. Solo administrador. |
 | `POST` | `/api/paloteo3/historico/exportar-pdf` | PDF del cierre historico de una operativa/barra. A diferencia de `exportar-pdf`, las filas se recalculan en el servidor desde `v9_paloteo_cierre` (body solo lleva `id_operacion`, `id_barra`, `usuario`); no se reciben filas del cliente. Solo administrador. |
@@ -331,19 +331,34 @@ Body ejemplo de exportacion:
   "id_barra": 1,
   "usuario": "PEREZ MAMANI, JUAN",
   "tipo_reporte": "general",
-  "filas": [
-    {
-      "idProducto": "101",
-      "codigo": "LIC-001",
-      "nombre": "WHISKY 750 ML",
-      "difUnidades": 1,
-      "difOnzas": -3.5
-    }
-  ]
+  "ordenar_por": "nombre",
+  "orden_dir": "asc"
 }
 ```
 
-`tipo_reporte` admite: `general`, `ingreso`, `salida`.
+`tipo_reporte` admite: `general`, `ingreso`, `salida`. `ordenar_por` (opcional,
+default `nombre`) admite `idProducto`, `codigo`, `nombre`; `orden_dir` admite
+`asc`/`desc`.
+
+**Filas del PDF de Ajustes (desde v12.34):** el navegador ya no envia filas; el
+servidor las arma en `_obtener_filas_reporte_ajustes` con la misma fuente que
+los totales FALTANTES/SOBRANTES/NETO, asi que el PDF no puede mostrar un total
+que sus filas no expliquen. Antes las filas salian de las tarjetas en pantalla y
+los totales de BD: en la operativa 1306 faltaba la fila de HAVANA 7A (-1
+botella, -140 Bs) mientras el total si la contaba. Reglas:
+
+- `general` incluye **todo producto contado**, con o sin diferencia (el paloteo
+  es lo que demuestra que un producto cuadra); `ingreso`/`salida` solo las filas
+  con esa parte del movimiento.
+- Con ajuste aplicado, deltas y VALOR salen del snapshot congelado
+  (`analytics_varianza_inventario`); un producto contado sin snapshot no tenia
+  diferencia al aplicar y va en cero. Sin aplicar, salen de
+  `_calcular_diferencias_paloteo` con la valoracion vigente (lo mismo que el
+  preview).
+- Una variacion operativa cero vale `0.00 Bs` aunque el producto no tenga WAC
+  (`_calcular_valor_varianza`); ya no cuenta como "sin valoracion".
+- El PDF refleja lo **registrado** en BD: exportar antes de registrar el paloteo
+  responde 404, y cambios en pantalla sin guardar no aparecen.
 
 ### Ajustes de Inventario (requiere JWT; aplicar requiere rol administrador)
 

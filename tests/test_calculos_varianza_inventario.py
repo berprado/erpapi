@@ -33,6 +33,17 @@ def test_valor_varianza_no_trata_wac_faltante_como_cero():
     }
 
 
+def test_valor_varianza_sin_variacion_operativa_vale_cero_aunque_falte_wac():
+    valoracion = _calcular_valor_varianza(_delta(0, 0), None)
+
+    assert valoracion == {
+        "estado_valoracion": "VALORIZADO",
+        "valor_paq": Decimal("0"),
+        "valor_detalle_operativo": Decimal("0"),
+        "valor_neto": Decimal("0"),
+    }
+
+
 def test_valor_varianza_detecta_rendimiento_invalido_sin_perder_valor_paq():
     valoracion = _calcular_valor_varianza(
         _delta(1, -2),

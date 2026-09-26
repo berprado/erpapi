@@ -205,3 +205,35 @@ def test_paloteo_sobrecapacidad_de_onzas_400(client, crear_usuario, escenario_pa
     }]), headers=user.headers)
     assert r.status_code == 400
     assert "Capacidad excedida" in r.json()["detail"]
+
+def test_pendientes_incluye_productos_ya_contados_sin_movimiento(client, crear_usuario,
+                                                                 escenario_paloteo, db_session):
+    """Un producto agregado a mano (sin comandas ni traspasos) y ya contado en la
+    operativa debe volver en /pendientes con sin_movimiento=True: antes
+    desaparecia de PALOTEO 1/2/3 al recargar (caso HAVANA 7A, operativa 1306),
+    aunque el servidor lo seguia usando al consolidar."""
+    esc = escenario_paloteo
+    esc.crear_operacion(estado_operacion=24)
+    id_producto = esc.agregar_producto(
+        "PYTEST CONTADO SIN MOVIMIENTO", pesable=True,
+        ideal_paq=1, ideal_det=10.0, real_paq=1, real_det=10.0,
+    )
+    # El fixture no llena estos campos de catalogo, que ProductoPendiente exige
+    # y que todo producto real tiene.
+    db_session.execute(text(
+        "UPDATE alm_producto SET ind_permite_comandar = 71, cantidad_detalle = 23.67 WHERE id = :id"
+    ), {"id": id_producto})
+    db_session.commit()
+    usuario = crear_usuario()
+    headers = {**usuario.headers, "X-Barra-Id": str(esc.id_barra)}
+
+    r = client.get(f"/api/inventario/pendientes?id_operacion={esc.id_operacion}", headers=headers)
+    assert r.status_code == 200, r.text
+    fila = next((p for p in r.json() if p["id_producto"] == id_producto), None)
+    assert fila is not None
+    assert fila["sin_movimiento"] is True
+
+    # Sin id_operacion (cliente viejo) el comportamiento anterior no cambia.
+    r_sin_operacion = client.get("/api/inventario/pendientes", headers=headers)
+    assert r_sin_operacion.status_code == 200, r_sin_operacion.text
+    assert id_producto not in {p["id_producto"] for p in r_sin_operacion.json()}

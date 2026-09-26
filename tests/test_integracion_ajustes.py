@@ -29,6 +29,14 @@ from sqlalchemy import text
 
 PREVIEW = "/api/inventario/consolidar/preview"
 APLICAR = "/api/inventario/ajustes/aplicar"
+EXPORTAR_PDF = "/api/paloteo3/exportar-pdf"
+
+
+def _texto_pdf(respuesta) -> str:
+    return "\n".join(
+        pagina.extract_text() or ""
+        for pagina in PdfReader(BytesIO(respuesta.content)).pages
+    )
 
 
 def _payload(esc, observaciones="AJUSTE PYTEST"):
@@ -87,7 +95,9 @@ def test_preview_calcula_deltas_y_buckets(client, crear_usuario, escenario_ajust
             "faltantes": 0.0,
             "sobrantes": 0.0,
             "neto": 0.0,
-            "productos_sin_valoracion": 5,
+            # control y tolerado no tienen variacion operativa: valen 0 Bs sin
+            # necesitar WAC; solo los 3 con diferencia quedan sin valoracion.
+            "productos_sin_valoracion": 3,
         },
     }
 
@@ -160,19 +170,10 @@ def test_exportar_pdf_muestra_valor_varianza_calculado_en_backend(
     db_session.commit()
     usuario = crear_usuario()
 
-    respuesta = client.post("/api/paloteo3/exportar-pdf", json={
+    respuesta = client.post(EXPORTAR_PDF, json={
         "id_operacion": esc.id_operacion,
         "id_barra": esc.id_barra,
         "usuario": usuario.usuario,
-        "filas": [{
-            "idProducto": str(id_producto),
-            "codigo": "PYT-PDF",
-            "nombre": "PYTEST PDF VALOR",
-            "paqPos": 10,
-            "paqBar": 12,
-            "difUnidades": 2,
-            "difOnzas": 0,
-        }],
     }, headers=usuario.headers)
 
     assert respuesta.status_code == 200, respuesta.text
@@ -206,19 +207,10 @@ def test_exportar_pdf_despues_de_aplicar_usa_snapshot_historico(
     assert aplicar.status_code == 200, aplicar.text
     assert aplicar.json()["status"] == "success"
 
-    respuesta = client.post("/api/paloteo3/exportar-pdf", json={
+    respuesta = client.post(EXPORTAR_PDF, json={
         "id_operacion": esc.id_operacion,
         "id_barra": esc.id_barra,
         "usuario": admin.usuario,
-        "filas": [{
-            "idProducto": str(id_producto),
-            "codigo": "PYT-SNAPSHOT",
-            "nombre": "PYTEST PDF SNAPSHOT",
-            "paqPos": 10,
-            "paqBar": 12,
-            "difUnidades": 2,
-            "difOnzas": 0,
-        }],
     }, headers=admin.headers)
 
     assert respuesta.status_code == 200, respuesta.text
@@ -228,6 +220,88 @@ def test_exportar_pdf_despues_de_aplicar_usa_snapshot_historico(
     )
     assert "+150.00 Bs" in texto_pdf
     assert "NETO: +150.00 Bs" in texto_pdf
+
+
+def test_exportar_pdf_filas_explican_el_total_e_incluye_contados_sin_diferencia(
+        client, crear_usuario, escenario_ajustes, db_session):
+    """Regresion operativa 1306 (HAVANA 7A): el total de FALTANTES contaba una
+    fila que el PDF no mostraba, porque las filas las armaba el navegador desde
+    la pantalla. Ahora filas y totales salen de BD: todo producto contado
+    aparece, con o sin diferencia, y una fila que cuadra vale 0 Bs aunque el
+    producto no tenga WAC."""
+    esc = escenario_ajustes
+    esc.crear_operacion()
+    id_faltante = esc.agregar_producto(
+        "PYTEST PDF FALTANTE", pesable=False,
+        ideal_paq=3, ideal_det=0, real_paq=2, real_det=0,
+    )
+    esc.agregar_producto(
+        "PYTEST PDF CUADRA", pesable=False,
+        ideal_paq=5, ideal_det=0, real_paq=5, real_det=0,
+    )
+    db_session.execute(text("""
+        INSERT INTO cache_wac_producto (id_almacen, id_producto, wac_actual)
+        VALUES (1, :id_producto, 140.0000)
+    """), {"id_producto": id_faltante})
+    db_session.commit()
+    admin = crear_usuario(admin=True)
+
+    aplicar = client.post(APLICAR, json=_payload(esc), headers=admin.headers)
+    assert aplicar.status_code == 200, aplicar.text
+
+    respuesta = client.post(EXPORTAR_PDF, json={
+        "id_operacion": esc.id_operacion,
+        "id_barra": esc.id_barra,
+        "usuario": admin.usuario,
+    }, headers=admin.headers)
+
+    assert respuesta.status_code == 200, respuesta.text
+    texto_pdf = _texto_pdf(respuesta)
+    assert "PYTEST PDF FALTANTE" in texto_pdf
+    assert "-140.00 Bs" in texto_pdf
+    assert "FALTANTES: -140.00 Bs" in texto_pdf
+    assert "PYTEST PDF CUADRA" in texto_pdf
+    assert "0.00 Bs" in texto_pdf
+    assert "SIN WAC" not in texto_pdf
+    assert "sin valoración" not in texto_pdf
+
+
+def test_exportar_pdf_salida_solo_incluye_faltantes(client, crear_usuario, escenario_ajustes):
+    esc = escenario_ajustes
+    esc.crear_operacion()
+    esc.agregar_producto("PYTEST PDF SALE", pesable=False,
+                         ideal_paq=3, ideal_det=0, real_paq=2, real_det=0)
+    esc.agregar_producto("PYTEST PDF ENTRA", pesable=False,
+                         ideal_paq=3, ideal_det=0, real_paq=5, real_det=0)
+    usuario = crear_usuario()
+
+    respuesta = client.post(EXPORTAR_PDF, json={
+        "id_operacion": esc.id_operacion,
+        "id_barra": esc.id_barra,
+        "usuario": usuario.usuario,
+        "tipo_reporte": "salida",
+    }, headers=usuario.headers)
+
+    assert respuesta.status_code == 200, respuesta.text
+    texto_pdf = _texto_pdf(respuesta)
+    assert "SALIDA POR AJUSTE" in texto_pdf
+    assert "PYTEST PDF SALE" in texto_pdf
+    assert "PYTEST PDF ENTRA" not in texto_pdf
+
+
+def test_exportar_pdf_sin_paloteo_registrado_responde_404(client, crear_usuario, escenario_ajustes):
+    esc = escenario_ajustes
+    esc.crear_operacion(con_cabecera_fisico=False)
+    usuario = crear_usuario()
+
+    respuesta = client.post(EXPORTAR_PDF, json={
+        "id_operacion": esc.id_operacion,
+        "id_barra": esc.id_barra,
+        "usuario": usuario.usuario,
+    }, headers=usuario.headers)
+
+    assert respuesta.status_code == 404
+    assert "Registra el paloteo" in respuesta.json()["detail"]
 
 
 def test_reporte_historico_agrega_valoraciones_y_pendientes(client, crear_usuario, db_session):
@@ -362,8 +436,14 @@ def test_aplicar_genera_movimientos_e_iguala_inventario(client, crear_usuario,
     assert {fila[0] for fila in snapshots} == {
         productos["sobrante_det"], productos["mixto"], productos["paq"], productos["tolerado"]
     }
-    assert all(fila[1] == 1 and fila[2] == "SIN_WAC" for fila in snapshots)
-    assert all(fila[5] is None for fila in snapshots)
+    assert all(fila[1] == 1 for fila in snapshots)
+    estados = {fila[0]: (fila[2], fila[5]) for fila in snapshots}
+    # Sin WAC en el escenario: los deltas operativos no se pueden valorar...
+    for clave in ("sobrante_det", "mixto", "paq"):
+        assert estados[productos[clave]] == ("SIN_WAC", None)
+    # ...pero el tolerado no tiene variacion operativa y vale 0 Bs sin WAC.
+    assert estados[productos["tolerado"]][0] == "VALORIZADO"
+    assert float(estados[productos["tolerado"]][1]) == 0.0
 
 
 def test_aplicar_iguala_bar_inventario_de_producto_tolerado(client, crear_usuario,

@@ -1402,6 +1402,8 @@ def _agrupar_filas_producto_pesaje(rows) -> list[dict]:
                 "stock_ideal_onzas": row["stock_ideal_onzas"],
                 "pesable": row["pesable"],
                 "onzas_por_botella_llena": row["onzas_por_botella_llena"],
+                # Solo /pendientes trae con_movimiento; /catalogo/buscar no lo usa.
+                "sin_movimiento": row.get("con_movimiento", 1) == 0,
                 "perfiles": []
             }
 
@@ -1446,12 +1448,19 @@ def _agrupar_filas_producto_pesaje(rows) -> list[dict]:
 @app.get("/api/inventario/pendientes", response_model=List[schemas.ProductoPendiente])
 def obtener_productos_pendientes(
     request: Request,
+    id_operacion: Optional[int] = Query(None, gt=0, description="Operativa activa: suma los productos ya contados en ella"),
     db: Session = Depends(get_db),
     current_user: models.Usuario = Depends(get_usuario_actual) # <-- CANDADO AQUÍ
     ):
     """
     Devuelve la lista de productos que tuvieron movimiento en la operación activa,
     junto con su stock ideal y parámetros de pesaje.
+
+    Con id_operacion, suma ademas los productos ya contados en el paloteo de esa
+    operativa/barra aunque no tengan movimiento (agregados a mano desde el
+    catalogo), marcados sin_movimiento=True. Sin esto desaparecian de PALOTEO
+    1/2/3 al recargar la pagina: preLlenarInventario solo completa tarjetas
+    existentes, y el servidor igual los usaba al consolidar/aplicar el ajuste.
     """
     id_barra_operativa = _resolver_barra_operativa(request)
 
@@ -1461,27 +1470,43 @@ def obtener_productos_pendientes(
             i.cantidad_paq AS stock_ideal_unidades, i.cantidad_detalle AS stock_ideal_onzas,
             i.id_categoria, i.categoria_nombre,
             p.id AS perfil_id, p.pesable, p.nombre_perfil, p.peso_bruto, p.tara, p.gramos_por_oz, p.tolerancia_oz, p.barcode,
-            a.cantidad_detalle AS onzas_por_botella_llena
+            a.cantidad_detalle AS onzas_por_botella_llena,
+            mov.con_movimiento
         FROM (
-            SELECT DISTINCT d.id_producto_receta AS id_producto
-            FROM comandas_v9_detallada d
-            INNER JOIN bar_comanda c ON d.id_comanda = c.id
-            WHERE d.id_operacion = (SELECT MAX(id_operacion) FROM bar_comanda)
-            AND c.estado_comanda = 26
-            AND d.id_producto_receta IS NOT NULL
+            SELECT u.id_producto, MAX(u.con_movimiento) AS con_movimiento
+            FROM (
+                SELECT DISTINCT d.id_producto_receta AS id_producto, 1 AS con_movimiento
+                FROM comandas_v9_detallada d
+                INNER JOIN bar_comanda c ON d.id_comanda = c.id
+                WHERE d.id_operacion = (SELECT MAX(id_operacion) FROM bar_comanda)
+                AND c.estado_comanda = 26
+                AND d.id_producto_receta IS NOT NULL
 
-            UNION
+                UNION ALL
 
-            SELECT DISTINCT dsi.id_producto AS id_producto
-            FROM alm_salida_inventario asi
-            INNER JOIN alm_detalle_salida_inv dsi ON dsi.id_salida_inventario = asi.id
-            WHERE asi.id_operacion = (SELECT MAX(id_operacion) FROM bar_comanda)
-            AND asi.estado = 'HAB'
-            AND dsi.estado = 'HAB'
-            AND asi.id_barra = :id_barra
-            AND asi.ind_tipo_movimiento = 83
-            AND asi.ind_tipo_salida = 34
-            AND asi.ind_estado_salida = 21
+                SELECT DISTINCT dsi.id_producto AS id_producto, 1 AS con_movimiento
+                FROM alm_salida_inventario asi
+                INNER JOIN alm_detalle_salida_inv dsi ON dsi.id_salida_inventario = asi.id
+                WHERE asi.id_operacion = (SELECT MAX(id_operacion) FROM bar_comanda)
+                AND asi.estado = 'HAB'
+                AND dsi.estado = 'HAB'
+                AND asi.id_barra = :id_barra
+                AND asi.ind_tipo_movimiento = 83
+                AND asi.ind_tipo_salida = 34
+                AND asi.ind_estado_salida = 21
+
+                UNION ALL
+
+                -- Ya contados en esta operativa/barra (sin id_operacion no matchea nada).
+                SELECT DISTINCT df.id_producto AS id_producto, 0 AS con_movimiento
+                FROM bar_detalle_fisico df
+                INNER JOIN bar_inventario_fisico f ON f.id = df.id_inventario_fisico
+                WHERE f.id_operacion = :id_operacion
+                AND f.id_barra = :id_barra
+                AND f.estado = 'HAB'
+                AND df.estado = 'HAB'
+            ) u
+            GROUP BY u.id_producto
         ) mov
         INNER JOIN alm_producto a ON mov.id_producto = a.id
         -- id_barra filtrado explícitamente: vista_inventario_barra_con_filtro NO
@@ -1496,7 +1521,7 @@ def obtener_productos_pendientes(
 
           """)
 
-    rows = db.execute(query, {"id_barra": id_barra_operativa}).mappings().all()
+    rows = db.execute(query, {"id_barra": id_barra_operativa, "id_operacion": id_operacion}).mappings().all()
 
     return _agrupar_filas_producto_pesaje(rows)
 
@@ -1644,6 +1669,14 @@ def _calcular_valor_varianza(delta: dict, costo: dict | None) -> dict:
     faltante. El delta exacto se guarda para auditoría, pero no altera el monto
     que explica los movimientos de ajuste del POS.
     """
+    if (Decimal(str(delta["delta_paq"])) == 0
+            and Decimal(str(delta["delta_det_operativo"])) == 0):
+        # Sin variacion operativa no hay nada que valorar: vale 0 Bs aunque el
+        # producto no tenga WAC. Antes caia en SIN_WAC y un producto contado que
+        # cuadraba se reportaba como "sin valoracion".
+        return {"estado_valoracion": "VALORIZADO", "valor_paq": Decimal("0"),
+                "valor_detalle_operativo": Decimal("0"), "valor_neto": Decimal("0")}
+
     wac = None if costo is None else costo.get("wac_snapshot")
     if wac is None:
         return {"estado_valoracion": "SIN_WAC", "valor_paq": None,
@@ -2576,6 +2609,10 @@ def _fmt_diff_oz(valor):
 
 
 def _fmt_valor_varianza(valor, estado_valoracion):
+    # estado None: la fila no tiene valoracion aplicable (ej. historico de una
+    # operativa sin ajuste aplicado) y la celda queda vacia.
+    if estado_valoracion is None:
+        return ""
     if estado_valoracion != "VALORIZADO" or valor is None:
         return "SIN WAC"
     monto = Decimal(str(valor))
@@ -2594,65 +2631,35 @@ class _ReportePDF(FPDF):
         self.cell(0, 8, f"PÁGINA {self.page_no()} / {{nb}}", align="C")
 
 
-@app.post("/api/paloteo3/exportar-pdf")
-def exportar_pdf_paloteo3(
-    payload: schemas.ExportarPdfRequest,
-    db: Session = Depends(get_db),
-    current_user: models.Usuario = Depends(get_usuario_actual),
-):
-    inventario_fisico = db.query(models.InventarioFisicoPOS).filter(
-        models.InventarioFisicoPOS.id_operacion == payload.id_operacion,
-        models.InventarioFisicoPOS.id_barra == payload.id_barra,
-        models.InventarioFisicoPOS.estado == 'HAB',
-    ).first()
-    control_aplicado = (
-        _obtener_control_aplicado(db, payload.id_operacion, payload.id_barra, inventario_fisico.id)
-        if inventario_fisico else None
-    )
-    if control_aplicado:
-        snapshots = db.query(models.VarianzaInventario).filter(
-            models.VarianzaInventario.id_control_ajuste == control_aplicado.id
-        ).all()
-        deltas_valorados = [
-            {
-                "id_producto": snapshot.id_producto,
-                "estado_valoracion": snapshot.estado_valoracion,
-                "valor_neto": snapshot.valor_neto,
-            }
-            for snapshot in snapshots
-        ]
-    else:
-        deltas_valorados = _enriquecer_deltas_con_valoracion(
-            db,
-            _calcular_diferencias_paloteo(db, payload.id_barra, inventario_fisico.id)
-            if inventario_fisico else [],
-        )
-    valoracion_por_producto = {
-        delta["id_producto"]: delta for delta in deltas_valorados
-    }
-    resumen_valoracion = _resumir_valoracion_varianzas(deltas_valorados)
+# Columnas del reporte de diferencias, compartidas por el PDF de Ajustes y el
+# historico para que ambos documentos se lean exactamente igual.
+# ID | COD | Producto | Paq.Pos | Paq.Bar | Det.Pos | Peso | Det.Bar | Dif.Paq | Dif.Real | Dif.Op | Valor
+_PDF_DIF_ANCHOS = [8, 14, 48, 16, 16, 19, 18, 19, 15, 20, 20, 44]  # suma = 257mm = ancho util A4 horizontal
+_PDF_DIF_TITULOS = ["ID", "COD", "PRODUCTO", "PAQ POS", "PAQ BAR", "DET POS", "PESO", "DET BAR", "DIF. PAQ.", "DIF REAL", "DIF OP", "VALOR"]
+_PDF_DIF_ALINEACION = ["R", "L", "L", "R", "R", "R", "R", "R", "R", "R", "R", "R"]
+# Jerarquía visual: ID/COD con menor peso, PRODUCTO en negrita, cantidades
+# absolutas (paq/det/peso) en texto neutro, diferencias con color semántico.
+_PDF_DIF_JERARQUIA = ["muted", "muted", "primary", "neutral", "neutral", "neutral", "neutral", "neutral", "diff", "diff", "diff", "diff"]
 
-    tipo_reporte = payload.tipo_reporte
-    if tipo_reporte == 'ingreso':
-        sufijo_archivo = '_INGRESO'
-        titulo_reporte = 'INGRESO POR AJUSTE'
-        subtitulo_reporte = 'Ajuste Ingreso'
-    elif tipo_reporte == 'salida':
-        sufijo_archivo = '_SALIDA'
-        titulo_reporte = 'SALIDA POR AJUSTE'
-        subtitulo_reporte = 'Ajuste Salida'
-    else:
-        sufijo_archivo = ''
-        titulo_reporte = 'REPORTE DE DIFERENCIAS'
-        subtitulo_reporte = 'Stock Barra vs. Stock POS'
 
-    nombre_archivo = f"PALOTEO_{payload.id_operacion}{sufijo_archivo}.pdf"
+def _renderizar_pdf_diferencias(
+    *,
+    titulo: str,
+    subtitulo: str,
+    meta: list[tuple[str, str]],
+    secciones: list[dict],
+    linea_superior: Optional[str] = None,
+    lineas_resumen: list[str] = (),
+    notas: list[str] = (),
+) -> bytes:
+    """Renderer unico del reporte de diferencias (Ajustes e historico).
 
-    ahora = datetime.now()
-    fecha_hora = ahora.strftime("%d/%m/%Y %H:%M:%S")
-
-    # Horizontal: 10 columnas (se agregaron PAQ POS/BAR y DET POS/BAR) no entran
-    # con un ancho legible en A4 vertical (170mm utiles).
+    secciones: lista de {"titulo": str | None, "filas": [...]}; las vacias se
+    omiten. Cada fila trae id_producto, codigo, nombre, paq_pos, paq_bar,
+    det_pos, peso_gramos, det_bar, dif_paq, dif_real, dif_op, valor_neto y
+    estado_valoracion (None en cualquier campo = celda vacia).
+    """
+    # Horizontal: 12 columnas no entran con un ancho legible en A4 vertical.
     pdf = _ReportePDF(orientation="L", unit="mm", format="A4")
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.alias_nb_pages()  # habilita el placeholder {nb} (total de paginas)
@@ -2669,144 +2676,369 @@ def exportar_pdf_paloteo3(
     pdf.set_font(_FONT_FAMILY, "B", 10)
     pdf.set_text_color(51, 51, 51)
     pdf.set_xy(20, 13)
-    pdf.cell(ancho_util, 5, titulo_reporte, align="R")
+    pdf.cell(ancho_util, 5, titulo, align="R")
     pdf.set_xy(20, 18)
-    pdf.cell(ancho_util, 5, subtitulo_reporte, align="R")
+    pdf.cell(ancho_util, 5, subtitulo, align="R")
 
     # línea divisoria
     pdf.set_draw_color(200, 200, 200)
     pdf.line(20, 28, x_derecha, 28)
     pdf.ln(20)
 
-    # — Metadata —
+    # — Metadata (dos columnas) —
     pdf.set_text_color(34, 34, 34)
-    meta = [
-        ("Generado:", fecha_hora),
-        ("Usuario:", payload.usuario),
-        ("Operativa:", str(payload.id_operacion)),
-        ("Barra:", str(payload.id_barra)),
-    ]
-    label_w, value_w, row_h = 24, 61, 6
+    label_w, value_w, meta_h = 24, 61, 6
     meta_y0 = pdf.get_y()
     for i, (etiqueta, valor) in enumerate(meta):
         x = 20 + (label_w + value_w) * (i % 2)
-        y = meta_y0 + (i // 2) * row_h
+        y = meta_y0 + (i // 2) * meta_h
         pdf.set_xy(x, y)
         pdf.set_font(_FONT_FAMILY, "B", 9)
-        pdf.cell(label_w, row_h, etiqueta)
+        pdf.cell(label_w, meta_h, etiqueta)
         pdf.set_font(_FONT_FAMILY, "", 9)
-        pdf.cell(value_w, row_h, valor)
-    pdf.set_y(meta_y0 + (len(meta) // 2) * row_h + 4)
+        pdf.cell(value_w, meta_h, valor)
+    pdf.set_y(meta_y0 + ((len(meta) + 1) // 2) * meta_h + 4)
+    if linea_superior:
+        pdf.set_font(_FONT_FAMILY, "B", 8.5)
+        pdf.set_text_color(51, 51, 51)
+        pdf.cell(ancho_util, 5, linea_superior)
+        pdf.ln(5)
     pdf.ln(6)
 
-    # — Tabla —
-    # ID | COD | Producto | Paq.Pos | Paq.Bar | Det.Pos | Peso | Det.Bar | Dif.Paq | Dif.Real | Dif.Op | Valor
-    col_widths = [8, 14, 48, 16, 16, 19, 18, 19, 15, 20, 20, 44]  # suma = 257mm = ancho_util
-    headers    = ["ID", "COD", "PRODUCTO", "PAQ POS", "PAQ BAR", "DET POS", "PESO", "DET BAR", "DIF. PAQ.", "DIF REAL", "DIF OP", "VALOR"]
-    aligns     = ["R", "L", "L", "R", "R", "R", "R", "R", "R", "R", "R", "R"]
-    # Jerarquía visual: ID/COD con menor peso, PRODUCTO en negrita, cantidades
-    # absolutas (paq/det/peso) en texto neutro, diferencias con color semántico.
-    jerarquias = ["muted", "muted", "primary", "neutral", "neutral", "neutral", "neutral", "neutral", "diff", "diff", "diff", "diff"]
     row_h = 7
 
-    # cabecera de tabla (definida como helper para redibujarla en cada pagina
-    # nueva: fpdf2 hace el salto de pagina automatico pero no repite el encabezado).
+    # cabecera de tabla (helper para redibujarla en cada pagina nueva: fpdf2
+    # hace el salto de pagina automatico pero no repite el encabezado).
     def dibujar_cabecera_tabla():
         pdf.set_fill_color(242, 242, 242)
         pdf.set_draw_color(204, 204, 204)
         pdf.set_text_color(17, 17, 17)
         pdf.set_font(_FONT_FAMILY, "B", 7.5)
-        for w, h, a in zip(col_widths, headers, aligns):
+        for w, h, a in zip(_PDF_DIF_ANCHOS, _PDF_DIF_TITULOS, _PDF_DIF_ALINEACION):
             pdf.cell(w, row_h, h, border=1, align=a, fill=True)
         pdf.ln()
 
-    dibujar_cabecera_tabla()
-
-    # filas de datos
-    for idx, fila in enumerate(payload.filas):
-        # Si la proxima fila no entra en la pagina, saltar manualmente y repetir
-        # la cabecera arriba (nos adelantamos al auto page break de fpdf2, que
-        # crearia la pagina sin encabezado de tabla).
-        if pdf.get_y() + row_h > pdf.page_break_trigger:
+    for seccion in secciones:
+        filas = seccion["filas"]
+        if not filas:
+            continue
+        titulo_seccion = seccion.get("titulo")
+        # Titulo + cabecera + al menos una fila juntos: nunca un titulo huerfano
+        # al pie de una pagina.
+        if pdf.get_y() + row_h * 2 + (7 if titulo_seccion else 0) > pdf.page_break_trigger:
             pdf.add_page()
-            dibujar_cabecera_tabla()
+        if titulo_seccion:
+            pdf.set_font(_FONT_FAMILY, "B", 9)
+            pdf.set_text_color(51, 51, 51)
+            pdf.cell(ancho_util, 6, titulo_seccion)
+            pdf.ln(7)
+        dibujar_cabecera_tabla()
 
-        dif_oz_exacta = fila.difOnzasExactas if fila.difOnzasExactas is not None else fila.difOnzas
-        dif_oz_pos = fila.difOnzasPos
-        if dif_oz_pos is None and dif_oz_exacta is not None:
-            # Unificamos granularidad con POS: incrementos de 0.5 oz.
-            dif_oz_pos = round(dif_oz_exacta * 2.0) * 0.5
+        for idx, fila in enumerate(filas):
+            # Si la proxima fila no entra en la pagina, saltar manualmente y
+            # repetir la cabecera arriba (nos adelantamos al auto page break de
+            # fpdf2, que crearia la pagina sin encabezado de tabla).
+            if pdf.get_y() + row_h > pdf.page_break_trigger:
+                pdf.add_page()
+                dibujar_cabecera_tabla()
 
-        valoracion = valoracion_por_producto.get(int(fila.idProducto))
-        valor_neto = valoracion["valor_neto"] if valoracion else None
-        estado_valoracion = valoracion["estado_valoracion"] if valoracion else "SIN_WAC"
+            valor_neto = fila["valor_neto"]
+            valores = [
+                fila["id_producto"],
+                fila["codigo"] or "",
+                fila["nombre"],
+                _fmt_cantidad_paq(fila["paq_pos"]),
+                _fmt_cantidad_paq(fila["paq_bar"]),
+                _fmt_cantidad_oz(fila["det_pos"]),
+                _fmt_peso_gramos(fila["peso_gramos"]),
+                _fmt_cantidad_oz(fila["det_bar"]),
+                _fmt_diff_paq(fila["dif_paq"]),
+                _fmt_diff_oz(fila["dif_real"]),
+                _fmt_diff_oz(fila["dif_op"]),
+                _fmt_valor_varianza(valor_neto, fila["estado_valoracion"]),
+            ]
+            colores = [
+                None, None, None,
+                None, None, None, None, None,
+                _color_diferencia(fila["dif_paq"]) if fila["dif_paq"] is not None else None,
+                _color_diferencia(fila["dif_real"]) if fila["dif_real"] is not None else None,
+                _color_diferencia(fila["dif_op"]) if fila["dif_op"] is not None else None,
+                _color_diferencia(valor_neto) if valor_neto is not None else None,
+            ]
 
-        valores = [
-            fila.idProducto,
-            fila.codigo,
-            fila.nombre,
-            _fmt_cantidad_paq(fila.paqPos),
-            _fmt_cantidad_paq(fila.paqBar),
-            _fmt_cantidad_oz(fila.detPos),
-            _fmt_peso_gramos(fila.pesoGramos),
-            _fmt_cantidad_oz(fila.detBar),
-            _fmt_diff_paq(fila.difUnidades),
-            _fmt_diff_oz(dif_oz_exacta),
-            _fmt_diff_oz(dif_oz_pos),
-            _fmt_valor_varianza(valor_neto, estado_valoracion),
-        ]
-        colores = [
-            None, None, None,
-            None, None, None, None, None,
-            _color_diferencia(fila.difUnidades) if fila.difUnidades is not None else None,
-            _color_diferencia(dif_oz_exacta) if dif_oz_exacta is not None else None,
-            _color_diferencia(dif_oz_pos) if dif_oz_pos is not None else None,
-            _color_diferencia(valor_neto) if valor_neto is not None else None,
-        ]
+            fondo = (245, 245, 245) if idx % 2 == 1 else (255, 255, 255)
+            pdf.set_fill_color(*fondo)
 
-        fondo = (245, 245, 245) if idx % 2 == 1 else (255, 255, 255)
-        pdf.set_fill_color(*fondo)
+            for w, val, align, color, jerarquia in zip(
+                _PDF_DIF_ANCHOS, valores, _PDF_DIF_ALINEACION, colores, _PDF_DIF_JERARQUIA
+            ):
+                if color:
+                    pdf.set_text_color(*color)
+                    pdf.set_font(_FONT_FAMILY, "B", 7.5)
+                elif jerarquia == "muted":
+                    pdf.set_text_color(90, 90, 90)
+                    pdf.set_font(_FONT_FAMILY, "", 7)
+                elif jerarquia == "primary":
+                    pdf.set_text_color(17, 17, 17)
+                    pdf.set_font(_FONT_FAMILY, "B", 8)
+                elif jerarquia == "neutral":
+                    pdf.set_text_color(85, 85, 85)
+                    pdf.set_font(_FONT_FAMILY, "", 7.5)
+                else:
+                    pdf.set_text_color(17, 17, 17)
+                    pdf.set_font(_FONT_FAMILY, "", 7.5)
+                pdf.cell(w, row_h, str(val), border=1, align=align, fill=True)
+            pdf.ln()
+        pdf.ln(4)
 
-        for w, val, align, color, jerarquia in zip(col_widths, valores, aligns, colores, jerarquias):
-            if color:
-                pdf.set_text_color(*color)
-                pdf.set_font(_FONT_FAMILY, "B", 7.5)
-            elif jerarquia == "muted":
-                pdf.set_text_color(90, 90, 90)
-                pdf.set_font(_FONT_FAMILY, "", 7)
-            elif jerarquia == "primary":
-                pdf.set_text_color(17, 17, 17)
-                pdf.set_font(_FONT_FAMILY, "B", 8)
-            elif jerarquia == "neutral":
-                pdf.set_text_color(85, 85, 85)
-                pdf.set_font(_FONT_FAMILY, "", 7.5)
-            else:
-                pdf.set_text_color(17, 17, 17)
-                pdf.set_font(_FONT_FAMILY, "", 7.5)
-            pdf.cell(w, row_h, str(val), border=1, align=align, fill=True)
-        pdf.ln()
-
-    pdf.ln(4)
-    pdf.set_font(_FONT_FAMILY, "B", 8)
-    pdf.set_text_color(51, 51, 51)
-    resumen_pdf = (
-        f"FALTANTES: -{resumen_valoracion['faltantes']:.2f} Bs    "
-        f"SOBRANTES: +{resumen_valoracion['sobrantes']:.2f} Bs    "
-        f"NETO: {resumen_valoracion['neto']:+.2f} Bs"
-    )
-    pdf.cell(ancho_util, 5, resumen_pdf, align="R")
-    if resumen_valoracion["productos_sin_valoracion"]:
+    for linea in lineas_resumen:
+        pdf.set_font(_FONT_FAMILY, "B", 8)
+        pdf.set_text_color(51, 51, 51)
+        pdf.cell(ancho_util, 5, linea, align="R")
         pdf.ln(5)
+    for nota in notas:
         pdf.set_font(_FONT_FAMILY, "", 7)
         pdf.set_text_color(90, 90, 90)
-        pdf.cell(
-            ancho_util,
-            4,
-            f"{resumen_valoracion['productos_sin_valoracion']} producto(s) sin valoración por WAC o rendimiento inválido.",
-            align="R",
+        pdf.cell(ancho_util, 4, nota, align="R")
+        pdf.ln(4)
+
+    return bytes(pdf.output())
+
+
+def _obtener_ultima_captura_cruda_por_producto(db: Session, id_operacion: int) -> dict[int, dict]:
+    """Ultima captura cruda por producto (misma regla "ultima gana" que
+    _obtener_pesos_crudos_por_producto): onzas exactas y peso total, para las
+    columnas PESO y DIF REAL. app_paloteo_registro_crudo no guarda id_barra."""
+    registros = db.query(models.PaloteoRegistroCrudo).filter(
+        models.PaloteoRegistroCrudo.id_operacion == id_operacion
+    ).order_by(models.PaloteoRegistroCrudo.id.desc()).all()
+
+    capturas = {}
+    for registro in registros:
+        if registro.id_producto in capturas:
+            continue
+        try:
+            pesos = json.loads(registro.pesos_abiertas) if registro.pesos_abiertas else []
+        except (TypeError, json.JSONDecodeError):
+            pesos = []
+        capturas[registro.id_producto] = {
+            "onzas": float(registro.onzas_calculadas) if registro.onzas_calculadas is not None else None,
+            "peso_gramos": _peso_total_crudo(pesos),
+        }
+    return capturas
+
+
+def _obtener_filas_reporte_ajustes(db: Session, id_operacion: int, id_barra: int) -> Optional[dict]:
+    """Filas y totales del reporte de diferencias de Ajustes, armados en el servidor.
+
+    Filas y totales salen de la misma fuente, para que el PDF nunca muestre un
+    total que sus filas no explican. Antes las filas las armaba el navegador
+    desde las tarjetas en pantalla mientras el total salia de BD: en la
+    operativa 1306 faltaba la fila de HAVANA 7A (-1 botella, -140 Bs) pero el
+    total de FALTANTES si la contaba.
+
+    - Universo: todo producto contado (bar_detalle_fisico HAB), con o sin
+      diferencia: el paloteo es justamente lo que demuestra que cuadra.
+    - Ajuste aplicado: deltas y valoracion desde el snapshot congelado
+      (analytics_varianza_inventario). Un producto contado sin snapshot no
+      tenia diferencia al aplicar (aplicar congela todo delta != 0) y va en cero.
+    - Sin aplicar: _calcular_diferencias_paloteo con la valoracion vigente, lo
+      mismo que muestra el preview y lo que ejecutaria aplicar.
+
+    Devuelve None si no hay paloteo registrado para la operativa/barra.
+    """
+    inventario_fisico = db.query(models.InventarioFisicoPOS).filter(
+        models.InventarioFisicoPOS.id_operacion == id_operacion,
+        models.InventarioFisicoPOS.id_barra == id_barra,
+        models.InventarioFisicoPOS.estado == 'HAB',
+    ).first()
+    if not inventario_fisico:
+        return None
+
+    deltas = _calcular_diferencias_paloteo(db, id_barra, inventario_fisico.id)
+    control_aplicado = _obtener_control_aplicado(db, id_operacion, id_barra, inventario_fisico.id)
+    if control_aplicado:
+        snapshots = {
+            snapshot.id_producto: snapshot
+            for snapshot in db.query(models.VarianzaInventario).filter(
+                models.VarianzaInventario.id_control_ajuste == control_aplicado.id
+            ).all()
+        }
+        for delta in deltas:
+            snapshot = snapshots.get(delta["id_producto"])
+            if snapshot is None:
+                delta.update({
+                    "delta_paq": 0.0, "delta_det_exacto": 0.0, "delta_det_operativo": 0.0,
+                    "estado_valoracion": "VALORIZADO", "valor_neto": 0.0,
+                })
+            else:
+                delta.update({
+                    "delta_paq": float(snapshot.delta_paq),
+                    "delta_det_exacto": float(snapshot.delta_det_exacto),
+                    "delta_det_operativo": float(snapshot.delta_det_operativo),
+                    "estado_valoracion": snapshot.estado_valoracion,
+                    "valor_neto": float(snapshot.valor_neto) if snapshot.valor_neto is not None else None,
+                })
+        valoracion = _resumir_valoracion_varianzas([
+            {"estado_valoracion": snapshot.estado_valoracion, "valor_neto": snapshot.valor_neto}
+            for snapshot in snapshots.values()
+        ])
+    else:
+        deltas = _enriquecer_deltas_con_valoracion(db, deltas)
+        valoracion = _resumir_valoracion_varianzas(deltas)
+
+    productos = {}
+    ids_producto = [delta["id_producto"] for delta in deltas]
+    if ids_producto:
+        productos = {
+            fila["id"]: fila
+            for fila in db.execute(
+                text("SELECT id, codigo, nombre FROM alm_producto WHERE id IN :ids")
+                .bindparams(bindparam("ids", expanding=True)),
+                {"ids": ids_producto},
+            ).mappings().all()
+        }
+    capturas = _obtener_ultima_captura_cruda_por_producto(db, id_operacion)
+
+    filas = []
+    for delta in deltas:
+        producto = productos.get(delta["id_producto"]) or {}
+        pesable = delta["pesable"] == 1
+        ideal_paq = delta["real_paq"] - delta["delta_paq"]
+        ideal_det = delta["real_det"] - delta["delta_det_exacto"]
+        captura = capturas.get(delta["id_producto"]) if pesable else None
+        dif_real = None
+        if pesable:
+            # DIF REAL: onzas exactas de la balanza contra el ideal; sin captura
+            # cruda, el delta sobre lo registrado (ya en grilla POS).
+            dif_real = (
+                captura["onzas"] - ideal_det
+                if captura and captura["onzas"] is not None
+                else delta["delta_det_exacto"]
+            )
+        filas.append({
+            "id_producto": delta["id_producto"],
+            "codigo": producto.get("codigo") or "",
+            "nombre": producto.get("nombre") or "",
+            "paq_pos": ideal_paq,
+            "paq_bar": delta["real_paq"],
+            # Los no pesables se cuentan en unidades: sin columnas de onzas.
+            "det_pos": ideal_det if pesable else None,
+            "peso_gramos": captura["peso_gramos"] if captura else None,
+            "det_bar": delta["real_det"] if pesable else None,
+            "dif_paq": delta["delta_paq"],
+            "dif_real": dif_real,
+            "dif_op": delta["delta_det_operativo"] if pesable else None,
+            "valor_neto": delta.get("valor_neto"),
+            "estado_valoracion": delta.get("estado_valoracion"),
+        })
+
+    return {
+        "filas": filas,
+        "valoracion": valoracion,
+        "ajuste_aplicado": control_aplicado is not None,
+    }
+
+
+def _filtrar_filas_reporte_por_tipo(filas: list[dict], tipo_reporte: str) -> list[dict]:
+    """ingreso/salida: solo las filas con esa parte del movimiento, anulando la
+    parte opuesta (mismo criterio que tenia el cliente). DIF REAL sigue a DIF OP."""
+    if tipo_reporte not in ("ingreso", "salida"):
+        return filas
+    signo = 1 if tipo_reporte == "ingreso" else -1
+    filtradas = []
+    for fila in filas:
+        paq_aplica = fila["dif_paq"] is not None and fila["dif_paq"] * signo > 0
+        det_aplica = fila["dif_op"] is not None and fila["dif_op"] * signo > 0
+        if not (paq_aplica or det_aplica):
+            continue
+        filtradas.append({
+            **fila,
+            "dif_paq": fila["dif_paq"] if paq_aplica else None,
+            "dif_op": fila["dif_op"] if det_aplica else None,
+            "dif_real": fila["dif_real"] if det_aplica else None,
+        })
+    return filtradas
+
+
+def _ordenar_filas_reporte(filas: list[dict], ordenar_por: Optional[str], orden_dir: str) -> list[dict]:
+    """Orden elegido en pantalla (por defecto nombre, como la lista de PALOTEO);
+    empates por id_producto ascendente (sorted es estable, tambien en reverse)."""
+    claves = {
+        "idProducto": lambda fila: fila["id_producto"],
+        "codigo": lambda fila: str(fila["codigo"] or "").casefold(),
+        "nombre": lambda fila: str(fila["nombre"] or "").casefold(),
+    }
+    por_id = sorted(filas, key=lambda fila: fila["id_producto"])
+    return sorted(por_id, key=claves[ordenar_por or "nombre"], reverse=orden_dir == "desc")
+
+
+@app.post("/api/paloteo3/exportar-pdf")
+def exportar_pdf_paloteo3(
+    payload: schemas.ExportarPdfRequest,
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_usuario_actual),
+):
+    reporte = _obtener_filas_reporte_ajustes(db, payload.id_operacion, payload.id_barra)
+    if reporte is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No hay paloteo registrado para esta operativa y barra. Registra el paloteo antes de exportar el PDF.",
         )
 
-    pdf_bytes = bytes(pdf.output())
+    tipo_reporte = payload.tipo_reporte
+    filas = _ordenar_filas_reporte(
+        _filtrar_filas_reporte_por_tipo(reporte["filas"], tipo_reporte),
+        payload.ordenar_por,
+        payload.orden_dir,
+    )
+    if not filas:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "ingreso": "No hay productos con ingreso por ajuste (sobrantes) para exportar.",
+                "salida": "No hay productos con salida por ajuste (faltantes) para exportar.",
+            }.get(tipo_reporte, "El paloteo registrado no tiene productos contados para exportar."),
+        )
+
+    if tipo_reporte == 'ingreso':
+        sufijo_archivo = '_INGRESO'
+        titulo_reporte = 'INGRESO POR AJUSTE'
+        subtitulo_reporte = 'Ajuste Ingreso'
+    elif tipo_reporte == 'salida':
+        sufijo_archivo = '_SALIDA'
+        titulo_reporte = 'SALIDA POR AJUSTE'
+        subtitulo_reporte = 'Ajuste Salida'
+    else:
+        sufijo_archivo = ''
+        titulo_reporte = 'REPORTE DE DIFERENCIAS'
+        subtitulo_reporte = 'Stock Barra vs. Stock POS'
+
+    nombre_archivo = f"PALOTEO_{payload.id_operacion}{sufijo_archivo}.pdf"
+    resumen_valoracion = reporte["valoracion"]
+    notas = []
+    if resumen_valoracion["productos_sin_valoracion"]:
+        notas.append(
+            f"{resumen_valoracion['productos_sin_valoracion']} producto(s) sin valoración por WAC o rendimiento inválido."
+        )
+
+    pdf_bytes = _renderizar_pdf_diferencias(
+        titulo=titulo_reporte,
+        subtitulo=subtitulo_reporte,
+        meta=[
+            ("Generado:", datetime.now().strftime("%d/%m/%Y %H:%M:%S")),
+            ("Usuario:", payload.usuario),
+            ("Operativa:", str(payload.id_operacion)),
+            ("Barra:", str(payload.id_barra)),
+        ],
+        secciones=[{"titulo": None, "filas": filas}],
+        lineas_resumen=[
+            f"FALTANTES: -{resumen_valoracion['faltantes']:.2f} Bs    "
+            f"SOBRANTES: +{resumen_valoracion['sobrantes']:.2f} Bs    "
+            f"NETO: {resumen_valoracion['neto']:+.2f} Bs"
+        ],
+        notas=notas,
+    )
 
     return Response(
         content=pdf_bytes,

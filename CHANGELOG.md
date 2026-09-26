@@ -11,6 +11,10 @@ separado con git tags semanticos (`vMAJOR.MINOR.PATCH`) — ver seccion
 version productiva en uso real), corresponde a este mismo punto de la
 historia, `## 12.2` de abajo.
 
+## 12.34
+- Ajustes: el PDF arma sus filas en el servidor desde el paloteo registrado, con la misma fuente que los totales; incluye todo producto contado (con o sin diferencia). Antes las filas salian de la pantalla y en la operativa 1306 faltaba HAVANA 7A (-140 Bs) aunque el total la contaba.
+- Paloteo: `/pendientes?id_operacion=` suma los productos ya contados sin movimiento (agregados a mano), que desaparecian de PALOTEO al recargar. Una variacion operativa cero vale 0 Bs aunque falte WAC (ya no cuenta como "sin valoracion").
+
 ## 12.33
 - BD: la URL de conexion se arma con `sqlalchemy.engine.URL.create` (`config.py`), que escapa usuario/contrasena; antes una contrasena con `@`, `:`, `/` o `#` rompia el parseo.
 - Paloteo: `POST /api/inventario/paloteo` bloquea la fila de `ope_operacion` (`FOR UPDATE`) y hace lectura actual de la cabecera existente, de modo que dos capturas simultaneas de la misma operativa ya no pueden crear dos cabeceras en `bar_inventario_fisico`; la segunda recibe 409.
