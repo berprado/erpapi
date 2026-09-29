@@ -440,7 +440,7 @@ Ejemplo:
 | `peso_bruto` | DECIMAL(10,2) | SÍ | Peso total cuando la botella está **llena** |
 | `tara` | DECIMAL(10,2) | SÍ | Peso de la botella **vacía** |
 | `gramos_por_oz` | DECIMAL(10,6) | SÍ | Factor de conversión gramos/oz. **Calculado por el backend**, no editable por el usuario: `(peso_bruto - tara) / volumen_estandar_oz`, donde `volumen_estandar_oz` es `alm_producto.cantidad_detalle` del mismo producto |
-| `barcode` | VARCHAR(50) | SÍ | Código de barras del modelo de botella. Opcional; si no se especifica al crear, se copia el de otro perfil existente del mismo producto (si hay) |
+| `barcode` | VARCHAR(50) | SÍ | Código de barras del modelo de botella. Opcional; si no se especifica al crear, se copia el de otro perfil existente del mismo producto (si hay). **Sin uso funcional hoy**: se guarda y se edita, pero ninguna funcionalidad (escaneo, búsqueda, selección de modelo) lo lee |
 | `tolerancia_oz` | DECIMAL(10,2) | SÍ | Columna **vestigial**: sigue existiendo y se selecciona/mapea, pero su valor almacenado nunca se usa. Desde v10.39 la tolerancia operativa real es un valor plano de **0.5 oz para todo producto `pesable=1`** (sin distinción por categoría) y `0.0` para no pesables, calculado en runtime por `_obtener_tolerancia_operativa_oz` y no leído de esta columna. Ver `documentos/redondeo_y_tolerancia.md` |
 | `pesable` | INT (TINYINT) | SÍ | **0** = No pesable, **1** = Pesable |
 | `estado` | VARCHAR(3) | NO | **'HAB'** (default) = activo, **'DES'** = eliminado lógicamente (soft-delete) desde el módulo PESAJE |
@@ -619,35 +619,40 @@ configs = db.query(ProductoPesajeConfig).filter(
     ProductoPesajeConfig.id_producto_almacen == 456
 ).all()
 
-config_base = configs[0]
-perfiles = [cfg for cfg in configs if cfg.pesable == 1]
+# Solo los perfiles pesable=1, ordenados por id (perfil_index se resuelve sobre este orden).
+# No se usa la "primera fila" de configs: puede ser una fila fantasma pesable=0 (ver CHANGELOG 12.7).
+perfiles = sorted([cfg for cfg in configs if cfg.pesable == 1], key=lambda cfg: cfg.id or 0)
 
 # 2. Calcular onzas
 total_onzas = 0.0
-margen_error = 10.0  # gramos
+margen_error_balanza = 10.0  # gramos
 
 for abierta in pesos_abiertas:  # [950, 945]
-    # Obtener perfil
+    # Obtener perfil: primero por perfil_id, luego por perfil_index; si no hay, 400
     perfil = obtener_perfil(perfiles, abierta.perfil_id, abierta.perfil_index)
-    
-    # Validar peso
+    # Perfil incompleto (tara NULL, peso_bruto/gramos_por_oz NULL o <= 0) -> 400
+
     tara = float(perfil.tara)  # 250
     gramos_oz = float(perfil.gramos_por_oz)  # 28.349523
     peso_medido = float(abierta.peso)  # 950
-    
-    if peso_medido >= (tara - margen_error):  # 950 >= 240
+    # peso_medido > peso_bruto del perfil -> 400
+
+    # NO es una validacion: si el peso queda bajo tara - 10 g, la botella
+    # se omite en silencio (aporta 0 oz). Validacion pendiente, ver TODO.md.
+    if peso_medido >= (tara - margen_error_balanza):  # 950 >= 240
         peso_liquido = max(0, peso_medido - tara)  # 950 - 250 = 700
-        onzas = peso_liquido / gramos_oz  # 700 / 28.349523 = 24.701...
+        onzas = peso_liquido / gramos_oz  # 700 / 28.349523 = 24.692...
+        # onzas > onzas_por_botella_llena (volumen del producto) -> 400
         total_onzas += onzas
 
 # Ejemplo con 2 botellas:
-# Botella 1: (950 - 250) / 28.349523 = 24.701 oz
-# Botella 2: (945 - 250) / 28.349523 = 24.556 oz
-# Total: 49.257 oz
+# Botella 1: (950 - 250) / 28.349523 = 24.692 oz
+# Botella 2: (945 - 250) / 28.349523 = 24.515 oz
+# Total: 49.207 oz
 
-# 3. Redondear para POS
-onzas_redondeadas = round(total_onzas * 2) / 2
-# 49.257 * 2 = 98.514 → round(98.514) = 99 → 99 / 2 = 49.50
+# 3. Redondear para POS: una sola vez sobre el total, HALF_UP a 0.5 oz (Decimal, no round())
+onzas_redondeadas = _redondear_media_onza_half_up(total_onzas)
+# 49.207 * 2 = 98.414 → HALF_UP = 98 → 98 / 2 = 49.00
 ```
 
 ---
@@ -657,7 +662,7 @@ onzas_redondeadas = round(total_onzas * 2) / 2
 ```python
 nuevo_detalle = DetalleFisicoPOS(
     cantidad_unidad=12,  # botellas_cerradas
-    cantidad_detalle=49.50,  # onzas redondeadas
+    cantidad_detalle=49.00,  # onzas redondeadas
     id_producto=456,
     id_inventario_fisico=1,  # FK a cabecera
     usuario_reg="bernardo.prado",
@@ -670,7 +675,7 @@ db.add(nuevo_detalle)
 **En base de datos:**
 ```
 INSERT INTO bar_detalle_fisico (...)
-VALUES (1, 12, 49.50, 456, 1, "bernardo.prado", 2026-05-09, 'HAB')
+VALUES (1, 12, 49.00, 456, 1, "bernardo.prado", 2026-05-09, 'HAB')
 ```
 
 ---
@@ -686,7 +691,7 @@ registro_crudo = PaloteoRegistroCrudo(
         {"peso": 950, "perfil_id": 1, "perfil_index": 0},
         {"peso": 945, "perfil_id": 1, "perfil_index": 0}
     ]),
-    onzas_calculadas=49.257,  # Exacto, NO redondeado
+    onzas_calculadas=49.207,  # Exacto, NO redondeado
     usuario_reg="bernardo.prado",
     fecha_reg=datetime.now()  # DATETIME con minutos/segundos
 )
@@ -696,7 +701,7 @@ db.add(registro_crudo)
 **En base de datos:**
 ```
 INSERT INTO app_paloteo_registro_crudo (...)
-VALUES (1, 42, 456, 12, '[{"peso": 950, ...}]', 49.257, 
+VALUES (1, 42, 456, 12, '[{"peso": 950, ...}]', 49.207, 
         "bernardo.prado", 2026-05-09 14:35:22)
 ```
 
@@ -716,7 +721,7 @@ db.commit()  # Aplica todos los INSERT
     {
       "id_producto": 456,
       "onzas_exactas": 49.26,
-      "onzas_pos": 49.50
+      "onzas_pos": 49.00
     }
   ]
 }
@@ -776,13 +781,15 @@ class PesoAbierta:
 ### 4. **Margen de Error en Balanza**
 
 ```python
-margen_error_balanza = 10.0  # gramos
+margen_error_balanza = 10.0  # gramos (fijo en código, igual en backend y frontend)
 
-# Un peso se considera válido si:
-if peso_medido >= (tara - margen_error):
-    # Ejemplo: tara=250, margen=10
-    # Válido si peso >= 240 (permite tolerancia de balanza)
+if peso_medido >= (tara - margen_error_balanza):
+    # Ejemplo: tara=250 -> se suma si peso >= 240
+    ...
+# si no: la botella se omite y aporta 0 oz, SIN error ni advertencia
 ```
+
+La validación `peso ≥ tara − 10 g` todavía no está implementada y forma parte de la hoja de ruta del proyecto (ver `TODO.md`). Hoy el umbral solo decide si la botella suma o se omite en silencio.
 
 ---
 
@@ -819,14 +826,14 @@ if peso_medido >= (tara - margen_error):
 
 | Botella | Peso Medido | Tara | Peso Líquido | Onzas |
 |---------|------------|------|--------------|-------|
-| 1 | 950 | 250 | 700 | 24.701 |
-| 2 | 945 | 250 | 695 | 24.532 |
-| **TOTAL** | - | - | - | **49.233** |
+| 1 | 950 | 250 | 700 | 24.692 |
+| 2 | 945 | 250 | 695 | 24.515 |
+| **TOTAL** | - | - | - | **49.207** |
 
 **Redondeo para POS:**
 ```
-49.233 * 2 = 98.466
-round(98.466) = 98
+49.207 * 2 = 98.414
+HALF_UP(98.414) = 98
 98 / 2 = 49.00 oz
 ```
 
@@ -846,7 +853,7 @@ id_inventario_fisico: 1
 
 **app_paloteo_registro_crudo:**
 ```
-id: 1, id_operacion: 42, id_producto: 456, onzas_calculadas: 49.233,
+id: 1, id_operacion: 42, id_producto: 456, onzas_calculadas: 49.207,
 pesos_abiertas: "[{peso: 950, ...}, {peso: 945, ...}]"
 ```
 
@@ -1067,18 +1074,9 @@ Respuesta:
 
 ### P2: ¿Qué pasa si la balanza falla durante el pesaje?
 
-**R:** El sistema tiene tolerancia:
+**R:** Hoy el sistema solo protege el extremo superior: un peso mayor al `peso_bruto` del modelo, o que da más onzas que la capacidad de la botella, se rechaza en frontend y backend.
 
-```python
-margen_error = 10.0  # gramos
-
-if peso_medido >= (tara - 10):
-    # Se acepta (permite error de ±10g de la balanza)
-else:
-    # Se rechaza como inválido
-```
-
-El usuario recibe una advertencia visual en el frontend si el peso es sospechoso.
+En el extremo inferior no hay protección todavía. Un peso menor a `tara − 10 g` (por ejemplo, 95 g en vez de 950 g) **no se rechaza ni genera advertencia**: la botella se omite y aporta 0 oz. La validación `peso ≥ tara − 10 g` todavía no está implementada y forma parte de la hoja de ruta del proyecto (ver `TODO.md`).
 
 ---
 

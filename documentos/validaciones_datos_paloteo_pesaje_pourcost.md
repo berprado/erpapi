@@ -40,7 +40,7 @@ El módulo de paloteo permite el registro y corrección del inventario físico e
 4. **Prevención de Registros Duplicados:**
    - En `POST /api/inventario/paloteo`, la API verifica que no exista previamente una cabecera habilitada (`estado='HAB'`) para ese `id_operacion`. Si ya existe, responde `409 Conflict`.
 5. **Validaciones de Balanza y Margen de Error por Botella:**
-   - **Tolerancia de Balanza:** Se valida que $\text{peso\_medido} \ge (\text{tara} - 10\text{g})$. Si es menor a la tara menos $10\text{g}$, la diferencia líquida se calcula como $0$.
+   - **Tolerancia de Balanza (pendiente):** la validación $\text{peso\_medido} \ge (\text{tara} - 10\text{g})$ todavía no está implementada y forma parte de la hoja de ruta del proyecto (ver `TODO.md`). Hoy, si el peso es menor a la tara menos $10\text{g}$, la botella se omite y aporta $0$ oz, sin error ni advertencia.
    - **Verificación de Incompletos:** Si un producto pesable tiene un perfil incompleto (`tara IS NULL`, `peso_bruto <= 0` o `gramos_por_oz <= 0`), la API rechaza el registro con `400 Bad Request`.
    - **Exceso de Peso y Capacidad:** Backend vuelve a validar de forma independiente que ningún peso medido supere el peso bruto del perfil ni que las onzas calculadas superen la capacidad de la botella. Si ocurre, retorna `400 Bad Request`.
 

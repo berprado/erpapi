@@ -11,6 +11,13 @@ separado con git tags semanticos (`vMAJOR.MINOR.PATCH`) — ver seccion
 version productiva en uso real), corresponde a este mismo punto de la
 historia, `## 12.2` de abajo.
 
+## 12.36
+- Docs (pesaje multibotella / modelos de botella): se elimina `documentos/agregar_mas_de_una_botella_por_producto_para_pesar.md` (especificacion original, reemplazada por `proceso_paloteo_multiples_botellas_y_estimacion_categorias.md`; su codigo de ejemplo era obsoleto). El documento de proceso ahora describe el comportamiento real: `gramos_por_oz` calculado siempre con el volumen del producto (limitacion para modelos de otro volumen, caso traspaso BRANCA 750ML -> 1LT), `barcode` sin uso funcional, auditoria cruda de una fila por producto y envio (sin tara/g-oz por botella) y precarga de correccion completa.
+- Docs: la regla `peso >= tara - 10 g` se documenta como validacion pendiente (hoy la botella se omite en silencio) en README, DOCUMENTACION_ALMACENAMIENTO_PALOTEO y validaciones_datos_paloteo_pesaje_pourcost; se corrige la aritmetica y el pseudocodigo de los ejemplos de DOCUMENTACION_ALMACENAMIENTO_PALOTEO (redondeo HALF_UP, sin `configs[0]`).
+- Docs: `ux_pesaje_recomendaciones.md` marca como resueltos los hallazgos ya implementados en 12.3/12.4. TODO: se cierra la precarga de correccion multibotella y se agregan la validacion `tara - 10 g`, el snapshot por botella en la auditoria cruda y los modelos de volumen distinto.
+- `sw.js?v=` en `index.html` vuelve a quedar sincronizado con `CACHE_NAME` (estaba en 12.30).
+- TODO: la actualizacion de precision ML->OZ figura como aplicada en produccion (confirmado 2026-09-28), con la regla `cantidad_detalle = HALF_UP_0.5(ml / 29.5735)` documentada; queda confirmar la segunda sucursal.
+
 ## 12.35
 - Historico: el PDF y la pantalla toman la estructura del reporte de Ajustes (mismo renderer y columnas, VALOR desde el snapshot del ajuste aplicado, totales en Bs); muestran solo los productos contados (con o sin diferencia) y aparte los que tuvieron movimiento sin contarse. El listado de operativas ofrece solo las barras que operaron (comandas, paloteo o ventas/ingresos en su cierre).
 

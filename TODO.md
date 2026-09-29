@@ -6,11 +6,12 @@
   - **⚠️ Bug crítico encontrado y ya corregido en `test_pos` (2026-09-10), pendiente en producción Beer Garden**: `app_producto_pesaje_config` (tabla legacy de un sistema propio de casa matriz, activo ahí con 296 filas — independiente de este repo) tenía un esquema desfasado en la línea Beer Garden (columna `id_producto` en vez de `id_producto_almacen`, sin `gramos_por_oz`/`pesable`) desde que el trigger unificado se aplicó el 2026-07-30. Efecto: **cualquier INSERT o UPDATE sobre `alm_producto` fallaba** con `ERROR 1054: Unknown column 'id_producto_almacen'` al disparar el trigger — bug dormido, nadie lo notó porque nadie había dado de alta/editado un producto real en `test_pos` desde entonces. Encontrado con un sanity check real (INSERT de prueba), no con `SHOW CREATE TRIGGER` (que solo confirma que el trigger se instaló, no que funcione). Fix: `querys/fix_esquema_legacy_app_producto_pesaje_config.sql` (migra el esquema de la tabla vacía al mismo que usa casa matriz — no aplica a casa matriz, esa base ya tiene el esquema correcto y datos reales). Detalle completo en `documentos/runbook_despliegue_pesaje_unidad_medida.md` sección 3.4.
 
 - [ ] **Implementar actualización de precisión ML→OZ en PRODUCCIÓN (cuando test_pos sea estable)**
-  - **Status:** ✓ COMPLETADO EN test_pos, PENDIENTE PRODUCCIÓN
+  - **Status:** ✓ COMPLETADO EN test_pos; **aplicado en producción** (confirmado 2026-09-28 por el usuario: `alm_producto` de producción ya tiene los valores redondeados, p. ej. BRANCA 750ML = 25,50 oz y BRANCA 1LT = 34,00 oz). Pendiente solo confirmar que las **dos** sucursales productivas (casa matriz y Beer Garden) lo tienen, y cerrar este ítem.
   - **Cambios:** 306 productos con redondeo HALF_UP a 0.5 oz + 149 perfiles de pesaje recalculados
+  - **Regla resultante:** `cantidad_detalle = HALF_UP_0.5(medida_ml / 29.5735)` para todo producto con unidad de detalle en onzas. La variación aparente de ml por oz entre presentaciones (29,41 en 750 ml/1 L, 29,79 en 700 ml) es efecto de ese redondeo, no de equivalencias distintas. Los productos con unidad de detalle `86` (copas; descripción en `parameter_table`) no siguen esta regla: vinos/espumantes de 750 ml = 5 copas, SANGRIA 3LT = 24 copas.
   - **Ambientes:**
     - ✓ test_pos (remoto POS real): ACTUALIZADO Y VALIDADO (operativa 1249 completó ciclo completo)
-    - ⏳ Producción (localhost): SIN CAMBIOS, en standby
+    - ✓ Producción: aplicado (ver Status); falta confirmar la segunda sucursal
   - **Próximos pasos cuando test_pos sea confirmado estable:**
     1. Backup completo de BD producción
     2. Ejecutar `TEST_POS_UPDATE_1_alm_producto.sql` (306 updates)
@@ -162,8 +163,25 @@
 - [x] **Revisar consistencia funcional de PALOTEO 3 vs PALOTEO 1/2**
   - Resuelto: PALOTEO 3 reutiliza `leerValoresCard`/`aplicarValoresCard` (igual que el modo captura 1x1), soporta multi-botella y multi-perfil, y corrige el step de los botones +/- de peso para que sea proporcional a `gramos_por_oz`.
 
-- [ ] **Mejorar precarga de corrección para múltiples botellas abiertas**
-  - Actualmente se repone solo el primer peso/perfil; evaluar restauración completa de todas las entradas capturadas.
+- [x] **Mejorar precarga de corrección para múltiples botellas abiertas**
+  - Resuelto (verificado 2026-09-27): `preLlenarInventario()` en `static/app.js` restaura **todas** las botellas con su modelo desde la última fila de `app_paloteo_registro_crudo` del producto (`pesos_abiertas`). Solo en registros antiguos sin datos crudos reconstruye un único peso desde `onzas_pos` usando el primer modelo (compatibilidad retroactiva).
+
+- [ ] **Implementar la validación `peso ≥ tara − 10 g` por botella abierta**
+  - Hoy el umbral existe (`margen_error_balanza = 10.0` en `_procesar_items_paloteo` de `main.py`, y `margenError = 10.0` en `static/app.js`), pero **no es una validación**: una botella con `peso < tara − 10 g` se omite en silencio y aporta 0 oz, sin error ni advertencia. Típicamente es un error de digitación (ej. `95` en vez de `950`) que termina como un faltante falso en el ajuste.
+  - Definir antes de implementar: ¿error bloqueante (`400` + bloqueo en frontend, igual que `peso > peso_bruto`) o advertencia con confirmación? ¿Qué pasa con una botella realmente vacía que se pesó (peso ≈ tara, dentro del margen, hoy suma 0 oz: ¿debe seguir aceptándose o debe pedirse que se quite la fila)? ¿El margen de 10 g debe volverse configurable (ver ítem 9 de `documentos/analisis_tecnico.md`)?
+  - Alcance: backend (`POST`/`PUT /api/inventario/paloteo`) y los dos puntos del frontend que hoy aplican el umbral en PALOTEO 1/2/3 (la validación previa al envío y el recálculo en vivo de la tarjeta, ambos con `margenError = 10.0` en `static/app.js`), más tests de integración en `tests/test_integracion_paloteo.py`. La calculadora de PESAJE no aplica el umbral; decidir si debe hacerlo.
+  - La documentación ya lo describe como validación pendiente (`documentos/proceso_paloteo_multiples_botellas_y_estimacion_categorias.md` §2.2, `README.md` "Logica de Conversion de Pesos", `documentos/DOCUMENTACION_ALMACENAMIENTO_PALOTEO.md`, `documentos/validaciones_datos_paloteo_pesaje_pourcost.md`); actualizar esos textos al implementarla.
+
+- [ ] **Guardar por botella la tara, los g/oz y las onzas aplicadas en la auditoría cruda**
+  - Hoy `app_paloteo_registro_crudo.pesos_abiertas` guarda solo `[{peso, perfil_id, perfil_index}]` tal como llega del payload, más el total exacto en `onzas_calculadas`. No guarda los parámetros del modelo usados en el cálculo, así que si luego se edita (o se elimina) un modelo no se pueden reconstruir con exactitud las onzas de cada botella de un paloteo anterior.
+  - Los reportes (Ajustes, Histórico) no se ven afectados: usan el total `onzas_calculadas`. El impacto es solo forense/auditoría. Prioridad baja.
+  - Propuesta: enriquecer cada entrada del JSON en el backend con `tara`, `gramos_por_oz`, `peso_bruto`, `nombre_perfil` y `onzas` exactas (sin cambio de esquema: es una columna JSON/texto). Mantener compatibilidad de lectura con las filas viejas (`preLlenarInventario`, `_peso_total_crudo`, `_obtener_ultima_captura_cruda_por_producto`). Si se implementa "volumen por modelo" (ítem siguiente), incluir también `volumen_oz`.
+
+- [ ] **Modelos de botella con volumen distinto al del producto (caso traspaso manual BRANCA 750ML → BRANCA 1LT)** — en análisis
+  - Hoy `gramos_por_oz = (peso_bruto - tara) / alm_producto.cantidad_detalle` para **todos** los modelos del producto (`POST /api/pesaje/perfiles`, `PUT /api/pesaje/config/{id}`, y el cálculo en vivo de los modales de PESAJE). La validación de capacidad por botella también usa el volumen del producto (`onzas_por_botella_llena`), en backend y frontend.
+  - Caso real: tras un Traspaso Manual del POS, una botella física de `BRANCA 750ML` (25,5 oz) queda asignada lógicamente como `cantidad_detalle` de `BRANCA 1LT` (34 oz). Al palotear `BRANCA 1LT` hay que pesar esa botella de 750 ml, y ningún modelo actual la convierte bien (con el volumen del producto daría 720/34 = 21,18 g/oz en vez de 720/25,5 = 28,24).
+  - Alternativa en evaluación: columna opcional `volumen_oz` por modelo en `app_producto_pesaje_config_api` (`NULL` = usar `alm_producto.cantidad_detalle`, compatible con todos los perfiles existentes), usada para calcular `gramos_por_oz` y para la validación de capacidad por botella.
+  - Documentado como limitación actual en `documentos/proceso_paloteo_multiples_botellas_y_estimacion_categorias.md` §1.1.
 
 - [ ] **Verificar las validaciones implementadas en Paloteo 1, 2 y 3**
   - Repasar end-to-end (frontend y backend) las validaciones ya marcadas como resueltas en esta sección (pesos máximos, sobrecapacidad de onzas, unicidad de `id_producto`) y confirmar que se comportan igual en los tres módulos tras los cambios recientes de consistencia funcional y foco.

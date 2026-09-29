@@ -4,6 +4,8 @@
 **Fecha:** 2026-09-03 · **Versión:** 1.0  
 **Archivos analizados:** `static/index.html` (líneas 1017–1260, incluye `#panel-pesaje` y `#pesaje-modal`), `static/app.js` (líneas 644–1451), `main.py` (líneas 908–1326), `schemas.py` (líneas 60–98)
 
+> **Estado al 2026-09-27:** este documento es el análisis tal como se hizo el 2026-09-03. Desde entonces se resolvieron, según `CHANGELOG.md`: F1 (chip "Buscar" en el header del panel, 12.4), la pérdida de scroll de F2 (12.4; el fetch completo tras guardar se mantiene), F4/D3 (mensaje específico al promover, 12.4), F5 ("Eliminar" siempre visible, deshabilitado con tooltip, 12.4), F8 (error solo inline, 12.3), F9 ("Copas por botella", 12.3) y F10 (diálogo "Modelo creado", 12.3). Las marcas ✔ en los flujos de abajo indican lo ya resuelto; el resto sigue pendiente.
+
 ---
 
 ## Diagnóstico principal
@@ -43,7 +45,7 @@ El panel `#panel-pesaje` se compone de arriba a abajo:
 3. Editar el campo (peso bruto / tara / código de barras) — `gr/oz` es siempre readonly y se recalcula automáticamente
 4. Tap **"Guardar"** → PUT → diálogo de éxito → tap **"Aceptar"**
 
-⚠ Tras guardar, `cargarPesaje()` hace un fetch completo y el modal se reinicializa perdiendo la posición de scroll.
+✔ Resuelto en 12.4: tras guardar, `cargarPesaje()` sigue haciendo un fetch completo, pero el modal conserva la posición de scroll.
 
 ### Crear un nuevo modelo de botella — 7–10 pasos
 
@@ -56,7 +58,7 @@ El panel `#panel-pesaje` se compone de arriba a abajo:
 7. gr/oz se calcula automáticamente (readonly)
 8. Código de barras (opcional)
 9. Tap **"Guardar modelo"** → POST
-10. Segundo modal cierra, primero se recarga. Sin diálogo de confirmación de éxito.
+10. Segundo modal cierra, primero se recarga y se muestra el diálogo "Modelo creado" (✔ desde 12.3; antes no había confirmación).
 
 ⚠ Doble modal encadenado. Si el POST falla, el segundo modal se re-abre con el error en `#mb-error`.
 
@@ -66,7 +68,7 @@ El panel `#panel-pesaje` se compone de arriba a abajo:
 2. Tap **"Eliminar"** → diálogo de confirmación
 3. Tap **"Confirmar"** → DELETE → modal se recarga
 
-✅ Flujo correcto. El botón solo aparece cuando hay 2+ perfiles activos (sincronizado con regla del backend).
+✅ Flujo correcto. ✔ Desde 12.4 el botón está siempre visible; con un solo perfil activo aparece deshabilitado con un tooltip que explica por qué (regla del backend: no se puede eliminar el último perfil activo).
 
 ### Promover un perfil fantasma (pesable=0 → pesable=1) — 4 pasos — flujo implícito
 
@@ -75,14 +77,14 @@ El panel `#panel-pesaje` se compone de arriba a abajo:
 3. Completar peso bruto y tara
 4. Tap **"Guardar"** → backend detecta elegibilidad y cambia `pesable` a 1
 
-⚠ El producto desaparece de la vista actual sin ningún aviso. El admin puede pensar que se perdió el dato.
+✔ Resuelto en 12.4: se muestra un mensaje específico al promover. (Antes el producto desaparecía de la vista actual sin aviso.)
 
 ### Buscar por nombre — 2+ pasos — no descubrible
 
 1. Tap en el ícono de lupa en la barra superior (no hay indicación dentro del panel)
 2. El campo aparece — tipear con debounce de 350ms
 
-⚠ Función crítica para catálogos de 50+ productos, completamente no descubrible.
+✔ Resuelto en 12.4: chip "Buscar" en el header del panel como segundo punto de entrada al mismo buscador. (Antes era completamente no descubrible.)
 
 ---
 

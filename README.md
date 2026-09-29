@@ -478,7 +478,7 @@ ajuste.
 
 Para cada botella abierta:
 
-1. Se valida `peso_medido >= (tara - 10g)`.
+1. Si `peso_medido < (tara - 10g)`, la botella se omite y aporta 0 oz, sin error ni advertencia. La validacion `peso >= tara - 10g` todavia no esta implementada y forma parte de la hoja de ruta (ver `TODO.md`).
 2. Se calcula `peso_liquido = max(0, peso_medido - tara)`.
 3. Se convierte a onzas: `onzas = peso_liquido / gramos_por_oz`.
 4. Se guarda el total exacto en `app_paloteo_registro_crudo`.
