@@ -6,6 +6,9 @@ const API_BASE = `${window.location.origin}/api`;
 let currentToken = localStorage.getItem('token') || null;
 let currentOperacionId = null;
 let currentIdInventarioPOS = null; // Guardamos el ID del inventario ya registrado para correcciones
+// true cuando el backend ya respondio (200/404) si la barra tiene inventario:
+// solo sin esa respuesta se usa el id_inventario_pos guardado en el borrador.
+let inventarioExistenteConsultado = false;
 let operativaPermitePaloteo = false;
 let currentEstadoOperacion = null; // estado_operacion crudo (22/23/24/...) de la operativa activa
 let idBarraActual = 1;
@@ -354,7 +357,9 @@ function hydrateAutosaveDraft() {
             return;
         }
 
-        if (snapshot.id_inventario_pos && !currentIdInventarioPOS) {
+        // Con respuesta del backend, su 404 manda: un borrador guardado en modo
+        // correccion podia traer el inventario de otra barra de la operativa.
+        if (snapshot.id_inventario_pos && !currentIdInventarioPOS && !inventarioExistenteConsultado) {
             currentIdInventarioPOS = snapshot.id_inventario_pos;
         }
 
@@ -3121,14 +3126,22 @@ function _deshabilitarBtnEnvio() {
  * los inputs de las tarjetas con los valores guardados.
  */
 async function cargarInventarioExistente() {
+    inventarioExistenteConsultado = false;
     if (!currentOperacionId) return;
 
     try {
-        const response = await fetchAutenticado(`${API_BASE}/inventario/paloteo/${currentOperacionId}`);
-        if (response.status === 404) return; // Sin inventario previo, flujo normal de creación
+        // Cada barra de la operativa tiene su propio inventario físico.
+        const response = await fetchAutenticado(`${API_BASE}/inventario/paloteo/${currentOperacionId}`, {
+            headers: { 'X-Barra-Id': String(idBarraActual) }
+        });
+        if (response.status === 404) {
+            inventarioExistenteConsultado = true;
+            return; // Sin inventario previo, flujo normal de creación
+        }
         if (!response.ok) return; // Otro error, ignorar silenciosamente
 
         const data = await response.json();
+        inventarioExistenteConsultado = true;
         currentIdInventarioPOS = data.id_inventario_pos;
 
         if (data.detalles && data.detalles.length > 0) {
@@ -4800,7 +4813,12 @@ async function enviarInventario(payload) {
 
         const response = await fetchAutenticado(url, {
             method: metodo,
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                // Sin este header el backend valida contra la barra por defecto
+                // y rechaza el paloteo de cualquier otra barra del selector.
+                'X-Barra-Id': String(idBarraActual),
+            },
             body: JSON.stringify(payload)
         });
 

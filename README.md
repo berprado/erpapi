@@ -160,8 +160,8 @@ Docs: `http://localhost:8000/docs`
 |---|---|---|
 | `GET` | `/api/inventario/pendientes` | Lista productos vendidos + traspasados a barra con configuracion de pesaje. Con `?id_operacion=` (desde v12.34, la PWA siempre lo envia) suma los productos ya contados en el paloteo de esa operativa/barra aunque no tengan movimiento (agregados a mano), marcados `sin_movimiento: true`; sin esto desaparecian de PALOTEO al recargar la pagina |
 | `GET` | `/api/inventario/catalogo/buscar` | Busca en el catalogo completo de la barra (sin filtrar por movimiento), para agregar manualmente al conteo productos que no tuvieron movimiento esta operativa. `?busqueda=` es opcional (si se omite o va vacio, min. 2 caracteres si se especifica), devuelve resultados con la misma forma que `/pendientes`. `?limite=` (1-500, default 15) ajusta el tope de resultados; con `busqueda` vacia y `limite` alto trae el catalogo completo, para el flujo de "paloteo completo" |
-| `POST` | `/api/inventario/paloteo` | Registra inventario fisico completo |
-| `GET` | `/api/inventario/paloteo/{id_operacion}` | Obtiene inventario registrado y si puede editarse |
+| `POST` | `/api/inventario/paloteo` | Registra inventario fisico completo. Una cabecera por operativa **y barra** (desde v12.37): un segundo registro de la misma barra responde `409`, otra barra de la misma operativa registra la suya |
+| `GET` | `/api/inventario/paloteo/{id_operacion}` | Obtiene el inventario registrado de la barra resuelta por `X-Barra-Id` (sin header, la barra por defecto) y si puede editarse |
 | `PUT` | `/api/inventario/paloteo/{id_inventario_pos}` | Corrige inventario fisico existente |
 | `DELETE` | `/api/inventario/paloteo/{id_inventario_pos}/producto/{id_producto}` | Da de baja (soft-delete) el detalle de un solo producto, para deshacer una alta manual por error. A diferencia de `PUT` (upsert-only, nunca borra), este endpoint si elimina una fila puntual. No afecta `app_paloteo_registro_crudo` |
 
@@ -177,7 +177,7 @@ Reglas de barra operativa:
 
 1. Si `PALOTEO_SELECTOR_ENABLED=false`, la barra se fija por `PALOTEO_DEFAULT_BARRA_ID`.
 2. Si `PALOTEO_SELECTOR_ENABLED=true`, frontend puede enviar `X-Barra-Id` (solo valores de `PALOTEO_ALLOWED_BARRAS`).
-3. En `POST/PUT /api/inventario/paloteo`, `payload.id_barra` debe coincidir con la barra operativa resuelta.
+3. En `POST/PUT /api/inventario/paloteo`, `payload.id_barra` debe coincidir con la barra operativa resuelta. La PWA envia `X-Barra-Id` en la consulta, el alta y la correccion del paloteo (antes de v12.37 no lo enviaba en `POST/PUT` ni en el `GET`, y el paloteo de cualquier barra distinta de la por defecto era imposible de registrar).
 4. `/pendientes` y `/catalogo/buscar` filtran explícitamente `AND i.id_barra = :id_barra` al unir contra `vista_inventario_barra_con_filtro` (fix 2026-09-08, `CHANGELOG` 12.5) — la vista **no** viene pre-filtrada a la barra activa pese a su nombre; sin este filtro, un producto con movimiento en más de una barra devolvía una fila (y cada perfil de pesaje asociado) por cada barra.
 
 ### Perfiles de Pesaje (requiere JWT + rol administrador)
@@ -314,8 +314,12 @@ deduplican por `id_operacion + id_barra + id_producto`, conservando el mayor
 `id_paloteo_cierre`. Los campos `fisico_*` y `diferencia_*` permanecen en
 `null` cuando el cierre no tiene captura fisica; no se convierten a cero.
 `app_paloteo_registro_crudo` solo aporta peso y diferencia exacta cuando existe
-una captura asociada. Como esa tabla no guarda `id_barra`, una misma captura
-cruda puede aparecer enriqueciendo el mismo producto en mas de una barra.
+una captura asociada. Como esa tabla no guarda `id_barra`, desde v12.37 solo se
+acepta la ultima captura que explica el conteo de esa barra (mismas botellas
+cerradas y onzas a no mas de 0.255 oz del conteo: media grilla POS mas el
+truncado a 2 decimales de `onzas_calculadas`); si ninguna coincide, el
+producto queda sin PESO. La misma regla aplica al PDF de Ajustes y a la
+precarga de correccion (`GET /api/inventario/paloteo/{id_operacion}`).
 
 **Clasificacion de filas (desde v12.35):** `con_diferencia` y `cuadrado` (hubo
 captura fisica), `con_movimiento_sin_contar` (sin captura, pero con ventas o

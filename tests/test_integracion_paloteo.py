@@ -237,3 +237,69 @@ def test_pendientes_incluye_productos_ya_contados_sin_movimiento(client, crear_u
     r_sin_operacion = client.get("/api/inventario/pendientes", headers=headers)
     assert r_sin_operacion.status_code == 200, r_sin_operacion.text
     assert id_producto not in {p["id_producto"] for p in r_sin_operacion.json()}
+
+
+def test_paloteo_dos_barras_en_la_misma_operativa(client, crear_usuario, escenario_paloteo,
+                                                   db_session, monkeypatch):
+    """Cada barra de la operativa tiene su propio inventario fisico (caso Beer
+    Garden, operativa 167): antes el alta rechazaba la segunda barra con 409
+    y la consulta devolvia el inventario de la primera, que la PWA intentaba
+    corregir con el id_barra de la segunda ("no coincide con el inventario").
+    Un producto contado en ambas barras restaura en cada una SU captura cruda,
+    aunque la ultima del registro crudo (que no guarda id_barra) sea de la otra."""
+    from config import settings
+    monkeypatch.setattr(settings, "PALOTEO_SELECTOR_ENABLED", True)
+    monkeypatch.setattr(settings, "PALOTEO_ALLOWED_BARRAS", "1,2")
+
+    esc = escenario_paloteo
+    esc.crear_operacion(estado_operacion=24, con_cabecera_fisico=False)
+    id_producto, id_perfil = esc.agregar_producto_catalogo("PYTEST DOS BARRAS")
+    user = crear_usuario()
+    barra_1, barra_2 = esc.id_barra, esc.id_barra + 1
+    headers_1 = {**user.headers, "X-Barra-Id": str(barra_1)}
+    headers_2 = {**user.headers, "X-Barra-Id": str(barra_2)}
+
+    def _payload_barra(id_barra, cerradas, peso):
+        payload = _payload(esc, [{
+            "id_producto": id_producto,
+            "botellas_cerradas": cerradas,
+            "pesos_abiertas": [{"peso": peso, "perfil_id": id_perfil}],
+        }])
+        payload["id_barra"] = id_barra
+        return payload
+
+    r1 = client.post(PALOTEO, json=_payload_barra(barra_1, 2, 1106), headers=headers_1)
+    assert r1.status_code == 200, r1.text
+    r2 = client.post(PALOTEO, json=_payload_barra(barra_2, 1, 855), headers=headers_2)
+    assert r2.status_code == 200, r2.text
+    id_inv_1, id_inv_2 = r1.json()["id_inventario_pos"], r2.json()["id_inventario_pos"]
+    assert id_inv_1 != id_inv_2
+
+    # La consulta resuelve la barra por el header; la ultima captura cruda del
+    # producto es la de la barra 2, pero la barra 1 recupera la suya.
+    g1 = client.get(f"{PALOTEO}/{esc.id_operacion}", headers=headers_1)
+    assert g1.status_code == 200, g1.text
+    assert (g1.json()["id_inventario_pos"], g1.json()["id_barra"]) == (id_inv_1, barra_1)
+    assert [p["peso"] for p in g1.json()["detalles"][0]["pesos_abiertas"]] == [1106]
+
+    g2 = client.get(f"{PALOTEO}/{esc.id_operacion}", headers=headers_2)
+    assert g2.status_code == 200, g2.text
+    assert (g2.json()["id_inventario_pos"], g2.json()["id_barra"]) == (id_inv_2, barra_2)
+    assert [p["peso"] for p in g2.json()["detalles"][0]["pesos_abiertas"]] == [855]
+
+    # Sin header (cliente viejo): barra por defecto, como antes.
+    g_sin_header = client.get(f"{PALOTEO}/{esc.id_operacion}", headers=user.headers)
+    assert g_sin_header.json()["id_inventario_pos"] == id_inv_1
+
+    # El duplicado sigue bloqueado, ahora por barra.
+    r_dup = client.post(PALOTEO, json=_payload_barra(barra_2, 1, 855), headers=headers_2)
+    assert r_dup.status_code == 409
+
+    # Corregir la barra 2 no toca la barra 1.
+    r_put = client.put(f"{PALOTEO}/{id_inv_2}", json=_payload_barra(barra_2, 3, 855),
+                       headers=headers_2)
+    assert r_put.status_code == 200, r_put.text
+    conteos = dict(db_session.execute(text(
+        "SELECT id_inventario_fisico, cantidad_unidad FROM bar_detalle_fisico "
+        "WHERE id_producto = :p AND estado = 'HAB'"), {"p": id_producto}).fetchall())
+    assert {k: float(v) for k, v in conteos.items()} == {id_inv_1: 2.0, id_inv_2: 3.0}

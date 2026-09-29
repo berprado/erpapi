@@ -84,25 +84,51 @@ def _redondear_media_onza_half_up(valor: float) -> float:
     return float(redondeado / Decimal("2"))
 
 
-def _obtener_pesos_crudos_por_producto(db: Session, id_operacion: int) -> dict[int, list]:
-    """Recupera la última captura cruda por producto para restaurar gramos reales en corrección."""
+MARGEN_CAPTURA_CRUDA_OZ = Decimal("0.255")
+
+
+def _obtener_capturas_crudas_por_conteo(
+    db: Session, id_operacion: int, conteos: dict[int, tuple[float, float]]
+) -> dict[int, models.PaloteoRegistroCrudo]:
+    """Última captura cruda de cada producto que explica su conteo registrado.
+
+    app_paloteo_registro_crudo no guarda id_barra: con más de una barra por
+    operativa, la última captura de un producto puede ser la de la otra barra.
+    Solo se acepta una captura con las mismas botellas cerradas que el conteo
+    (paq, det) de esta barra y cuyas onzas pudieron redondear a det: a no más
+    de 0.25 oz (media grilla POS) más 0.005 (onzas_calculadas se guarda con 2
+    decimales, así que 10.25 puede venir de un exacto 10.249 registrado como
+    10.0; re-redondear el guardado daría 10.5). Si ninguna coincide, el
+    producto queda sin captura y quien consume cae a lo registrado en el POS.
+    """
+    if not conteos:
+        return {}
+
     registros = db.query(models.PaloteoRegistroCrudo).filter(
-        models.PaloteoRegistroCrudo.id_operacion == id_operacion
+        models.PaloteoRegistroCrudo.id_operacion == id_operacion,
+        models.PaloteoRegistroCrudo.id_producto.in_(list(conteos)),
     ).order_by(models.PaloteoRegistroCrudo.id.desc()).all()
 
-    pesos_por_producto = {}
+    capturas = {}
     for registro in registros:
-        if registro.id_producto in pesos_por_producto:
+        if registro.id_producto in capturas:
             continue
+        paq, det = conteos[registro.id_producto]
+        if float(registro.botellas_cerradas or 0) != float(paq or 0):
+            continue
+        onzas = Decimal(str(registro.onzas_calculadas or 0))
+        if abs(onzas - Decimal(str(det or 0))) > MARGEN_CAPTURA_CRUDA_OZ:
+            continue
+        capturas[registro.id_producto] = registro
+    return capturas
 
-        try:
-            pesos = json.loads(registro.pesos_abiertas) if registro.pesos_abiertas else []
-        except (TypeError, json.JSONDecodeError):
-            pesos = []
 
-        pesos_por_producto[registro.id_producto] = pesos if isinstance(pesos, list) else []
-
-    return pesos_por_producto
+def _pesos_de_captura_cruda(registro: models.PaloteoRegistroCrudo) -> list:
+    try:
+        pesos = json.loads(registro.pesos_abiertas) if registro.pesos_abiertas else []
+    except (TypeError, json.JSONDecodeError):
+        pesos = []
+    return pesos if isinstance(pesos, list) else []
 
 
 def _obtener_tolerancia_operativa_oz(pesable: int | None) -> float:
@@ -708,8 +734,10 @@ def procesar_paloteo(
             detail=f"La barra enviada ({payload.id_barra}) no coincide con la barra operativa configurada ({barra_operativa})."
         )
 
-    # Fix #5: Prevenir inventario duplicado por operación.
-    # Si ya existe una cabecera HAB para este id_operacion, rechazamos el registro.
+    # Fix #5: Prevenir inventario duplicado por operación y barra.
+    # Si ya existe una cabecera HAB para este id_operacion en esta barra,
+    # rechazamos el registro. Cada barra de la operativa tiene su propia
+    # cabecera: el ajuste/consolidación ya las resuelve por (operación, barra).
     # with_for_update() no es por el bloqueo en sí (ya lo da la fila de
     # ope_operacion) sino para forzar una lectura actual: con REPEATABLE READ la
     # sesión ya tiene snapshot desde la consulta de autenticación, y un SELECT
@@ -717,12 +745,13 @@ def procesar_paloteo(
     # Usa el índice de id_operacion, así que solo bloquea el rango de esa operativa.
     inventario_existente = db.query(models.InventarioFisicoPOS).filter(
         models.InventarioFisicoPOS.id_operacion == payload.id_operacion,
+        models.InventarioFisicoPOS.id_barra == payload.id_barra,
         models.InventarioFisicoPOS.estado == 'HAB'
     ).with_for_update().first()
     if inventario_existente:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Ya existe un inventario registrado para esta operación (ID: {inventario_existente.id}). No se puede registrar dos veces."
+            detail=f"Ya existe un inventario registrado para esta operación y barra (ID: {inventario_existente.id}). No se puede registrar dos veces."
         )
 
     # 2. CREAR CABECERA EN EL POS (Con estado 62 y nombre formateado)
@@ -763,16 +792,20 @@ def procesar_paloteo(
 @app.get("/api/inventario/paloteo/{id_operacion}", response_model=schemas.InventarioRegistradoResponse)
 def obtener_inventario_registrado(
     id_operacion: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: models.Usuario = Depends(get_usuario_actual)
 ):
+    # Sin X-Barra-Id (cliente viejo) resuelve la barra por defecto, como antes.
+    id_barra = _resolver_barra_operativa(request)
     inventario = db.query(models.InventarioFisicoPOS).filter(
         models.InventarioFisicoPOS.id_operacion == id_operacion,
+        models.InventarioFisicoPOS.id_barra == id_barra,
         models.InventarioFisicoPOS.estado == 'HAB'
     ).first()
 
     if not inventario:
-        raise HTTPException(status_code=404, detail="No existe inventario físico registrado para esta operación.")
+        raise HTTPException(status_code=404, detail="No existe inventario físico registrado para esta operación y barra.")
 
     operacion = db.query(models.Operacion).filter(models.Operacion.id == id_operacion).first()
     puede_editar = bool(operacion and operacion.estado_operacion == 24)
@@ -781,14 +814,20 @@ def obtener_inventario_registrado(
         models.DetalleFisicoPOS.id_inventario_fisico == inventario.id,
         models.DetalleFisicoPOS.estado == 'HAB'
     ).all()
-    pesos_crudos_por_producto = _obtener_pesos_crudos_por_producto(db, inventario.id_operacion)
+    capturas = _obtener_capturas_crudas_por_conteo(db, inventario.id_operacion, {
+        detalle.id_producto: (detalle.cantidad_unidad, detalle.cantidad_detalle)
+        for detalle in detalles_db
+    })
 
     detalles = [
         {
             "id_producto": detalle.id_producto,
             "botellas_cerradas": float(detalle.cantidad_unidad or 0),
             "onzas_pos": float(detalle.cantidad_detalle or 0),
-            "pesos_abiertas": pesos_crudos_por_producto.get(detalle.id_producto, []),
+            "pesos_abiertas": (
+                _pesos_de_captura_cruda(capturas[detalle.id_producto])
+                if detalle.id_producto in capturas else []
+            ),
         }
         for detalle in detalles_db
     ]
@@ -2512,12 +2551,17 @@ def _obtener_filas_paloteo_historico(db: Session, id_operacion: int, id_barra: i
               AND estado_paloteo = 'HAB'
             GROUP BY id_operacion, id_barra, id_producto
         ) ultima_cierre ON ultima_cierre.id_paloteo_cierre = c.id_paloteo_cierre
+        -- El registro crudo no guarda id_barra: solo vale la ultima captura
+        -- que explica el conteo de esta barra (mismas botellas y onzas a no mas
+        -- de MARGEN_CAPTURA_CRUDA_OZ), igual que _obtener_capturas_crudas_por_conteo.
         LEFT JOIN app_paloteo_registro_crudo r
           ON r.id = (
               SELECT MAX(r2.id)
               FROM app_paloteo_registro_crudo r2
               WHERE r2.id_operacion = c.id_operacion
                 AND r2.id_producto = c.id_producto
+                AND r2.botellas_cerradas = COALESCE(c.fisico_paq, 0)
+                AND ABS(COALESCE(r2.onzas_calculadas, 0) - COALESCE(c.fisico_detalle, 0)) <= 0.255
           )
         WHERE c.id_operacion = :id_operacion
           AND c.id_barra = :id_barra
@@ -2923,27 +2967,19 @@ def _renderizar_pdf_diferencias(
     return bytes(pdf.output())
 
 
-def _obtener_ultima_captura_cruda_por_producto(db: Session, id_operacion: int) -> dict[int, dict]:
-    """Ultima captura cruda por producto (misma regla "ultima gana" que
-    _obtener_pesos_crudos_por_producto): onzas exactas y peso total, para las
-    columnas PESO y DIF REAL. app_paloteo_registro_crudo no guarda id_barra."""
-    registros = db.query(models.PaloteoRegistroCrudo).filter(
-        models.PaloteoRegistroCrudo.id_operacion == id_operacion
-    ).order_by(models.PaloteoRegistroCrudo.id.desc()).all()
-
-    capturas = {}
-    for registro in registros:
-        if registro.id_producto in capturas:
-            continue
-        try:
-            pesos = json.loads(registro.pesos_abiertas) if registro.pesos_abiertas else []
-        except (TypeError, json.JSONDecodeError):
-            pesos = []
-        capturas[registro.id_producto] = {
+def _obtener_ultima_captura_cruda_por_producto(
+    db: Session, id_operacion: int, conteos: dict[int, tuple[float, float]]
+) -> dict[int, dict]:
+    """Onzas exactas y peso total de la captura cruda que explica el conteo de
+    esta barra (ver _obtener_capturas_crudas_por_conteo), para las columnas
+    PESO y DIF REAL."""
+    return {
+        id_producto: {
             "onzas": float(registro.onzas_calculadas) if registro.onzas_calculadas is not None else None,
-            "peso_gramos": _peso_total_crudo(pesos),
+            "peso_gramos": _peso_total_crudo(_pesos_de_captura_cruda(registro)),
         }
-    return capturas
+        for id_producto, registro in _obtener_capturas_crudas_por_conteo(db, id_operacion, conteos).items()
+    }
 
 
 def _obtener_filas_reporte_ajustes(db: Session, id_operacion: int, id_barra: int) -> Optional[dict]:
@@ -3016,7 +3052,9 @@ def _obtener_filas_reporte_ajustes(db: Session, id_operacion: int, id_barra: int
                 {"ids": ids_producto},
             ).mappings().all()
         }
-    capturas = _obtener_ultima_captura_cruda_por_producto(db, id_operacion)
+    capturas = _obtener_ultima_captura_cruda_por_producto(db, id_operacion, {
+        delta["id_producto"]: (delta["real_paq"], delta["real_det"]) for delta in deltas
+    })
 
     filas = []
     for delta in deltas:
