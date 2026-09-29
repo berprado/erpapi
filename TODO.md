@@ -26,6 +26,13 @@
   - `.env` sigue usando el placeholder `cambia_esto_por_una_clave_larga_y_aleatoria_en_produccion` (pasa la validación de longitud ≥32, pero no es aleatorio).
   - Generar con: `python -c "import secrets; print(secrets.token_hex(32))"`
 
+- [ ] **Cambiar usuarios y contraseñas de BD de producción (casa matriz y Beer Garden)** (detectado 2026-09-29)
+  - Hoy la API se conecta a ambas producciones como `root`, con contraseñas débiles, a través de túneles TCP públicos de LocalToNet (`backapp.localto.net`, `gardentcp.localto.net`): cualquiera que conozca host/puerto puede intentar credenciales contra un MySQL con todos los privilegios.
+  - Crear por sucursal un usuario de BD solo para la API, con permisos mínimos: `SELECT` sobre lo que lee (catálogo, vistas `v9_*`/`vista_*`/`vw_*`, `ope_operacion`, `seg_*`), y `SELECT/INSERT/UPDATE` solo sobre las tablas que escribe (`bar_inventario_fisico`, `bar_detalle_fisico`, `bar_inventario`, `bar_ajuste`, `bar_detalle_ajuste`, `bar_salida_inventario`, `bar_detalle_salida_inv`, `app_*`, `analytics_varianza_inventario`, `seg_acceso`). Sin `DROP`/`ALTER`/`GRANT`; los DDL de `querys/` se siguen aplicando con un usuario administrador aparte.
+  - Cambiar también la contraseña de `root` en ambos servidores y restringir desde dónde puede conectarse.
+  - Actualizar `PROD_DB_USER`/`PROD_DB_PASS` en los dos Web Services de Seenode y en los `.env` locales; verificar login y un paloteo en cada instancia tras el cambio.
+  - No registrar las credenciales en el repo ni en la documentación (solo en las variables de entorno de Seenode y en `.env`, que está en `.gitignore`).
+
 - [ ] **Decidir y corregir el criterio de "producto con movimiento" de `/api/inventario/pendientes`** (análisis 2026-09-25, caso HAVANA 7A operativa 1306)
   - Hoy: comandas `estado_comanda = 26` de `(SELECT MAX(id_operacion) FROM bar_comanda)` + traspasos almacén→barra (tipo 83/34, estado 21) + (desde v12.34) productos ya contados en la operativa.
   - Huecos verificados: (1) una comanda **anulada** (27) saca al producto de la lista aunque tuvo movimiento: HAVANA 7A solo tuvo la comanda 74173, anulada, y no apareció en PALOTEO; (2) las comandas **no se filtran por barra** (una venta en barra 2 hace aparecer el producto en el paloteo de barra 1); (3) usa `MAX(id_operacion)` de `bar_comanda` en vez de la operativa activa: si la operativa en curso aún no tiene comandas (ej. 1307), lista los productos de la anterior. Las cortesías (`tipo_salida = 51`) **ya** entran (el filtro no mira `tipo_salida`).

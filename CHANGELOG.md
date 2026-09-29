@@ -11,6 +11,9 @@ separado con git tags semanticos (`vMAJOR.MINOR.PATCH`) — ver seccion
 version productiva en uso real), corresponde a este mismo punto de la
 historia, `## 12.2` de abajo.
 
+## 12.38
+- TODO (alta prioridad): cambiar usuarios y contraseñas de BD de produccion (casa matriz y Beer Garden). Hoy la API entra como `root` con contraseñas debiles a traves de tuneles TCP publicos; se propone un usuario por sucursal solo para la API, con permisos minimos, y rotar `root`.
+
 ## 12.37
 - Fix paloteo multi-barra (Beer Garden, operativa 167): una operativa con dos barras no podia registrar el paloteo de la segunda. El alta rechazaba con 409 cualquier segundo inventario de la operativa (sin mirar la barra), `GET /api/inventario/paloteo/{id_operacion}` devolvia el de la primera barra (la PWA entraba en modo correccion y el PUT fallaba con "El id_barra del payload no coincide con el inventario fisico a corregir") y la PWA no enviaba `X-Barra-Id` en el alta/correccion, asi que el backend validaba contra la barra por defecto. Ahora alta y consulta van por (operativa, barra), la PWA envia la barra seleccionada y el borrador local ya no reutiliza un `id_inventario_pos` de otra barra cuando el backend confirma que la barra no tiene inventario.
 - `app_paloteo_registro_crudo` no guarda `id_barra`: la precarga de correccion, las columnas PESO/DIF REAL del PDF de Ajustes y el Historico toman ahora la ultima captura cruda que explica el conteo de esa barra (mismas botellas y onzas a no mas de 0.255 oz del conteo: media grilla POS mas el truncado a 2 decimales de `onzas_calculadas`, que con re-redondeo dejaba afuera casos como JAGER 1LT en la operativa 167, exacto ~10.249 guardado como 10.25), no la ultima del producto en la operativa, que podia ser de la otra barra (y al volver a guardar, escribir sus pesos en esta).
