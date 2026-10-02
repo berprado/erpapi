@@ -48,6 +48,16 @@
 
 ## 🟡 Media Prioridad
 
+- [ ] **Agregar `id_barra` a `app_paloteo_registro_crudo` (solución de fondo del paloteo multi-barra)** (anotado 2026-09-30, a partir del fix v12.37)
+  - **Contexto:** la tabla no guarda la barra. Desde v12.37, la precarga de corrección (`GET /api/inventario/paloteo/{id_operacion}`) y las columnas PESO / DIF REAL del PDF de Ajustes y del Histórico eligen la última captura cruda que **explica el conteo** de esa barra (mismas botellas cerradas y onzas a ≤ 0.255 oz de `bar_detalle_fisico`): `_obtener_capturas_crudas_por_conteo` y la subconsulta de `_obtener_filas_paloteo_historico` en `main.py`.
+  - **Caso que la regla no distingue:** un producto contado en las dos barras con el **mismo conteo** puede tomar el pesaje de la otra barra. Efecto acotado a lo que se muestra: gramos precargados / PESO de la otra barra y DIF REAL con < 0.25 oz de diferencia. Ajustes, DIF OP, VALOR y `bar_inventario` salen de `bar_detalle_fisico` y no se ven afectados; volver a guardar con esos pesos redondea al mismo valor POS. En la operativa 167 de Beer Garden fueron 5 de 46 productos compartidos, todos sin botella abierta (resultado idéntico).
+  - **No es bloqueante** para los cierres de Beer Garden: la operación con el fix v12.37 es correcta. Programarlo con calma, nunca en la previa de un cierre.
+  - **Plan:**
+    1. DDL versionado en `querys/` (agregar a la allowlist de `.gitignore`): `ALTER TABLE app_paloteo_registro_crudo ADD COLUMN id_barra INT NULL` + índice `(id_operacion, id_barra, id_producto)`. Nullable: las filas históricas quedan en `NULL` (no hay forma confiable de reconstruir su barra).
+    2. Código: mapear `id_barra` en `models.PaloteoRegistroCrudo`, escribirlo en `_procesar_items_paloteo` (alta y corrección) y filtrar por barra al leer. Mantener la regla actual "captura que explica el conteo" como respaldo para filas con `id_barra IS NULL`.
+    3. Tests: extender `test_paloteo_dos_barras_en_la_misma_operativa` con un producto con conteo idéntico en ambas barras y pesos distintos (hoy indistinguible), y cubrir el respaldo para filas sin barra.
+    4. Aplicar el DDL **antes** del deploy del código en `test` → `test_pos` (validar un cierre completo con dos barras) → producción casa matriz y Beer Garden, en una ventana sin cierres en ninguna sucursal (un push redespliega ambas). Documentar el estado por entorno en README, como con los triggers.
+
 - [x] **Manejar productos sin configuración de pesaje en `procesar_paloteo`**
   - Implementado: `_procesar_items_paloteo` devuelve `productos_omitidos` y se incluye en la respuesta de los endpoints de paloteo (no se omiten en silencio).
 

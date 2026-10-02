@@ -11,6 +11,9 @@ separado con git tags semanticos (`vMAJOR.MINOR.PATCH`) — ver seccion
 version productiva en uso real), corresponde a este mismo punto de la
 historia, `## 12.2` de abajo.
 
+## 12.39
+- TODO (media prioridad): agregar `id_barra` a `app_paloteo_registro_crudo` como solucion de fondo del paloteo multi-barra. Documenta el caso que la regla de v12.37 no distingue (producto con conteo identico en ambas barras: solo afecta gramos precargados, PESO y DIF REAL, nunca ajustes ni VALOR), que no es bloqueante para los cierres, y el plan DDL -> codigo -> tests -> despliegue por entorno.
+
 ## 12.38
 - TODO (alta prioridad): cambiar usuarios y contraseñas de BD de produccion (casa matriz y Beer Garden). Hoy la API entra como `root` con contraseñas debiles a traves de tuneles TCP publicos; se propone un usuario por sucursal solo para la API, con permisos minimos, y rotar `root`.
 
