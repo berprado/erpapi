@@ -2983,6 +2983,7 @@ async function iniciarDashboard() {
             operativaPermitePaloteo = false;
             currentIdInventarioPOS = null;
             ocultarBannerCorreccion();
+            ocultarBannerTraspasosSinRecepcion();
             mostrarBannerSoloLectura();
             actualizarPanelAjustes();
 
@@ -3016,6 +3017,7 @@ async function iniciarDashboard() {
 
         // 2. Cargar Lista de Productos Pendientes
         cargarProductos();
+        verificarTraspasosSinRecepcion();
 
     } catch (error) {
         if (error instanceof SesionExpiradaError) return;
@@ -3218,6 +3220,54 @@ function mostrarBannerCorreccion(observaciones) {
 function ocultarBannerCorreccion() {
     const banner = document.getElementById('banner-correccion');
     if (banner) banner.classList.add('hidden');
+}
+
+function ocultarBannerTraspasosSinRecepcion() {
+    const banner = document.getElementById('banner-traspasos-sin-recepcion');
+    if (banner) banner.classList.add('hidden');
+}
+
+/**
+ * Traspasos almacén -> barra de la operativa que el almacén ya despachó y la
+ * barra no recepcionó: sus unidades no están en el stock ideal de la barra.
+ * Si se cuentan igual, el ajuste las toma como sobrante y la recepción
+ * posterior las vuelve a sumar. Se avisa (banner + diálogo) antes de contar.
+ */
+async function verificarTraspasosSinRecepcion() {
+    ocultarBannerTraspasosSinRecepcion();
+    if (!currentOperacionId || !operativaPermitePaloteo) return;
+
+    try {
+        const response = await fetchAutenticado(
+            `${API_BASE}/inventario/traspasos-sin-recepcion?id_operacion=${encodeURIComponent(currentOperacionId)}`,
+            { headers: { 'X-Barra-Id': String(idBarraActual) } }
+        );
+        if (!response.ok) return;
+        const traspasos = await response.json();
+        if (!Array.isArray(traspasos) || traspasos.length === 0) return;
+
+        const banner = document.getElementById('banner-traspasos-sin-recepcion');
+        const texto = document.getElementById('banner-traspasos-sin-recepcion-texto');
+        if (texto) {
+            texto.textContent = `${traspasos.length} traspaso(s) sin recepcionar en esta barra · recepciónalos antes de contar`;
+        }
+        if (banner) banner.classList.remove('hidden');
+
+        const detalle = traspasos.map((t) => {
+            const productos = t.productos
+                .map((p) => `   ${p.nombre}: ${Number(p.cantidad).toLocaleString('es-BO', { maximumFractionDigits: 2 })} ${p.por_unidad ? 'u.' : 'det.'}`)
+                .join('\n');
+            return `• Traspaso Nº ${t.id_salida}\n${productos}`;
+        }).join('\n');
+        mostrarDialogoResultado({
+            tipo: 'warning',
+            titulo: 'Traspasos sin recepcionar',
+            mensaje: `El almacén despachó estos traspasos a la barra, pero la barra todavía no los recepcionó en el POS. Sus unidades aún no figuran en el stock de la barra: si las cuentas ahora, el ajuste las registrará como sobrante y al recepcionarlas se sumarán otra vez.\n\nRecepciónalos (o recházalos) en el POS antes de hacer el paloteo:\n\n${detalle}`,
+        });
+    } catch (error) {
+        if (error instanceof SesionExpiradaError) return;
+        console.error('Error verificando traspasos sin recepcionar:', error);
+    }
 }
 
 function mostrarBannerSoloLectura() {

@@ -818,6 +818,12 @@
         <!-- Área de Contenido -->
         <main class="flex-1 pb-28 overflow-y-auto" id="main-content">
 
+        <!-- Banner: traspasos almacén -> barra despachados y sin recepcionar (visible en todos los paneles) -->
+        <div id="banner-traspasos-sin-recepcion" class="hidden p-md max-w-2xl mx-auto w-full flex items-center gap-sm text-label-mono uppercase tracking-widest rounded-md border" style="background: color-mix(in srgb, var(--semantic-warning) 10%, transparent); border-color: var(--semantic-warning); color: var(--semantic-warning);">
+            <span class="material-symbols-outlined" style="font-size: 1.1rem;">local_shipping</span>
+            <span id="banner-traspasos-sin-recepcion-texto"></span>
+        </div>
+
         <!-- Banner: modo corrección (visible en todos los paneles) -->
         <div id="banner-correccion" class="hidden p-md max-w-2xl mx-auto w-full flex items-center gap-sm text-label-mono uppercase tracking-widest rounded-md border" style="background: color-mix(in srgb, var(--semantic-warning) 10%, transparent); border-color: var(--semantic-warning); color: var(--semantic-warning);">
             <span class="material-symbols-outlined" style="font-size: 1.1rem;">edit_note</span>
@@ -1602,7 +1608,7 @@
         </div>
     </div>
 
-    <script src="/assets/app.js?v=12.39"></script>
+    <script src="/assets/app.js?v=12.40"></script>
 
     <script>
         (function () {
@@ -1651,7 +1657,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/assets/sw.js?v=12.39')
+                navigator.serviceWorker.register('/assets/sw.js?v=12.40')
                     .then(reg => console.log('[PWA] Service Worker registrado:', reg.scope))
                     .catch(err => console.error('[PWA] Error al registrar SW:', err));
             });

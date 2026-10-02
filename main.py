@@ -1484,6 +1484,107 @@ def _agrupar_filas_producto_pesaje(rows) -> list[dict]:
     return list(productos_dict.values())
 
 
+# Productos con movimiento en una barra durante una operativa (parámetros
+# :id_barra, :id_operacion_movimiento). Cada rama es una fuente que mueve
+# bar_inventario de ESA barra; los estados están verificados contra el POS
+# (ver docstring de /api/inventario/pendientes).
+_SQL_PRODUCTOS_CON_MOVIMIENTO = """
+                -- Comandas de la barra: procesadas, o anuladas que llegaron a imprimirse.
+                SELECT DISTINCT d.id_producto_receta AS id_producto, 1 AS con_movimiento
+                FROM comandas_v9_detallada d
+                INNER JOIN bar_comanda c ON d.id_comanda = c.id
+                WHERE c.id_operacion = :id_operacion_movimiento
+                AND c.id_barra = :id_barra
+                AND d.id_producto_receta IS NOT NULL
+                AND (
+                    c.estado_comanda = 26
+                    OR (
+                        c.estado_comanda = 27
+                        AND EXISTS (SELECT 1 FROM bar_comanda_impresion ci WHERE ci.id_comanda = c.id)
+                    )
+                )
+
+                UNION ALL
+
+                -- Traspasos almacén -> barra ya recepcionados (21 EN BARRA).
+                SELECT DISTINCT dsi.id_producto AS id_producto, 1 AS con_movimiento
+                FROM alm_salida_inventario asi
+                INNER JOIN alm_detalle_salida_inv dsi ON dsi.id_salida_inventario = asi.id
+                WHERE asi.id_operacion = :id_operacion_movimiento
+                AND asi.estado = 'HAB'
+                AND dsi.estado = 'HAB'
+                AND asi.id_barra = :id_barra
+                AND asi.ind_tipo_movimiento = 83
+                AND asi.ind_tipo_salida = 34
+                AND asi.ind_estado_salida = 21
+
+                UNION ALL
+
+                -- Devoluciones barra -> almacén procesadas (tipo 76 MOVIMIENTO, 20 PROCESADO).
+                SELECT DISTINCT bdsi.id_producto AS id_producto, 1 AS con_movimiento
+                FROM bar_salida_inventario bsi
+                INNER JOIN bar_detalle_salida_inv bdsi ON bdsi.id_salida_inventario = bsi.id
+                WHERE bsi.id_operacion = :id_operacion_movimiento
+                AND bsi.id_barra = :id_barra
+                AND bsi.ind_tipo_salida = 76
+                AND bsi.ind_estado_salida = 20
+                AND bsi.estado = 'HAB'
+                AND bdsi.estado = 'HAB'
+"""
+
+
+@app.get("/api/inventario/traspasos-sin-recepcion", response_model=List[schemas.TraspasoSinRecepcion])
+def listar_traspasos_sin_recepcion(
+    request: Request,
+    id_operacion: int = Query(..., gt=0, description="Operativa activa"),
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_usuario_actual)
+):
+    """
+    Traspasos almacén -> barra de la operativa ya despachados por el almacén
+    (20 PROCESADO) que la barra todavía no recepcionó. Sus unidades están en
+    tránsito: salieron del almacén pero bar_inventario aún no las suma. Si se
+    palotea así y las botellas ya están físicamente en la barra, el ajuste las
+    registra como sobrante y la recepción posterior las vuelve a sumar (stock
+    duplicado). La PWA lo muestra como advertencia antes de contar.
+
+    Solo la operativa activa: el respaldo de Beer Garden arrastra traspasos de
+    2024 que quedaron en 20 para siempre; avisarlos cada noche sería ruido.
+    """
+    id_barra = _resolver_barra_operativa(request)
+    filas = db.execute(text("""
+        SELECT asi.id AS id_salida, asi.fecha_salida, asi.id_operacion,
+               dsi.id_producto, a.nombre, dsi.cantidad, dsi.ind_paq_detalle
+        FROM alm_salida_inventario asi
+        INNER JOIN alm_detalle_salida_inv dsi ON dsi.id_salida_inventario = asi.id
+        LEFT JOIN alm_producto a ON a.id = dsi.id_producto
+        WHERE asi.id_barra = :id_barra
+          AND asi.id_operacion = :id_operacion
+          AND asi.estado = 'HAB'
+          AND dsi.estado = 'HAB'
+          AND asi.ind_tipo_movimiento = 83
+          AND asi.ind_tipo_salida = 34
+          AND asi.ind_estado_salida = 20
+        ORDER BY asi.id, a.nombre
+    """), {"id_barra": id_barra, "id_operacion": id_operacion}).mappings().all()
+
+    traspasos: dict[int, dict] = {}
+    for fila in filas:
+        traspaso = traspasos.setdefault(fila["id_salida"], {
+            "id_salida": fila["id_salida"],
+            "fecha_salida": fila["fecha_salida"],
+            "id_operacion": fila["id_operacion"],
+            "productos": [],
+        })
+        traspaso["productos"].append({
+            "id_producto": fila["id_producto"],
+            "nombre": fila["nombre"] or "",
+            "cantidad": float(fila["cantidad"] or 0),
+            "por_unidad": str(fila["ind_paq_detalle"]) == "1",
+        })
+    return list(traspasos.values())
+
+
 @app.get("/api/inventario/pendientes", response_model=List[schemas.ProductoPendiente])
 def obtener_productos_pendientes(
     request: Request,
@@ -1492,16 +1593,35 @@ def obtener_productos_pendientes(
     current_user: models.Usuario = Depends(get_usuario_actual) # <-- CANDADO AQUÍ
     ):
     """
-    Devuelve la lista de productos que tuvieron movimiento en la operación activa,
-    junto con su stock ideal y parámetros de pesaje.
+    Devuelve la lista de productos que tuvieron movimiento EN ESTA BARRA durante
+    la operativa, junto con su stock ideal y parámetros de pesaje.
 
-    Con id_operacion, suma ademas los productos ya contados en el paloteo de esa
-    operativa/barra aunque no tengan movimiento (agregados a mano desde el
-    catalogo), marcados sin_movimiento=True. Sin esto desaparecian de PALOTEO
-    1/2/3 al recargar la pagina: preLlenarInventario solo completa tarjetas
-    existentes, y el servidor igual los usaba al consolidar/aplicar el ajuste.
+    Movimiento (criterio validado en vivo contra el POS, test_pos operativa 163,
+    2026-10-01; detalle en _SQL_PRODUCTOS_CON_MOVIMIENTO):
+    - comandas de la barra procesadas (26), o anuladas (27) que llegaron a
+      imprimirse (fila en bar_comanda_impresion): el POS descuenta al procesar y
+      devuelve al anular, pero un trago servido y luego anulado sí movió la
+      botella. 25 PENDIENTE (incluye las bloqueadas por stock) no movió nada.
+      Venta (50) y cortesía (51) por igual.
+    - traspasos almacén -> barra recepcionados (21 EN BARRA).
+    - devoluciones barra -> almacén procesadas (bar_salida_inventario tipo 76,
+      estado 20). Nunca tipo 77: son las bajas por ajuste de esta misma API.
+
+    Antes las comandas no se filtraban por barra (un producto vendido en la barra
+    2 aparecía "colado" en el paloteo de la barra 1) y se tomaban de
+    MAX(id_operacion) de bar_comanda en vez de la operativa activa.
+
+    Con id_operacion (la PWA siempre lo envía) se usa esa operativa y se suman
+    los productos ya contados en el paloteo de esa operativa/barra aunque no
+    tengan movimiento (agregados a mano desde el catálogo), marcados
+    sin_movimiento=True. Sin esto desaparecían de PALOTEO 1/2/3 al recargar la
+    página. Sin id_operacion (cliente viejo) se usa la última operativa con
+    comandas, como antes, y no se suman los contados.
     """
     id_barra_operativa = _resolver_barra_operativa(request)
+    id_operacion_movimiento = id_operacion or db.execute(
+        text("SELECT MAX(id_operacion) FROM bar_comanda")
+    ).scalar()
 
     query = text("""
         SELECT
@@ -1514,25 +1634,7 @@ def obtener_productos_pendientes(
         FROM (
             SELECT u.id_producto, MAX(u.con_movimiento) AS con_movimiento
             FROM (
-                SELECT DISTINCT d.id_producto_receta AS id_producto, 1 AS con_movimiento
-                FROM comandas_v9_detallada d
-                INNER JOIN bar_comanda c ON d.id_comanda = c.id
-                WHERE d.id_operacion = (SELECT MAX(id_operacion) FROM bar_comanda)
-                AND c.estado_comanda = 26
-                AND d.id_producto_receta IS NOT NULL
-
-                UNION ALL
-
-                SELECT DISTINCT dsi.id_producto AS id_producto, 1 AS con_movimiento
-                FROM alm_salida_inventario asi
-                INNER JOIN alm_detalle_salida_inv dsi ON dsi.id_salida_inventario = asi.id
-                WHERE asi.id_operacion = (SELECT MAX(id_operacion) FROM bar_comanda)
-                AND asi.estado = 'HAB'
-                AND dsi.estado = 'HAB'
-                AND asi.id_barra = :id_barra
-                AND asi.ind_tipo_movimiento = 83
-                AND asi.ind_tipo_salida = 34
-                AND asi.ind_estado_salida = 21
+                """ + _SQL_PRODUCTOS_CON_MOVIMIENTO + """
 
                 UNION ALL
 
@@ -1560,7 +1662,11 @@ def obtener_productos_pendientes(
 
           """)
 
-    rows = db.execute(query, {"id_barra": id_barra_operativa, "id_operacion": id_operacion}).mappings().all()
+    rows = db.execute(query, {
+        "id_barra": id_barra_operativa,
+        "id_operacion": id_operacion,
+        "id_operacion_movimiento": id_operacion_movimiento,
+    }).mappings().all()
 
     return _agrupar_filas_producto_pesaje(rows)
 

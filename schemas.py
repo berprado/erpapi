@@ -125,6 +125,21 @@ class ProductoPendiente(BaseModel):
     sin_movimiento: bool = False
 
 
+class ProductoTraspasoSinRecepcion(BaseModel):
+    id_producto: int
+    nombre: str
+    cantidad: float
+    por_unidad: bool  # ind_paq_detalle = '1': cantidad en unidades (botellas), si no en detalle
+
+
+class TraspasoSinRecepcion(BaseModel):
+    """Traspaso almacén -> barra despachado (20 PROCESADO) que la barra no recepcionó."""
+    id_salida: int
+    fecha_salida: Optional[date] = None
+    id_operacion: Optional[int] = None
+    productos: List[ProductoTraspasoSinRecepcion]
+
+
 class InventarioDetalleRegistrado(BaseModel):
     id_producto: int
     botellas_cerradas: float

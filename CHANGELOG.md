@@ -11,6 +11,12 @@ separado con git tags semanticos (`vMAJOR.MINOR.PATCH`) — ver seccion
 version productiva en uso real), corresponde a este mismo punto de la
 historia, `## 12.2` de abajo.
 
+## 12.40
+- Fix paloteo multi-barra: la lista de PALOTEO de cada barra (`/api/inventario/pendientes`) muestra solo los productos que se movieron en esa barra. Las comandas no se filtraban por barra, asi que un producto vendido en la barra 2 aparecia "colado" en el paloteo de la barra 1 (en test_pos, operativa 163: 4 colados en la barra 1 y 7 en la barra 2); si el bartender lo dejaba vacio y confirmaba el 0, el ajuste registraba un faltante falso.
+- Criterio de movimiento validado en vivo contra el POS (test_pos, operativa 163): comandas de la barra procesadas (26) o anuladas (27) que llegaron a imprimirse (`bar_comanda_impresion`), venta o cortesia; traspasos almacen -> barra recepcionados (21); devoluciones barra -> almacen procesadas (`bar_salida_inventario` tipo 76, estado 20), que antes no se consideraban. Se usa la operativa activa (`id_operacion` que envia la PWA) en lugar de `MAX(id_operacion)` de `bar_comanda`.
+- Nuevo `GET /api/inventario/traspasos-sin-recepcion`: la PWA avisa (banner + dialogo) si la barra tiene traspasos de la operativa despachados por el almacen (20) y sin recepcionar, porque contarlos antes de recepcionarlos duplicaria el stock.
+- Tests de integracion (`tests/test_integracion_pendientes.py`): un producto por caso del criterio, con stock en las dos barras.
+
 ## 12.39
 - TODO (media prioridad): agregar `id_barra` a `app_paloteo_registro_crudo` como solucion de fondo del paloteo multi-barra. Documenta el caso que la regla de v12.37 no distingue (producto con conteo identico en ambas barras: solo afecta gramos precargados, PESO y DIF REAL, nunca ajustes ni VALOR), que no es bloqueante para los cierres, y el plan DDL -> codigo -> tests -> despliegue por entorno.
 
