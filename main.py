@@ -3496,10 +3496,30 @@ def _calcular_costo_receta_simulado(ingredientes) -> Decimal:
     return _decimal2(total)
 
 
-def _agregar_costo_receta(lineas) -> dict:
+def _id_opcional_por_defecto(id_categoria_combo, lineas_combo, opcional_por_categoria) -> Optional[int]:
+    """Id del opcional incluido por defecto para este combo, o None si la categoria no tiene regla
+    configurada o el producto de la regla no figura entre los OPCIONAL del combo (nunca se
+    sustituye por otro). opcional_por_categoria: {id_categoria: id_producto}, ver
+    settings.pourcost_opcional_por_categoria."""
+    id_defecto = opcional_por_categoria.get(id_categoria_combo)
+    if id_defecto is None:
+        return None
+    for linea in lineas_combo:
+        if _tipo_parte_combo_es_opcional(linea.get("tipo_parte_combo")) and linea["id_producto"] == id_defecto:
+            return id_defecto
+    return None
+
+
+def _agregar_costo_receta(lineas, opcional_por_categoria=None) -> dict:
     """Agrupa lineas de vw_pourcost_receta (una fila por ingrediente) por id_combo_coctel, sumando
     cogs_ingrediente con Decimal para no arrastrar error de float. No toca precio_venta -- esa vista
-    lo trae fijo a id_dia=1, se resuelve aparte contra v9_menubackstage (ver pourcost.md, seccion 8.2)."""
+    lo trae fijo a id_dia=1, se resuelve aparte contra v9_menubackstage (ver pourcost.md, seccion 8.2).
+
+    El costo suma todos los PRINCIPAL mas, como mucho, el OPCIONAL por defecto de la categoria
+    (opcional_por_categoria, configurado en el .env; sin el, solo los PRINCIPAL); es el mismo criterio con el que el modal arranca sus
+    checkboxes (campo `incluido_por_defecto` de cada ingrediente). `costo_incompleto` solo mira
+    las lineas incluidas, no los opcionales que nadie marco."""
+    opcional_por_categoria = opcional_por_categoria or {}
     combos: dict = {}
     for linea in lineas:
         id_combo = linea["id_combo_coctel"]
@@ -3510,15 +3530,27 @@ def _agregar_costo_receta(lineas) -> dict:
                 "nombre_combo": linea["nombre_combo"],
                 "descripcion_combo": linea["descripcion_combo"],
                 "nombre_categoria_combo": linea["nombre_categoria_combo"],
+                "id_categoria_combo": linea.get("id_categoria_combo"),
                 "costo_total": Decimal("0"),
                 "costo_incompleto": False,
                 "ingredientes": [],
             }
             combos[id_combo] = combo
-        combo["costo_total"] += Decimal(str(linea["cogs_ingrediente"] or 0))
-        if int(linea["sin_wac"] or 0) == 1:
-            combo["costo_incompleto"] = True
-        combo["ingredientes"].append(linea)
+        combo["ingredientes"].append(dict(linea))
+
+    for combo in combos.values():
+        id_defecto = _id_opcional_por_defecto(combo["id_categoria_combo"], combo["ingredientes"], opcional_por_categoria)
+        for linea in combo["ingredientes"]:
+            incluido = (
+                not _tipo_parte_combo_es_opcional(linea.get("tipo_parte_combo"))
+                or linea["id_producto"] == id_defecto
+            )
+            linea["incluido_por_defecto"] = incluido
+            if not incluido:
+                continue
+            combo["costo_total"] += Decimal(str(linea["cogs_ingrediente"] or 0))
+            if int(linea["sin_wac"] or 0) == 1:
+                combo["costo_incompleto"] = True
     return combos
 
 
@@ -3603,13 +3635,15 @@ def listar_pourcost_recetas(
     documentos/pour_cost/pourcost.md, seccion 8, punto 2)."""
     lineas = db.execute(
         text("""
-            SELECT id_combo_coctel, codigo_combo, nombre_combo, descripcion_combo, nombre_categoria_combo,
-                   id_producto, codigo_producto, nombre_producto, nombre_categoria_producto,
-                   cantidad_receta, tipo_cantidad_combo, tipo_parte_combo, unidad_base, medida_unidad_base,
-                   unidades_detalle_por_base, unidad_detalle, wac_actual, sin_wac, cantidad_unidad_base,
-                   cogs_ingrediente
-            FROM vw_pourcost_receta
-            ORDER BY id_combo_coctel
+            SELECT v.id_combo_coctel, v.codigo_combo, v.nombre_combo, v.descripcion_combo, v.nombre_categoria_combo,
+                   b.id_categoria AS id_categoria_combo,
+                   v.id_producto, v.codigo_producto, v.nombre_producto, v.nombre_categoria_producto,
+                   v.cantidad_receta, v.tipo_cantidad_combo, v.tipo_parte_combo, v.unidad_base, v.medida_unidad_base,
+                   v.unidades_detalle_por_base, v.unidad_detalle, v.wac_actual, v.sin_wac, v.cantidad_unidad_base,
+                   v.cogs_ingrediente
+            FROM vw_pourcost_receta v
+            JOIN bar_combo_coctel b ON b.id = v.id_combo_coctel
+            ORDER BY v.id_combo_coctel
         """)
     ).mappings().all()
 
@@ -3623,7 +3657,7 @@ def listar_pourcost_recetas(
     ).mappings().all()
     precio_por_combo = {row["id_origen"]: row["precio_venta"] for row in precios}
 
-    combos = _agregar_costo_receta(lineas)
+    combos = _agregar_costo_receta(lineas, settings.pourcost_opcional_por_categoria)
 
     salida = []
     for id_combo, combo in combos.items():
@@ -3657,6 +3691,7 @@ def listar_pourcost_recetas(
                         sin_wac=bool(int(linea["sin_wac"] or 0)),
                         cantidad_unidad_base=float(linea["cantidad_unidad_base"]),
                         cogs_ingrediente=float(linea["cogs_ingrediente"] or 0),
+                        incluido_por_defecto=linea["incluido_por_defecto"],
                     )
                     for linea in combo["ingredientes"]
                 ],

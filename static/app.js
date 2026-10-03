@@ -1970,7 +1970,11 @@ function pourCostClonarParaSimulacion(item, esCoctel) {
             cantidad_receta: ing.cantidad_receta,   // editable por el usuario
             wac_actual: ing.wac_actual,
             sin_wac: ing.sin_wac,
-            incluido: pourCostIngredienteEsPrincipal(ing),
+            // El backend decide qué opcional cuenta por defecto (regla por categoría), igual
+            // que en el costo de la tarjeta; sin el campo, solo los principales.
+            incluido: typeof ing.incluido_por_defecto === 'boolean'
+                ? ing.incluido_por_defecto
+                : pourCostIngredienteEsPrincipal(ing),
         }));
         ingredientes.sort(pourCostCompararIngredientes);
         return { esCoctel: true, precioVenta: item.precio_venta, ingredientes };

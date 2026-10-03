@@ -41,10 +41,10 @@ Datos reales en test_pos (2026-08-05): 430 combos, 3545 líneas de receta, 396 c
 ### 3.1 Combos/cócteles — vía `vw_pourcost_receta`
 
 1. Agrupar todas las filas de `vw_pourcost_receta` por `id_combo_coctel`.
-2. Sumar `cogs_ingrediente` de cada línea → **Costo Total de Receta**.
+2. Sumar `cogs_ingrediente` de las líneas **incluidas** → **Costo Total de Receta**: todos los `PRINCIPAL` más, como mucho, un `OPCIONAL` por defecto según la categoría del combo (desde v12.41; antes se sumaban todas las líneas, opcionales incluidos). Regla y configuración en la sección 6, «Selección de opcionales».
 3. `pour_cost = (costo_total_receta / precio_venta) x 100`.
 
-Cada fila ya trae `sin_wac = 1` cuando el ingrediente no tiene costo cacheado (`cache_wac_producto` vacío) — el agregado debe marcar el combo como "costo incompleto" en ese caso, no mostrar un pour cost falsamente bajo.
+Cada fila ya trae `sin_wac = 1` cuando el ingrediente no tiene costo cacheado (`cache_wac_producto` vacío) — el agregado debe marcar el combo como "costo incompleto" en ese caso, no mostrar un pour cost falsamente bajo. Solo cuentan las líneas incluidas: un opcional sin WAC que no está en el costo no activa el aviso.
 
 ### 3.2 Productos sueltos comandables — vía `v9_menubackstage` (`tipo='producto'`) + WAC directo
 
@@ -86,17 +86,17 @@ Los tres primeros aceptan `id_dia` como query param (default `1`), ya que `vw_po
 | `GET /api/pourcost/productos?id_dia=1` | `v9_menubackstage` (`tipo='producto'`) + `v9_cache_wac_producto` | Un objeto por producto suelto: `wac_unitario`, `precio_venta`, pour cost directo |
 | `GET /api/pourcost/insumos` | `vw_alm_producto_con_nombres` | Catálogo completo para la simulación "agregar ingrediente" |
 
-**Nota sobre `ind_tipo_producto`:** `vw_pourcost_receta` no expone el ID numérico de `bar_detalle_combo_bar.ind_tipo_producto`; sí expone `tipo_parte_combo` (el nombre resuelto desde `parameter_table`, ej. `"PRINCIPAL"`, `"OPCIONAL"`). El schema `PourCostIngrediente` y el estado local de simulación usan `tipo_parte_combo` como campo semántico para distinguir ingredientes principales y opcionales — es equivalente y suficiente para la próxima tarea de opcionales.
+**Nota sobre `ind_tipo_producto`:** `vw_pourcost_receta` no expone el ID numérico de `bar_detalle_combo_bar.ind_tipo_producto`; sí expone `tipo_parte_combo` (el nombre resuelto desde `parameter_table`, ej. `"PRINCIPAL"`, `"OPCIONAL"`). El schema `PourCostIngrediente` y el estado local de simulación usan `tipo_parte_combo` como campo semántico para distinguir ingredientes principales y opcionales — es equivalente y suficiente para distinguir opcionales (ver «Selección de opcionales» en la sección 6).
 
 ## 6. Sandbox de simulación (implementado, 100% en memoria del cliente)
 
 Toda la simulación corre en memoria del cliente, sin `POST`/`PUT` a `adminerp`:
 
 - **Simulación inversa (bidireccional):** el usuario puede ingresar un **% objetivo** para obtener el precio sugerido (`costo / (% / 100)`), o bien ingresar un **precio en Bs** para obtener el pour cost % resultante (`costo / precio × 100`). Ambos campos tienen controles `[−][valor][+]`: % con paso 0,5 (mínimo 0,5), precio con paso 1 Bs (mínimo 1). Ambas direcciones reaccionan en tiempo real si el costo simulado cambia por edición de cantidades/WAC.
-- **Selección de opcionales:** al abrir el modal, todos los ingredientes `PRINCIPAL` entran al cálculo automáticamente y los `OPCIONAL` arrancan desmarcados. El frontend usa `tipo_parte_combo` para distinguirlos e `id_producto` como identificador estable del checkbox local; marcar o desmarcar un opcional actualiza en vivo costo, pour cost, precio sugerido y porcentaje resultante.
+- **Selección de opcionales (v12.41):** el backend decide qué cuenta por defecto y lo expone como `incluido_por_defecto` en cada ingrediente de `GET /api/pourcost/recetas`. Entran todos los `PRINCIPAL` más, como mucho, **un** `OPCIONAL` fijado por la categoría del combo. La regla se configura en el `.env` (una variable por categoría, `config.py` → `pourcost_opcional_por_categoria`): `POURCOST_OPCIONAL_CAT<id_categoria>=<id_producto>`, donde `id_categoria` es `bar_combo_coctel.id_categoria` (= `alm_categoria.id`; la consulta de recetas une `bar_combo_coctel` para traerlo, ya que `vw_pourcost_receta` solo expone el nombre) e `id_producto` es `alm_producto.id`. Valores del entorno `test` (BD local): `CAT1` WHISKYS → AGUA S-GAS 2LT (64), `CAT2` RON y `CAT4` FERNET → COCA COLA 3LT (62), `CAT3` LICOR → ROCKSTAR (479), `CAT5` SINGANI → GINGER ALE 2LT (60), `CAT7` VODKAS y `CAT10` COCTELES → SPRITE 3LT (63), `CAT9` GIN y `CAT21` GINVIP → AGUA TONICA 1LT (61), `CAT11` CERVEZAS → AMSTEL LATA 473ML (492). Categorías sin variable (VINOS, TEQUILAS, SHOT, MEZCLADORES, COMIDA…) cuentan solo los principales. Las variables de entorno reales (despliegue) ganan sobre el `.env`; valores no numéricos o ≤ 0 se ignoran. Si el opcional de la regla no figura entre los del combo (p. ej. 4 combos GIN/GINVIP usan otras tónicas) no se sustituye por otro: cuenta solo el principal. Los ids de producto cambian entre entornos (en `test_pos` el 63 es AMSTEL 330ML), por eso cada entorno define sus propias variables; un entorno sin ellas degrada a "solo principal" sin error. La tarjeta (`costo_total_receta`, `pour_cost_pct`) y el estado inicial del modal salen de este mismo cálculo; el usuario puede marcar/desmarcar otros opcionales en el modal. `costo_incompleto` solo considera las líneas incluidas. Antes (≤ v12.40) la tarjeta sumaba todos los opcionales y el modal partía con todos desmarcados. El frontend usa `tipo_parte_combo` para distinguirlos e `id_producto` como identificador estable del checkbox local; marcar o desmarcar un opcional actualiza en vivo costo, pour cost, precio sugerido y porcentaje resultante.
 - **Alteración de WAC:** el usuario edita el WAC de un ingrediente → recalcula `cogs_ingrediente` de esa línea y el total.
 - **Alteración de receta:** selector `[−] [cantidad] [+]` con paso 0,5 por ingrediente. El frontend edita `cantidad_receta` y deriva `cantidad_unidad_base` internamente (`pourCostCantidadUnidadBase`). Para `Detalle`: `cantidad_unidad_base = cantidad_receta / unidades_detalle_por_base`; para `Unidad`: `cantidad_unidad_base = cantidad_receta`.
-- **Reiniciar simulación:** restaura exactamente los valores originales del backend (cantidades, WAC, costos y % original).
+- **Reiniciar simulación:** restaura exactamente los valores originales del backend (cantidades, WAC, costos y % original) y la selección inicial de opcionales (`incluido_por_defecto`, no «todos desmarcados»).
 
 ### 6.1 Consistencia del modal de ingredientes (implementada en v11.4)
 
@@ -168,7 +168,7 @@ Las imágenes aportadas sirven como referencia visual del estado actual del moda
 
 ## 10. Pruebas
 
-- **Unitarias, sin DB** (`tests/test_calculos_pourcost.py`, 27 tests): cubren `_calcular_pour_cost_pct`, `_calcular_precio_sugerido`, `_agregar_costo_receta`, el espejo puro del cálculo simulado con opcionales (`_calcular_costo_receta_simulado`) y los casos de aceptación de cantidades/opcionales (Long Island 1 oz → Bs 2,35; 1,5 oz → Bs 3,53; Chuflay inicial 4,41 / 12,61; Chuflay con opcionales 7,15 / 20,43; división por cero → 0). Corren con `python -m pytest`.
+- **Unitarias, sin DB** (`tests/test_calculos_pourcost.py`, 39 tests): cubren `_calcular_pour_cost_pct`, `_calcular_precio_sugerido`, `_agregar_costo_receta` (incluida la regla del opcional por defecto por categoría y `costo_incompleto` solo sobre líneas incluidas), la lectura de `POURCOST_OPCIONAL_CAT<id>` desde `.env`/entorno (`settings.pourcost_opcional_por_categoria`), el espejo puro del cálculo simulado con opcionales (`_calcular_costo_receta_simulado`) y los casos de aceptación de cantidades/opcionales (Long Island 1 oz → Bs 2,35; 1,5 oz → Bs 3,53; Chuflay inicial 4,41 / 12,61; Chuflay con opcionales 7,15 / 20,43; división por cero → 0). Corren con `python -m pytest`.
 - **Sin integración automatizada en v1.** Los 4 `GET` se validan a mano contra `test_pos` vía `/docs` o la PWA en seenode — `tests/conftest.py` exige `APP_ENV=test` y no se toca ese guard.
 
 ---

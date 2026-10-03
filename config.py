@@ -1,14 +1,22 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import field_validator
 from sqlalchemy.engine import URL
+from dotenv import dotenv_values
 import logging
+import os
+import re
 
 from branding import BRAND_IDS, DEFAULT_BRAND_ID
 
 logger = logging.getLogger(__name__)
 
+_ENV_FILE = ".env"
+_PATRON_OPCIONAL_CAT = re.compile(r"^POURCOST_OPCIONAL_CAT(\d+)$", re.IGNORECASE)
+
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env")
+    # extra="ignore": las claves POURCOST_OPCIONAL_CAT<id> son dinámicas (una por
+    # categoría) y no pueden declararse como campos; ver pourcost_opcional_por_categoria.
+    model_config = SettingsConfigDict(env_file=_ENV_FILE, extra="ignore")
 
     APP_ENV: str = "test"
     SECRET_KEY: str  # Clave para firma de tokens JWT
@@ -117,6 +125,33 @@ class Settings(BaseSettings):
             valores = [1]
 
         return list(dict.fromkeys(valores))
+
+    @property
+    def pourcost_opcional_por_categoria(self) -> dict[int, int]:
+        """Producto OPCIONAL que POUR COST cuenta por defecto en el costo de un combo, por categoría.
+
+        Se configura con una variable por categoría: POURCOST_OPCIONAL_CAT<id_categoria>=<id_producto>,
+        ej. POURCOST_OPCIONAL_CAT1=64 (WHISKYS -> AGUA S-GAS 2LT). id_categoria es
+        bar_combo_coctel.id_categoria (= alm_categoria.id); id_producto es alm_producto.id, que cambia
+        entre entornos, por eso vive en el .env de cada uno. Categoría sin variable = sin opcional por
+        defecto (solo cuentan los PRINCIPAL). Se leen el .env y las variables de entorno reales (en
+        el despliegue no hay .env); estas últimas ganan. Valores no numéricos o <= 0 se ignoran."""
+        crudo = {**dotenv_values(_ENV_FILE), **os.environ}
+        resultado: dict[int, int] = {}
+        for clave, valor in crudo.items():
+            coincide = _PATRON_OPCIONAL_CAT.match(clave)
+            if not coincide:
+                continue
+            try:
+                id_producto = int(str(valor).strip())
+            except ValueError:
+                logger.warning("%s=%r ignorada: no es un id de producto numérico", clave, valor)
+                continue
+            if id_producto <= 0:
+                logger.warning("%s=%r ignorada: el id de producto debe ser mayor a 0", clave, valor)
+                continue
+            resultado[int(coincide.group(1))] = id_producto
+        return resultado
 
     # Variables de prueba (WAMP local)
     TEST_DB_HOST: str

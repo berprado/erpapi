@@ -126,6 +126,109 @@ def test_agregar_costo_receta_lista_vacia():
     assert _agregar_costo_receta([]) == {}
 
 
+# --- _agregar_costo_receta: opcional por defecto segun categoria ---------------
+
+# {id_categoria: id_producto}, como lo entrega settings.pourcost_opcional_por_categoria.
+REGLAS = {5: 60, 7: 63, 9: 61}  # SINGANI -> GINGER ALE, VODKAS -> SPRITE, GIN -> AGUA TONICA
+
+
+def _receta_singani(id_categoria=5):
+    """Principal 87 + opcionales: GINGER ALE (60), SPRITE (63), COCA COLA (62)."""
+    kw = {"id_categoria_combo": id_categoria}
+    return [
+        _linea(1, 19, Decimal("87"), tipo_parte_combo="PRINCIPAL", **kw),
+        _linea(1, 60, Decimal("4.4477"), tipo_parte_combo="OPCIONAL", **kw),
+        _linea(1, 63, Decimal("5.5070"), tipo_parte_combo="OPCIONAL", **kw),
+        _linea(1, 62, Decimal("5.8956"), tipo_parte_combo="OPCIONAL", **kw),
+    ]
+
+
+def test_costo_incluye_principal_mas_opcional_por_defecto_de_la_categoria():
+    combo = _agregar_costo_receta(_receta_singani(), REGLAS)[1]
+    assert combo["costo_total"] == Decimal("91.4477")
+    marcadas = {l["id_producto"]: l["incluido_por_defecto"] for l in combo["ingredientes"]}
+    assert marcadas == {19: True, 60: True, 63: False, 62: False}
+
+
+def test_cada_categoria_usa_su_propio_opcional():
+    combo = _agregar_costo_receta(_receta_singani(id_categoria=7), REGLAS)[1]
+    assert combo["costo_total"] == Decimal("92.5070")  # VODKAS -> SPRITE 3LT (63)
+
+
+def test_sin_configuracion_solo_cuenta_principales():
+    for reglas in (None, {}):
+        combo = _agregar_costo_receta(_receta_singani(), reglas)[1]
+        assert combo["costo_total"] == Decimal("87")
+        assert not any(l["incluido_por_defecto"] for l in combo["ingredientes"] if l["tipo_parte_combo"] == "OPCIONAL")
+
+
+def test_categoria_sin_regla_solo_cuenta_principales():
+    combo = _agregar_costo_receta(_receta_singani(id_categoria=6), REGLAS)[1]  # VINOS
+    assert combo["costo_total"] == Decimal("87")
+
+
+def test_linea_sin_id_categoria_combo_solo_cuenta_principales():
+    lineas = [l for l in _receta_singani()]
+    for l in lineas:
+        del l["id_categoria_combo"]
+    assert _agregar_costo_receta(lineas, REGLAS)[1]["costo_total"] == Decimal("87")
+
+
+def test_opcional_por_defecto_ausente_en_el_combo_no_se_sustituye():
+    """GIN -> AGUA TONICA (61); si el combo no la trae entre sus opcionales, no se elige otra."""
+    combo = _agregar_costo_receta(_receta_singani(id_categoria=9), REGLAS)[1]
+    assert combo["costo_total"] == Decimal("87")
+
+
+def test_producto_por_defecto_como_principal_no_se_duplica():
+    """Solo un OPCIONAL puede ser el default; un PRINCIPAL con ese id cuenta una sola vez."""
+    lineas = [_linea(1, 60, Decimal("10"), tipo_parte_combo="PRINCIPAL", id_categoria_combo=5)]
+    assert _agregar_costo_receta(lineas, REGLAS)[1]["costo_total"] == Decimal("10")
+
+
+def test_costo_incompleto_ignora_opcionales_no_incluidos():
+    lineas = _receta_singani()
+    lineas[2]["sin_wac"] = 1  # SPRITE sin WAC, pero no es el default de SINGANI
+    assert _agregar_costo_receta(lineas, REGLAS)[1]["costo_incompleto"] is False
+    lineas[1]["sin_wac"] = 1  # GINGER ALE sin WAC y si cuenta
+    assert _agregar_costo_receta(lineas, REGLAS)[1]["costo_incompleto"] is True
+
+
+# --- settings.pourcost_opcional_por_categoria (lectura de POURCOST_OPCIONAL_CAT<id>) ---
+
+def _reglas_desde(monkeypatch, dotenv, entorno=None):
+    import config
+    monkeypatch.setattr(config, "dotenv_values", lambda _ruta: dotenv)
+    for clave in [k for k in config.os.environ if k.upper().startswith("POURCOST_OPCIONAL_CAT")]:
+        monkeypatch.delenv(clave)
+    for clave, valor in (entorno or {}).items():
+        monkeypatch.setenv(clave, valor)
+    return config.Settings.pourcost_opcional_por_categoria.fget(None)
+
+
+def test_config_lee_una_variable_por_categoria(monkeypatch):
+    reglas = _reglas_desde(monkeypatch, {"POURCOST_OPCIONAL_CAT1": "64", "POURCOST_OPCIONAL_CAT21": " 61 ", "OTRA": "9"})
+    assert reglas == {1: 64, 21: 61}
+
+
+def test_config_ignora_valores_invalidos(monkeypatch):
+    reglas = _reglas_desde(monkeypatch, {
+        "POURCOST_OPCIONAL_CAT1": "abc", "POURCOST_OPCIONAL_CAT2": "0",
+        "POURCOST_OPCIONAL_CAT3": "-4", "POURCOST_OPCIONAL_CAT4": "", "POURCOST_OPCIONAL_CAT5": "60",
+        "POURCOST_OPCIONAL_CATX": "7",
+    })
+    assert reglas == {5: 60}
+
+
+def test_config_variable_de_entorno_real_gana_sobre_el_dotenv(monkeypatch):
+    reglas = _reglas_desde(monkeypatch, {"POURCOST_OPCIONAL_CAT1": "64"}, {"POURCOST_OPCIONAL_CAT1": "99", "POURCOST_OPCIONAL_CAT2": "62"})
+    assert reglas == {1: 99, 2: 62}
+
+
+def test_config_sin_variables_devuelve_vacio(monkeypatch):
+    assert _reglas_desde(monkeypatch, {}) == {}
+
+
 # --- Casos de aceptacion: formulas de cantidad_receta → cogs_ingrediente -----
 # Estos tests validan la formula que la UI de JS replica con pourCostCantidadUnidadBase.
 # El backend calcula cogs_ingrediente en vw_pourcost_receta; aqui se verifica la

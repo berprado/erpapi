@@ -104,6 +104,7 @@ El módulo de Pour Cost calcula los costos de receta (WAC) y porcentajes de pour
    - Los ingredientes con `tipo_parte_combo = 'OPCIONAL'` cuentan con un checkbox independiente.
    - Si no está seleccionado, sus cambios de cantidad o WAC no afectan el costo total de la simulación.
    - Los ingredientes principales no se pueden desmarcar ni excluir del cálculo.
+   - Al abrir el modal, la selección inicial es la del backend (`incluido_por_defecto`): todos los principales más el opcional por defecto de la categoría del combo, configurado en `.env` (`POURCOST_OPCIONAL_CAT<id_categoria>=<id_producto>`). Sin regla para la categoría, solo los principales. Ver `documentos/pour_cost/pourcost.md` sección 6.
 4. **Cálculo de Porcentaje Objetivo y Precio Sugerido:**
    - Permite ingresar un **% Pour Cost Objetivo**. Si el valor ingresado es un número válido y mayor a $0$, calcula reactivamente el **Precio Sugerido**:
      $$\text{Precio Sugerido Exacto} = \frac{\text{Costo Total Simulado}}{\text{Pour Cost Objetivo \%} / 100}$$

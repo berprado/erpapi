@@ -4,6 +4,8 @@ name: "Pour Cost Modal Fix"
 applyTo: "**"
 ---
 
+> **Nota (v12.41): documento histórico, parcialmente superado.** La regla «ningún opcional seleccionado al abrir el modal» (y que el costo inicial sea solo el principal) ya no aplica: ahora el costo de la tarjeta y la selección inicial del modal incluyen los `PRINCIPAL` más un `OPCIONAL` por defecto según la categoría del combo (`POURCOST_OPCIONAL_CAT<id_categoria>`, ver `documentos/pour_cost/pourcost.md` sección 6). El resto (checkboxes independientes, `tipo_parte_combo` como fuente de verdad, `id_producto` como identificador) sigue vigente.
+
 ### Contexto del problema
 
 Actualmente, el costo y el pour cost parecen calcularse sumando todos los ingredientes registrados en la receta, incluidos todos los ingredientes opcionales.

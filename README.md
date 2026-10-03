@@ -118,6 +118,13 @@ PALOTEO_ALLOWED_BARRAS=1
 # POUR COST: grupos de precio (ope_dia) que la instancia realmente usa,
 # separados por coma. Ver "POUR COST" mas abajo. Default: "1".
 POURCOST_DIAS_PRECIO_ACTIVOS=1
+
+# POUR COST: producto OPCIONAL que cuenta por defecto en el costo de cada combo.
+# Una variable por categoria: POURCOST_OPCIONAL_CAT<id alm_categoria>=<id alm_producto>.
+# Los ids de producto cambian por entorno. Categoria sin variable = solo los PRINCIPAL.
+# Ejemplo (entorno test): WHISKYS (1) -> AGUA S-GAS 2LT (64), SINGANI (5) -> GINGER ALE 2LT (60).
+POURCOST_OPCIONAL_CAT1=64
+POURCOST_OPCIONAL_CAT5=60
 ```
 
 Generar una `SECRET_KEY` segura:
@@ -413,17 +420,18 @@ Modulo de solo lectura: calcula el costo de receta (WAC) y el pour cost % de com
 |---|---|---|
 | `GET` | `/api/pourcost/dias` | Grupos de precio (`ope_dia`) que la instancia realmente usa, segun el allowlist `POURCOST_DIAS_PRECIO_ACTIVOS` (`config.py`) — devuelve `id_dia`/`nombre` reales, no un `id_dia` inventado. `ope_dia` puede tener mas filas de las que estan realmente en produccion (un grupo creado pero nunca puesto en uso, con precios en `0`); este endpoint es la fuente de verdad de "cuales estan activos", no la mera existencia de filas en `ope_dia`/`ope_precio_venta` |
 | `GET` | `/api/pourcost/menu?id_dia=1` | Menu activo (combos + productos sueltos) con su `precio_venta` para el `id_dia` pedido |
-| `GET` | `/api/pourcost/recetas?id_dia=1` | Combos agregados desde `vw_pourcost_receta`: costo total de receta, `precio_venta` del `id_dia` pedido, pour cost % y la lista de ingredientes con su `cogs_ingrediente` |
+| `GET` | `/api/pourcost/recetas?id_dia=1` | Combos agregados desde `vw_pourcost_receta`: costo total de receta (principales + el opcional por defecto de la categoria, regla 6), `precio_venta` del `id_dia` pedido, pour cost % y la lista de ingredientes con su `cogs_ingrediente` e `incluido_por_defecto` |
 | `GET` | `/api/pourcost/productos?id_dia=1` | Productos sueltos comandables (sin receta): costo = su WAC directo (`v9_cache_wac_producto`), sin agregacion de lineas |
 | `GET` | `/api/pourcost/insumos` | Catalogo completo de insumos (`vw_alm_producto_con_nombres` + WAC) para la simulacion "agregar ingrediente" del frontend |
 
 Reglas:
 
 1. `id_dia` es un "horario de precio" (ej. jueves-sabado vs. domingo-lunes con tarifa distinta), no un dia calendario 1:1 — se selecciona manualmente en la UI, default `1`. Las vistas fuente traen su propio `precio_venta` fijo a `id_dia=1`; los endpoints lo ignoran y resuelven el precio aparte contra `v9_menubackstage` filtrando por el `id_dia` recibido.
-2. `sin_wac`/`costo_incompleto` marcan ingredientes sin WAC cacheado (`cache_wac_producto` vacio) — no se ocultan ni se tratan como costo cero silencioso.
+2. `sin_wac`/`costo_incompleto` marcan ingredientes sin WAC cacheado (`cache_wac_producto` vacio) — no se ocultan ni se tratan como costo cero silencioso. `costo_incompleto` solo mira las lineas incluidas en el costo.
 3. Las vistas fuente (`v9_menubackstage`, `vw_pourcost_receta`, `vw_alm_producto_con_nombres`, `v9_cache_wac_producto`) viven en MySQL, no en el ORM de este repo — mismo patron que los triggers de `alm_producto`. DDL versionado en `querys/create_views_pourcost.sql`; ya existen en `test_pos`, que es el entorno de desarrollo/validacion de este modulo (ver `documentos/pour_cost/pourcost.md`, seccion 2).
 4. `POURCOST_DIAS_PRECIO_ACTIVOS` (`config.py`, default `"1"`, lista separada por coma, mismo patron que `PALOTEO_ALLOWED_BARRAS`) determina que `id_dia` de `ope_dia` expone `GET /api/pourcost/dias` y, por lo tanto, si el frontend muestra el selector "Precios A/B" con sus 2 botones (nombres reales de `ope_dia`) o lo oculta y muestra un solo grupo como texto plano (caso de hoy: solo el grupo 1 esta realmente en uso).
 5. Sin `Aplicar Precio` (escritura en `ope_precio_venta`) todavia — explicitamente fuera de alcance de esta fase.
+6. **Opcional por defecto (v12.41):** el costo de un combo (tarjeta) suma los `PRINCIPAL` mas un unico `OPCIONAL` segun la categoria del combo, configurado en el `.env` con `POURCOST_OPCIONAL_CAT<id alm_categoria>=<id alm_producto>` (`config.py`, `pourcost_opcional_por_categoria`; ver el bloque de variables de arriba). Los ids de producto cambian por entorno: cada entorno (`.env` local, `test_pos`, variables de entorno de cada Web Service de Seenode) debe definir los suyos. Categoria sin variable, o combo que no trae ese opcional, cuenta solo el principal. El modal parte de la misma seleccion (`incluido_por_defecto`) y el usuario puede cambiarla. Detalle y valores del entorno `test` en `documentos/pour_cost/pourcost.md` seccion 6.
 
 ---
 
@@ -678,7 +686,7 @@ sincronizada entre ambos modulos porque comparten el mismo origen de datos.
 - Selector **Precios A / Precios B** (`pourCostEstado.idDia`, query param `id_dia`) es una eleccion manual del usuario, no se infiere de la operativa activa (decision de diseno, ver `documentos/pour_cost/pourcost.md` seccion 8.2) — cambiarlo vuelve a pedir datos al backend porque el precio depende del horario elegido. Los labels de los botones ya no son "Precios A"/"Precios B" fijos: `cargarPourCostDias()` los reemplaza por los nombres reales de `ope_dia` (`GET /api/pourcost/dias`, ver seccion POUR COST de endpoints); si solo hay un grupo activo (`POURCOST_DIAS_PRECIO_ACTIVOS`), el toggle se oculta por completo y se muestra ese nombre como texto plano no interactivo — hoy es el caso (solo el grupo 1 esta en uso real).
 - El filtro de categoria se llena en cliente a partir del dataset ya cargado (no hay endpoint `/api/pourcost/categorias`); cambia junto con el toggle de tipo. Si la categoria seleccionada no existe en el nuevo dataset al cambiar de tipo, el `<select>` se resetea a "Todas" y se muestra un aviso breve junto al filtro explicando por que (antes era un reset silencioso).
 - Cada tarjeta muestra el pour cost % en un badge coloreado: verde (`badge-ok`, <=28%), ambar (`badge-caution`, 28-35%) o rojo (`badge-danger`, >35%) — cortes definidos por el negocio, no un estandar generico. `badge-caution` es una clase nueva porque `badge-warning` ya estaba tomada por el rojo de diferencias de PALOTEO/AJUSTES.
-- Al hacer click en una tarjeta se abre `#pourcost-modal` con el desglose real (receta con `cogs_ingrediente` por linea, o WAC directo en productos sueltos) y el sandbox de simulacion: cantidad/WAC editables por ingrediente y un campo de % objetivo que calcula el precio sugerido (exacto + redondeado a unidad entera) y su diferencia contra el precio actual. Todo el calculo (`pourCostCalcularPct`, `pourCostCalcularPrecioSugerido`, `pourCostRedondearHalfUp`) es JS puro que espeja exactamente las funciones de `main.py` (mismo HALF_UP manual que `redondearOnzasOperativas`, no `Math.round`) — nunca se envia nada al backend, "Reiniciar simulacion" descarta los cambios volviendo a clonar el item original.
+- Al hacer click en una tarjeta se abre `#pourcost-modal` con el desglose real (receta con `cogs_ingrediente` por linea, o WAC directo en productos sueltos) y el sandbox de simulacion: checkbox por ingrediente opcional (parte con el opcional por defecto de la categoria marcado, ver regla 6), cantidad/WAC editables por ingrediente y un campo de % objetivo que calcula el precio sugerido (exacto + redondeado a unidad entera) y su diferencia contra el precio actual. Todo el calculo (`pourCostCalcularPct`, `pourCostCalcularPrecioSugerido`, `pourCostRedondearHalfUp`) es JS puro que espeja exactamente las funciones de `main.py` (mismo HALF_UP manual que `redondearOnzasOperativas`, no `Math.round`) — nunca se envia nada al backend, "Reiniciar simulacion" descarta los cambios volviendo a clonar el item original.
 - El campo del WAC editable (productos sueltos) tiene una nota inline ("Solo en esta simulación") junto al input, ademas del disclaimer general del header del modal. Cuando el precio base es nulo para el horario elegido, se muestra un aviso explicando que el campo "Bs precio" parte vacio, en vez de dejarlo sin contexto.
 - Mientras el usuario edita "% objetivo" o "Bs precio", el campo activo (el que esta "conduciendo" el calculo) se resalta con borde y el otro se atenua; si se editaron ambos a mano, dejan de sincronizarse entre si y ninguno queda resaltado. Un boton de copiar (icono junto al precio sugerido) copia ese valor al portapapeles.
 - Buscador "BUSCAR" visible en el encabezado del panel, mismo mecanismo que en PESAJE (segundo punto de entrada al buscador compartido del topbar).

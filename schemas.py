@@ -383,6 +383,9 @@ class PourCostIngrediente(BaseModel):
     sin_wac: bool
     cantidad_unidad_base: float
     cogs_ingrediente: float
+    # True para todo PRINCIPAL y para el único OPCIONAL que cuenta en costo_total_receta
+    # (regla por categoría en el .env, ver pourcost_opcional_por_categoria en config.py).
+    incluido_por_defecto: bool = True
 
 
 class PourCostReceta(BaseModel):
