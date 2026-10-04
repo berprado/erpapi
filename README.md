@@ -341,7 +341,7 @@ aplicarlo antes es seguro). Un push redespliega ambas sucursales.
 | Entorno | Estado |
 |---|---|
 | `test` (BD local `adminerp`) | Aplicado 2026-10-04 (3.754 filas previas en NULL) |
-| `test_pos` | Pendiente |
+| `test_pos` | Aplicado 2026-10-04 (607 filas previas en NULL) |
 | `production` casa matriz | Pendiente |
 | `production` Beer Garden | Pendiente |
 
