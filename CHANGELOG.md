@@ -11,6 +11,9 @@ separado con git tags semanticos (`vMAJOR.MINOR.PATCH`) — ver seccion
 version productiva en uso real), corresponde a este mismo punto de la
 historia, `## 12.2` de abajo.
 
+## 12.42
+- Docs POUR COST: nueva seccion 6.4 de `pourcost.md` con los valores de `POURCOST_OPCIONAL_CAT<id>` por entorno (test/casa matriz y Beer Garden), el bloque listo para pegar de Beer Garden, y por que alli no se definen CAT3 (LICOR) ni CAT11 (CERVEZAS). Verificado contra ambas producciones el 2026-10-03.
+
 ## 12.41
 - Fix POUR COST: la tarjeta de COCTELES y el modal de un combo con ingredientes opcionales mostraban pour cost distintos y ambos errados (la tarjeta sumaba todos los opcionales; el modal solo el principal). Ahora el costo es el de los PRINCIPAL mas un unico OPCIONAL por defecto segun la categoria del combo, configurado en el `.env` con una variable por categoria: `POURCOST_OPCIONAL_CAT<id alm_categoria>=<id alm_producto>` (ej. `POURCOST_OPCIONAL_CAT1=64`). Los ids de producto cambian por entorno, por eso no van en el codigo; hay que definir las variables en cada entorno (incluidas las variables de entorno del despliegue en seenode). Categorias sin variable, o combos que no traen ese opcional, cuentan solo el principal. `config.py` pasa a `extra="ignore"` y expone `pourcost_opcional_por_categoria`; la consulta de recetas une `bar_combo_coctel` para traer `id_categoria`.
 - `GET /api/pourcost/recetas` agrega `incluido_por_defecto` a cada ingrediente y el modal lo usa como estado inicial de los checkboxes: tarjeta y modal parten del mismo calculo. `costo_incompleto` solo mira las lineas incluidas (un opcional sin WAC que nadie marco ya no lo activa).

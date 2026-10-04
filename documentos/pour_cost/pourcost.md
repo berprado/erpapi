@@ -93,7 +93,7 @@ Los tres primeros aceptan `id_dia` como query param (default `1`), ya que `vw_po
 Toda la simulación corre en memoria del cliente, sin `POST`/`PUT` a `adminerp`:
 
 - **Simulación inversa (bidireccional):** el usuario puede ingresar un **% objetivo** para obtener el precio sugerido (`costo / (% / 100)`), o bien ingresar un **precio en Bs** para obtener el pour cost % resultante (`costo / precio × 100`). Ambos campos tienen controles `[−][valor][+]`: % con paso 0,5 (mínimo 0,5), precio con paso 1 Bs (mínimo 1). Ambas direcciones reaccionan en tiempo real si el costo simulado cambia por edición de cantidades/WAC.
-- **Selección de opcionales (v12.41):** el backend decide qué cuenta por defecto y lo expone como `incluido_por_defecto` en cada ingrediente de `GET /api/pourcost/recetas`. Entran todos los `PRINCIPAL` más, como mucho, **un** `OPCIONAL` fijado por la categoría del combo. La regla se configura en el `.env` (una variable por categoría, `config.py` → `pourcost_opcional_por_categoria`): `POURCOST_OPCIONAL_CAT<id_categoria>=<id_producto>`, donde `id_categoria` es `bar_combo_coctel.id_categoria` (= `alm_categoria.id`; la consulta de recetas une `bar_combo_coctel` para traerlo, ya que `vw_pourcost_receta` solo expone el nombre) e `id_producto` es `alm_producto.id`. Valores del entorno `test` (BD local): `CAT1` WHISKYS → AGUA S-GAS 2LT (64), `CAT2` RON y `CAT4` FERNET → COCA COLA 3LT (62), `CAT3` LICOR → ROCKSTAR (479), `CAT5` SINGANI → GINGER ALE 2LT (60), `CAT7` VODKAS y `CAT10` COCTELES → SPRITE 3LT (63), `CAT9` GIN y `CAT21` GINVIP → AGUA TONICA 1LT (61), `CAT11` CERVEZAS → AMSTEL LATA 473ML (492). Categorías sin variable (VINOS, TEQUILAS, SHOT, MEZCLADORES, COMIDA…) cuentan solo los principales. Las variables de entorno reales (despliegue) ganan sobre el `.env`; valores no numéricos o ≤ 0 se ignoran. Si el opcional de la regla no figura entre los del combo (p. ej. 4 combos GIN/GINVIP usan otras tónicas) no se sustituye por otro: cuenta solo el principal. Los ids de producto cambian entre entornos (en `test_pos` el 63 es AMSTEL 330ML), por eso cada entorno define sus propias variables; un entorno sin ellas degrada a "solo principal" sin error. La tarjeta (`costo_total_receta`, `pour_cost_pct`) y el estado inicial del modal salen de este mismo cálculo; el usuario puede marcar/desmarcar otros opcionales en el modal. `costo_incompleto` solo considera las líneas incluidas. Antes (≤ v12.40) la tarjeta sumaba todos los opcionales y el modal partía con todos desmarcados. El frontend usa `tipo_parte_combo` para distinguirlos e `id_producto` como identificador estable del checkbox local; marcar o desmarcar un opcional actualiza en vivo costo, pour cost, precio sugerido y porcentaje resultante.
+- **Selección de opcionales (v12.41):** el backend decide qué cuenta por defecto y lo expone como `incluido_por_defecto` en cada ingrediente de `GET /api/pourcost/recetas`. Entran todos los `PRINCIPAL` más, como mucho, **un** `OPCIONAL` fijado por la categoría del combo. La regla se configura en el `.env` (una variable por categoría, `config.py` → `pourcost_opcional_por_categoria`): `POURCOST_OPCIONAL_CAT<id_categoria>=<id_producto>`, donde `id_categoria` es `bar_combo_coctel.id_categoria` (= `alm_categoria.id`; la consulta de recetas une `bar_combo_coctel` para traerlo, ya que `vw_pourcost_receta` solo expone el nombre) e `id_producto` es `alm_producto.id`. Valores por entorno (test, casa matriz y Beer Garden) en la sección 6.4. Valores del entorno `test` (BD local): `CAT1` WHISKYS → AGUA S-GAS 2LT (64), `CAT2` RON y `CAT4` FERNET → COCA COLA 3LT (62), `CAT3` LICOR → ROCKSTAR (479), `CAT5` SINGANI → GINGER ALE 2LT (60), `CAT7` VODKAS y `CAT10` COCTELES → SPRITE 3LT (63), `CAT9` GIN y `CAT21` GINVIP → AGUA TONICA 1LT (61), `CAT11` CERVEZAS → AMSTEL LATA 473ML (492). Categorías sin variable (VINOS, TEQUILAS, SHOT, MEZCLADORES, COMIDA…) cuentan solo los principales. Las variables de entorno reales (despliegue) ganan sobre el `.env`; valores no numéricos o ≤ 0 se ignoran. Si el opcional de la regla no figura entre los del combo (p. ej. 4 combos GIN/GINVIP usan otras tónicas) no se sustituye por otro: cuenta solo el principal. Los ids de producto cambian entre entornos (en `test_pos` el 63 es AMSTEL 330ML), por eso cada entorno define sus propias variables; un entorno sin ellas degrada a "solo principal" sin error. La tarjeta (`costo_total_receta`, `pour_cost_pct`) y el estado inicial del modal salen de este mismo cálculo; el usuario puede marcar/desmarcar otros opcionales en el modal. `costo_incompleto` solo considera las líneas incluidas. Antes (≤ v12.40) la tarjeta sumaba todos los opcionales y el modal partía con todos desmarcados. El frontend usa `tipo_parte_combo` para distinguirlos e `id_producto` como identificador estable del checkbox local; marcar o desmarcar un opcional actualiza en vivo costo, pour cost, precio sugerido y porcentaje resultante.
 - **Alteración de WAC:** el usuario edita el WAC de un ingrediente → recalcula `cogs_ingrediente` de esa línea y el total.
 - **Alteración de receta:** selector `[−] [cantidad] [+]` con paso 0,5 por ingrediente. El frontend edita `cantidad_receta` y deriva `cantidad_unidad_base` internamente (`pourCostCantidadUnidadBase`). Para `Detalle`: `cantidad_unidad_base = cantidad_receta / unidades_detalle_por_base`; para `Unidad`: `cantidad_unidad_base = cantidad_receta`.
 - **Reiniciar simulación:** restaura exactamente los valores originales del backend (cantidades, WAC, costos y % original) y la selección inicial de opcionales (`incluido_por_defecto`, no «todos desmarcados»).
@@ -136,6 +136,43 @@ Una revisión de código del modal (agosto 2026) encontró varias inconsistencia
 - **Escape cierra el modal**: el listener global de `keydown` (compartido con el resto de modales de la PWA) ahora también llama a `cerrarModalPourCost()`.
 - **Realimentación cruzada entre "% objetivo" y "Bs precio"**: mientras el usuario no haya tocado un campo a mano, se mantiene sincronizado con lo que calcula el otro (`pourCostTargetTocadoManualmente` / `pourCostPrecioTocadoManualmente`). En cuanto el usuario edita uno directamente, deja de sobreescribirse — evita que un valor autocompletado quede "congelado" y deje de reflejar cambios posteriores en el otro campo.
 - Los botones `[−][valor][+]` que esta sección ya describía para ambos campos existían cableados en `app.js` pero no en el HTML (código muerto): ahora también están en el markup, que es lo que este documento venía asumiendo.
+
+### 6.4 Valores de `POURCOST_OPCIONAL_CAT<id>` por entorno
+
+`<id>` es `alm_categoria.id`; el valor es `alm_producto.id` del opcional que cuenta por defecto. Verificado contra cada BD el 2026-10-03 con `querys/verificar_pourcost_opcionales.sql` (solo lectura). Se define en el `.env` local y en las variables de entorno de cada Web Service de Seenode (`erpapi` = casa matriz, `paloteo_garden` = Beer Garden).
+
+| Variable | Categoría | `test` (local) y casa matriz (producción) | Beer Garden (producción) |
+|---|---|---|---|
+| `POURCOST_OPCIONAL_CAT1` | WHISKYS | 64 · AGUA S-GAS 2LT | 28 · AGUA SIN GAS 2LT |
+| `POURCOST_OPCIONAL_CAT2` | RON | 62 · COCA COLA 3LT | 4 · COCA COLA 3LT |
+| `POURCOST_OPCIONAL_CAT3` | LICOR | 479 · ROCKSTAR | *no se define* |
+| `POURCOST_OPCIONAL_CAT4` | FERNET | 62 · COCA COLA 3LT | 4 · COCA COLA 3LT |
+| `POURCOST_OPCIONAL_CAT5` | SINGANI | 60 · GINGER ALE 2LT | 175 · GINGER ALE 2LT |
+| `POURCOST_OPCIONAL_CAT7` | VODKAS | 63 · SPRITE 3LT | 26 · SPRITE 3LT |
+| `POURCOST_OPCIONAL_CAT9` | GIN | 61 · AGUA TONICA 1LT | 43 · AGUA TONICA 1LT |
+| `POURCOST_OPCIONAL_CAT10` | COCTELES | 63 · SPRITE 3LT | 26 · SPRITE 3LT |
+| `POURCOST_OPCIONAL_CAT11` | CERVEZAS | 492 · AMSTEL LATA 473ML | *no se define* |
+| `POURCOST_OPCIONAL_CAT21` | GINVIP | 61 · AGUA TONICA 1LT | 43 · AGUA TONICA 1LT |
+
+Bloque listo para pegar (Beer Garden):
+
+```
+POURCOST_OPCIONAL_CAT1=28
+POURCOST_OPCIONAL_CAT2=4
+POURCOST_OPCIONAL_CAT4=4
+POURCOST_OPCIONAL_CAT5=175
+POURCOST_OPCIONAL_CAT7=26
+POURCOST_OPCIONAL_CAT9=43
+POURCOST_OPCIONAL_CAT10=26
+POURCOST_OPCIONAL_CAT21=43
+```
+
+Notas:
+
+- **Beer Garden sin CAT3 ni CAT11:** ninguna receta de LICOR ni de CERVEZAS tiene opcionales allí, y sus productos (ROCKSTAR, AMSTEL LATA 473ML) no existen en esa BD. Definir esas variables con otro producto no tendría efecto hoy, y marcaría por defecto un producto ajeno si alguien agrega opcionales a esas categorías.
+- **Cobertura verificada (2026-10-03):** en la casa matriz y en Beer Garden todas las recetas con opcionales tienen su opcional por defecto (consulta 3 del SQL de verificación: vacía) y no hay categorías con opcionales sin regla (consulta 2: vacía). En Beer Garden: WHISKYS 21, RON 13, FERNET 5, SINGANI 24, VODKAS 13, GIN 28, COCTELES 1 (V SAN MATEO) y GINVIP 31 combos con opcionales.
+- **`test_pos`** tiene otros ids de producto (p. ej. SPRITE 3LT = 26, AGUA TONICA 1LT = 43, como Beer Garden); si se usa para validar POUR COST, hay que verificar sus ids con el mismo SQL antes de definir las variables.
+- **Alta de una sucursal nueva:** correr `querys/verificar_pourcost_opcionales.sql`, ajustar el mapa a los ids de esa BD y definir las variables antes de desplegar; sin ellas el costo vuelve a contar solo los principales, sin error.
 
 ## 7. Cierre del flujo — Fase 2, fuera de alcance v1
 
