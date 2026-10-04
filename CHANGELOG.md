@@ -11,6 +11,9 @@ separado con git tags semanticos (`vMAJOR.MINOR.PATCH`) — ver seccion
 version productiva en uso real), corresponde a este mismo punto de la
 historia, `## 12.2` de abajo.
 
+## 12.44
+- TODO: cerrada la precision ML->OZ en produccion (casa matriz 273/273 y Beer Garden 119/119 verificados el 2026-10-04, BRIGHTON 700ML corregidos). El runbook de PESAJE queda abierto solo por el smoke test de la pantalla de PESAJE (paso 5) en ambas instancias.
+
 ## 12.43
 - Fix POUR COST: si la receta repite la linea del opcional por defecto (dato duplicado en el ERP, p. ej. `AGUA TONICA 1LT` dos veces en `C MOM ROCKS 700ML`), solo cuenta la primera; antes se contaba dos veces y el costo del combo quedaba inflado. Detectado por el nuevo test de integracion.
 - Tests: `tests/test_integracion_pourcost.py` (7 tests, solo lectura, `APP_ENV=test`) para `GET /api/pourcost/recetas` y `/productos`: invariantes de costo y de opcional por defecto, join sin perdida ni duplicados y control de acceso. Mas un unitario del caso de linea repetida.
