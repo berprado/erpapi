@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import text, bindparam, func
+from sqlalchemy import text, bindparam, func, or_
 from sqlalchemy.exc import IntegrityError
 from fastapi import FastAPI, Depends, HTTPException, status, Request, Query
 from fastapi.responses import FileResponse, JSONResponse, Response
@@ -88,14 +88,17 @@ MARGEN_CAPTURA_CRUDA_OZ = Decimal("0.255")
 
 
 def _obtener_capturas_crudas_por_conteo(
-    db: Session, id_operacion: int, conteos: dict[int, tuple[float, float]]
+    db: Session, id_operacion: int, id_barra: int, conteos: dict[int, tuple[float, float]]
 ) -> dict[int, models.PaloteoRegistroCrudo]:
-    """Última captura cruda de cada producto que explica su conteo registrado.
+    """Captura cruda de cada producto contado en esta barra.
 
-    app_paloteo_registro_crudo no guarda id_barra: con más de una barra por
-    operativa, la última captura de un producto puede ser la de la otra barra.
-    Solo se acepta una captura con las mismas botellas cerradas que el conteo
-    (paq, det) de esta barra y cuyas onzas pudieron redondear a det: a no más
+    Desde v12.45 cada captura guarda su id_barra: vale la última de esta barra,
+    y las de otra barra se ignoran siempre.
+
+    Respaldo para las filas anteriores (id_barra NULL), solo si el producto no
+    tiene ninguna captura propia: antes no había forma de saber la barra, así
+    que se acepta la última captura sin barra con las mismas botellas cerradas
+    que el conteo (paq, det) y cuyas onzas pudieron redondear a det: a no más
     de 0.25 oz (media grilla POS) más 0.005 (onzas_calculadas se guarda con 2
     decimales, así que 10.25 puede venir de un exacto 10.249 registrado como
     10.0; re-redondear el guardado daría 10.5). Si ninguna coincide, el
@@ -107,11 +110,19 @@ def _obtener_capturas_crudas_por_conteo(
     registros = db.query(models.PaloteoRegistroCrudo).filter(
         models.PaloteoRegistroCrudo.id_operacion == id_operacion,
         models.PaloteoRegistroCrudo.id_producto.in_(list(conteos)),
+        or_(
+            models.PaloteoRegistroCrudo.id_barra == id_barra,
+            models.PaloteoRegistroCrudo.id_barra.is_(None),
+        ),
     ).order_by(models.PaloteoRegistroCrudo.id.desc()).all()
 
     capturas = {}
     for registro in registros:
-        if registro.id_producto in capturas:
+        if registro.id_barra == id_barra and registro.id_producto not in capturas:
+            capturas[registro.id_producto] = registro
+
+    for registro in registros:
+        if registro.id_barra is not None or registro.id_producto in capturas:
             continue
         paq, det = conteos[registro.id_producto]
         if float(registro.botellas_cerradas or 0) != float(paq or 0):
@@ -511,6 +522,7 @@ def _procesar_items_paloteo(
 
         registro_crudo = models.PaloteoRegistroCrudo(
             id_operacion=payload.id_operacion,
+            id_barra=payload.id_barra,
             id_producto=item.id_producto,
             botellas_cerradas=item.botellas_cerradas,
             pesos_abiertas=json.dumps([entrada.model_dump() for entrada in item.pesos_abiertas]),
@@ -814,7 +826,7 @@ def obtener_inventario_registrado(
         models.DetalleFisicoPOS.id_inventario_fisico == inventario.id,
         models.DetalleFisicoPOS.estado == 'HAB'
     ).all()
-    capturas = _obtener_capturas_crudas_por_conteo(db, inventario.id_operacion, {
+    capturas = _obtener_capturas_crudas_por_conteo(db, inventario.id_operacion, id_barra, {
         detalle.id_producto: (detalle.cantidad_unidad, detalle.cantidad_detalle)
         for detalle in detalles_db
     })
@@ -2657,17 +2669,28 @@ def _obtener_filas_paloteo_historico(db: Session, id_operacion: int, id_barra: i
               AND estado_paloteo = 'HAB'
             GROUP BY id_operacion, id_barra, id_producto
         ) ultima_cierre ON ultima_cierre.id_paloteo_cierre = c.id_paloteo_cierre
-        -- El registro crudo no guarda id_barra: solo vale la ultima captura
-        -- que explica el conteo de esta barra (mismas botellas y onzas a no mas
-        -- de MARGEN_CAPTURA_CRUDA_OZ), igual que _obtener_capturas_crudas_por_conteo.
+        -- Misma regla que _obtener_capturas_crudas_por_conteo: la ultima captura
+        -- de esta barra; si no hay ninguna, respaldo para las filas anteriores a
+        -- v12.45 (id_barra NULL): la ultima que explica el conteo (mismas
+        -- botellas y onzas a no mas de MARGEN_CAPTURA_CRUDA_OZ). Nunca la de otra barra.
         LEFT JOIN app_paloteo_registro_crudo r
-          ON r.id = (
-              SELECT MAX(r2.id)
-              FROM app_paloteo_registro_crudo r2
-              WHERE r2.id_operacion = c.id_operacion
-                AND r2.id_producto = c.id_producto
-                AND r2.botellas_cerradas = COALESCE(c.fisico_paq, 0)
-                AND ABS(COALESCE(r2.onzas_calculadas, 0) - COALESCE(c.fisico_detalle, 0)) <= 0.255
+          ON r.id = COALESCE(
+              (
+                  SELECT MAX(r1.id)
+                  FROM app_paloteo_registro_crudo r1
+                  WHERE r1.id_operacion = c.id_operacion
+                    AND r1.id_barra = c.id_barra
+                    AND r1.id_producto = c.id_producto
+              ),
+              (
+                  SELECT MAX(r2.id)
+                  FROM app_paloteo_registro_crudo r2
+                  WHERE r2.id_operacion = c.id_operacion
+                    AND r2.id_barra IS NULL
+                    AND r2.id_producto = c.id_producto
+                    AND r2.botellas_cerradas = COALESCE(c.fisico_paq, 0)
+                    AND ABS(COALESCE(r2.onzas_calculadas, 0) - COALESCE(c.fisico_detalle, 0)) <= 0.255
+              )
           )
         WHERE c.id_operacion = :id_operacion
           AND c.id_barra = :id_barra
@@ -3074,7 +3097,7 @@ def _renderizar_pdf_diferencias(
 
 
 def _obtener_ultima_captura_cruda_por_producto(
-    db: Session, id_operacion: int, conteos: dict[int, tuple[float, float]]
+    db: Session, id_operacion: int, id_barra: int, conteos: dict[int, tuple[float, float]]
 ) -> dict[int, dict]:
     """Onzas exactas y peso total de la captura cruda que explica el conteo de
     esta barra (ver _obtener_capturas_crudas_por_conteo), para las columnas
@@ -3084,7 +3107,7 @@ def _obtener_ultima_captura_cruda_por_producto(
             "onzas": float(registro.onzas_calculadas) if registro.onzas_calculadas is not None else None,
             "peso_gramos": _peso_total_crudo(_pesos_de_captura_cruda(registro)),
         }
-        for id_producto, registro in _obtener_capturas_crudas_por_conteo(db, id_operacion, conteos).items()
+        for id_producto, registro in _obtener_capturas_crudas_por_conteo(db, id_operacion, id_barra, conteos).items()
     }
 
 
@@ -3158,7 +3181,7 @@ def _obtener_filas_reporte_ajustes(db: Session, id_operacion: int, id_barra: int
                 {"ids": ids_producto},
             ).mappings().all()
         }
-    capturas = _obtener_ultima_captura_cruda_por_producto(db, id_operacion, {
+    capturas = _obtener_ultima_captura_cruda_por_producto(db, id_operacion, id_barra, {
         delta["id_producto"]: (delta["real_paq"], delta["real_det"]) for delta in deltas
     })
 

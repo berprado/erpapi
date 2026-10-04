@@ -71,6 +71,9 @@ class PaloteoRegistroCrudo(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     id_operacion = Column(Integer)
+    # Desde v12.45 (querys/ddl_app_paloteo_registro_crudo_id_barra.sql). NULL en
+    # las filas anteriores: no hay forma confiable de reconstruir su barra.
+    id_barra = Column(Integer)
     id_producto = Column(Integer)
     botellas_cerradas = Column(Integer)
     pesos_abiertas = Column(Text)

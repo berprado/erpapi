@@ -303,3 +303,91 @@ def test_paloteo_dos_barras_en_la_misma_operativa(client, crear_usuario, escenar
         "SELECT id_inventario_fisico, cantidad_unidad FROM bar_detalle_fisico "
         "WHERE id_producto = :p AND estado = 'HAB'"), {"p": id_producto}).fetchall())
     assert {k: float(v) for k, v in conteos.items()} == {id_inv_1: 2.0, id_inv_2: 3.0}
+
+
+def _dos_barras(esc, crear_usuario, monkeypatch, nombre):
+    """Operativa en INICIO CIERRE con selector de barra habilitado (barras 1 y 2)."""
+    from config import settings
+    monkeypatch.setattr(settings, "PALOTEO_SELECTOR_ENABLED", True)
+    monkeypatch.setattr(settings, "PALOTEO_ALLOWED_BARRAS", "1,2")
+    esc.crear_operacion(estado_operacion=24, con_cabecera_fisico=False)
+    id_producto, id_perfil = esc.agregar_producto_catalogo(nombre)
+    user = crear_usuario()
+    barras = (esc.id_barra, esc.id_barra + 1)
+    headers = {b: {**user.headers, "X-Barra-Id": str(b)} for b in barras}
+
+    def payload(id_barra, cerradas, peso):
+        p = _payload(esc, [{
+            "id_producto": id_producto,
+            "botellas_cerradas": cerradas,
+            "pesos_abiertas": [{"peso": peso, "perfil_id": id_perfil}],
+        }])
+        p["id_barra"] = id_barra
+        return p
+
+    return id_producto, barras, headers, payload
+
+
+def _pesos_precargados(client, esc, headers):
+    r = client.get(f"{PALOTEO}/{esc.id_operacion}", headers=headers)
+    assert r.status_code == 200, r.text
+    return [p["peso"] for p in r.json()["detalles"][0]["pesos_abiertas"]]
+
+
+def test_paloteo_mismo_conteo_en_dos_barras_cada_una_lee_su_pesaje(
+        client, crear_usuario, escenario_paloteo, db_session, monkeypatch):
+    """El caso que la regla "captura que explica el conteo" no distinguia (v12.37):
+    850 g y 855 g dan 10.05 y 10.22 oz, ambos 10.0 en el POS, con la misma botella
+    cerrada. Desde v12.45 el registro crudo guarda id_barra y cada barra
+    recupera su propio pesaje, aunque la ultima captura sea de la otra."""
+    esc = escenario_paloteo
+    id_producto, (b1, b2), headers, payload = _dos_barras(
+        esc, crear_usuario, monkeypatch, "PYTEST MISMO CONTEO")
+
+    assert client.post(PALOTEO, json=payload(b1, 1, 850), headers=headers[b1]).status_code == 200
+    assert client.post(PALOTEO, json=payload(b2, 1, 855), headers=headers[b2]).status_code == 200
+
+    crudos = db_session.execute(text(
+        "SELECT id_barra, botellas_cerradas FROM app_paloteo_registro_crudo "
+        "WHERE id_operacion = :op AND id_producto = :p ORDER BY id"),
+        {"op": esc.id_operacion, "p": id_producto}).fetchall()
+    assert [tuple(c) for c in crudos] == [(b1, 1), (b2, 1)]
+
+    assert _pesos_precargados(client, esc, headers[b1]) == [850]
+    assert _pesos_precargados(client, esc, headers[b2]) == [855]
+
+
+def test_paloteo_captura_sin_barra_usa_la_regla_de_respaldo(
+        client, crear_usuario, escenario_paloteo, db_session, monkeypatch):
+    """Filas anteriores a v12.45 (id_barra NULL): sin captura propia, la barra
+    toma la ultima sin barra que explica su conteo."""
+    esc = escenario_paloteo
+    id_producto, (b1, _b2), headers, payload = _dos_barras(
+        esc, crear_usuario, monkeypatch, "PYTEST CRUDO LEGADO")
+
+    assert client.post(PALOTEO, json=payload(b1, 1, 850), headers=headers[b1]).status_code == 200
+    db_session.execute(text(
+        "UPDATE app_paloteo_registro_crudo SET id_barra = NULL "
+        "WHERE id_operacion = :op AND id_producto = :p"),
+        {"op": esc.id_operacion, "p": id_producto})
+    db_session.commit()
+
+    assert _pesos_precargados(client, esc, headers[b1]) == [850]
+
+
+def test_paloteo_nunca_usa_la_captura_de_otra_barra(
+        client, crear_usuario, escenario_paloteo, db_session, monkeypatch):
+    """Una captura marcada con otra barra no se usa aunque explique el conteo:
+    sin captura propia ni legada, la precarga queda sin pesos."""
+    esc = escenario_paloteo
+    id_producto, (b1, b2), headers, payload = _dos_barras(
+        esc, crear_usuario, monkeypatch, "PYTEST CRUDO AJENO")
+
+    assert client.post(PALOTEO, json=payload(b1, 1, 850), headers=headers[b1]).status_code == 200
+    db_session.execute(text(
+        "UPDATE app_paloteo_registro_crudo SET id_barra = :otra "
+        "WHERE id_operacion = :op AND id_producto = :p"),
+        {"otra": b2, "op": esc.id_operacion, "p": id_producto})
+    db_session.commit()
+
+    assert _pesos_precargados(client, esc, headers[b1]) == []

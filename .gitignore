@@ -44,6 +44,7 @@ dump_*.sql
 querys/*
 *.sql
 !querys/ddl_app_login_auditoria_api.sql
+!querys/ddl_app_paloteo_registro_crudo_id_barra.sql
 !querys/fix_trigger_alm_producto_after_insert.sql
 !querys/fix_trigger_alm_producto_after_update.sql
 !querys/fix_12_productos_atascados_produccion.sql

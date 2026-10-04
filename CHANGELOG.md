@@ -11,6 +11,11 @@ separado con git tags semanticos (`vMAJOR.MINOR.PATCH`) — ver seccion
 version productiva en uso real), corresponde a este mismo punto de la
 historia, `## 12.2` de abajo.
 
+## 12.45
+- Paloteo multi-barra, solucion de fondo: `app_paloteo_registro_crudo` guarda `id_barra` (DDL `querys/ddl_app_paloteo_registro_crudo_id_barra.sql`, columna nullable + indice `(id_operacion, id_barra, id_producto)`). La precarga de correccion y las columnas PESO / DIF REAL del PDF de Ajustes y del Historico leen la ultima captura de **esa** barra; las filas anteriores (id_barra NULL) se siguen leyendo con la regla v12.37 ("la captura que explica el conteo") solo si el producto no tiene captura propia, y la captura de otra barra no se usa nunca. Resuelve el caso que v12.37 no distinguia: un producto con el mismo conteo en las dos barras podia mostrar el pesaje de la otra.
+- **Requiere aplicar el DDL en cada base antes de desplegar este codigo** (estado por entorno en README). Aplicado en `test`.
+- Tests: 3 de integracion en `tests/test_integracion_paloteo.py` (mismo conteo en dos barras con pesos distintos, respaldo para filas sin barra, nunca la captura de otra barra).
+
 ## 12.44
 - TODO: cerrada la precision ML->OZ en produccion (casa matriz 273/273 y Beer Garden 119/119 verificados el 2026-10-04, BRIGHTON 700ML corregidos). El runbook de PESAJE queda abierto solo por el smoke test de la pantalla de PESAJE (paso 5) en ambas instancias.
 

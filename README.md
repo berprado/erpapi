@@ -322,12 +322,28 @@ deduplican por `id_operacion + id_barra + id_producto`, conservando el mayor
 `id_paloteo_cierre`. Los campos `fisico_*` y `diferencia_*` permanecen en
 `null` cuando el cierre no tiene captura fisica; no se convierten a cero.
 `app_paloteo_registro_crudo` solo aporta peso y diferencia exacta cuando existe
-una captura asociada. Como esa tabla no guarda `id_barra`, desde v12.37 solo se
-acepta la ultima captura que explica el conteo de esa barra (mismas botellas
-cerradas y onzas a no mas de 0.255 oz del conteo: media grilla POS mas el
-truncado a 2 decimales de `onzas_calculadas`); si ninguna coincide, el
-producto queda sin PESO. La misma regla aplica al PDF de Ajustes y a la
-precarga de correccion (`GET /api/inventario/paloteo/{id_operacion}`).
+una captura asociada. Desde v12.45 cada captura guarda su `id_barra` y cada
+barra lee la ultima captura **propia**; las de otra barra no se usan nunca.
+Las filas anteriores (`id_barra` NULL) se leen con la regla de respaldo de
+v12.37, solo si el producto no tiene captura propia: la ultima captura sin
+barra que explica el conteo (mismas botellas cerradas y onzas a no mas de
+0.255 oz del conteo: media grilla POS mas el truncado a 2 decimales de
+`onzas_calculadas`); si ninguna coincide, el producto queda sin PESO. La misma
+regla aplica al PDF de Ajustes y a la precarga de correccion
+(`GET /api/inventario/paloteo/{id_operacion}`): `_obtener_capturas_crudas_por_conteo`
+y la subconsulta de `_obtener_filas_paloteo_historico` en `main.py`.
+
+**Estado del DDL `id_barra` por entorno** (`querys/ddl_app_paloteo_registro_crudo_id_barra.sql`).
+El codigo v12.45 escribe y filtra por esa columna: el DDL va en **todas** las
+bases antes de desplegar el codigo (el codigo anterior la ignora, asi que
+aplicarlo antes es seguro). Un push redespliega ambas sucursales.
+
+| Entorno | Estado |
+|---|---|
+| `test` (BD local `adminerp`) | Aplicado 2026-10-04 (3.754 filas previas en NULL) |
+| `test_pos` | Pendiente |
+| `production` casa matriz | Pendiente |
+| `production` Beer Garden | Pendiente |
 
 **Clasificacion de filas (desde v12.35):** `con_diferencia` y `cuadrado` (hubo
 captura fisica), `con_movimiento_sin_contar` (sin captura, pero con ventas o
