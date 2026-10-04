@@ -3540,11 +3540,15 @@ def _agregar_costo_receta(lineas, opcional_por_categoria=None) -> dict:
 
     for combo in combos.values():
         id_defecto = _id_opcional_por_defecto(combo["id_categoria_combo"], combo["ingredientes"], opcional_por_categoria)
+        defecto_ya_incluido = False
         for linea in combo["ingredientes"]:
-            incluido = (
-                not _tipo_parte_combo_es_opcional(linea.get("tipo_parte_combo"))
-                or linea["id_producto"] == id_defecto
-            )
+            incluido = not _tipo_parte_combo_es_opcional(linea.get("tipo_parte_combo"))
+            # Un solo opcional por combo: si la receta repite la linea del opcional por defecto
+            # (dato duplicado en el ERP), solo cuenta la primera; contarla dos veces duplicaria
+            # su costo y dejaria dos checkboxes con el mismo id_producto en el modal.
+            if not incluido and id_defecto is not None and linea["id_producto"] == id_defecto and not defecto_ya_incluido:
+                incluido = True
+                defecto_ya_incluido = True
             linea["incluido_por_defecto"] = incluido
             if not incluido:
                 continue

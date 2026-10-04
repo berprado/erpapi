@@ -27,7 +27,7 @@ propios, no compartidos):
 | `test` (WAMP local) | `adminerp_garden` — copia local, funciona como entorno de desarrollo de la sucursal Beer Garden | ✅ Ya tiene todo aplicado y verificado (backfills + triggers 2026-09-09) |
 | `test_pos` | Túnel `servidor.localto.net:5277`, BD `adminerp` — entorno de validación E2E con POS real conectado, réplica exacta de producción Beer Garden | ✅ Aplicado y verificado 2026-09-10 (backfills + fix de esquema legacy + triggers, con sanity check real de INSERT/UPDATE) |
 | `production` — casa matriz | Túnel `backapp.localto.net:1790`, BD `adminerp` | ⬜ BD aplicada y verificada 2026-09-10 (backfills + triggers, con sanity check real de INSERT/UPDATE; el paso 3.4 no aplicó — esquema legacy ya correcto, 296 filas con actividad real) — **falta el smoke test (5) en la PWA real**, no dar por cerrada esta fila hasta registrarlo. Auditoría: 63 productos sin config (INCOMPLETOS), 5 conflictos excepcionales incluyendo `HUARI 620ML`/`AMSTEL 620ML` — sin editar por SQL directo, pendiente completar vía PESAJE |
-| `production` — Beer Garden | Túnel `gardentcp.localto.net:7755`, BD propia | ⬜ Pendiente — misma línea que `test_pos`, se espera el mismo esquema legacy desfasado (ver 3.4) |
+| `production` — Beer Garden | Túnel `gardentcp.localto.net:7755`, BD propia | ✅ Verificado de solo lectura el 2026-10-04: esquema legacy ya con el fix 3.4, triggers iguales a `test_pos` y datos consistentes (124 objetivo, 0 sin fila, 0 fantasma, 0 sobrantes). Falta el smoke test en la PWA real |
 
 **Antes de arrancar, confirmar con quien tenga acceso:**
 1. ¿`test_pos` sigue vivo y es representativo de casa matriz, o quedó desactualizado desde que Beer Garden se desplegó por separado (2026-09-02)?

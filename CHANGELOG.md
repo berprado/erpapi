@@ -11,6 +11,11 @@ separado con git tags semanticos (`vMAJOR.MINOR.PATCH`) — ver seccion
 version productiva en uso real), corresponde a este mismo punto de la
 historia, `## 12.2` de abajo.
 
+## 12.43
+- Fix POUR COST: si la receta repite la linea del opcional por defecto (dato duplicado en el ERP, p. ej. `AGUA TONICA 1LT` dos veces en `C MOM ROCKS 700ML`), solo cuenta la primera; antes se contaba dos veces y el costo del combo quedaba inflado. Detectado por el nuevo test de integracion.
+- Tests: `tests/test_integracion_pourcost.py` (7 tests, solo lectura, `APP_ENV=test`) para `GET /api/pourcost/recetas` y `/productos`: invariantes de costo y de opcional por defecto, join sin perdida ni duplicados y control de acceso. Mas un unitario del caso de linea repetida.
+- Docs/TODO: verificacion de solo lectura de Beer Garden (esquema legacy, triggers y consistencia de PESAJE correctos; 2 productos BRIGHTON 700ML con 24,5 oz en vez de 23,5).
+
 ## 12.42
 - Docs POUR COST: nueva seccion 6.4 de `pourcost.md` con los valores de `POURCOST_OPCIONAL_CAT<id>` por entorno (test/casa matriz y Beer Garden), el bloque listo para pegar de Beer Garden, y por que alli no se definen CAT3 (LICOR) ni CAT11 (CERVEZAS). Verificado contra ambas producciones el 2026-10-03.
 

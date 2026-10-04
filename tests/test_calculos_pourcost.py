@@ -186,6 +186,15 @@ def test_producto_por_defecto_como_principal_no_se_duplica():
     assert _agregar_costo_receta(lineas, REGLAS)[1]["costo_total"] == Decimal("10")
 
 
+def test_opcional_por_defecto_repetido_en_la_receta_solo_cuenta_una_vez():
+    """Dato duplicado en el ERP (caso real: C MOM ROCKS 700ML): la misma linea OPCIONAL dos veces."""
+    lineas = _receta_singani()
+    lineas.append(_linea(1, 60, Decimal("4.4477"), tipo_parte_combo="OPCIONAL", id_categoria_combo=5))
+    combo = _agregar_costo_receta(lineas, REGLAS)[1]
+    assert combo["costo_total"] == Decimal("91.4477")
+    assert sum(1 for l in combo["ingredientes"] if l["id_producto"] == 60 and l["incluido_por_defecto"]) == 1
+
+
 def test_costo_incompleto_ignora_opcionales_no_incluidos():
     lineas = _receta_singani()
     lineas[2]["sin_wac"] = 1  # SPRITE sin WAC, pero no es el default de SINGANI
