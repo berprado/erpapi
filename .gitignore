@@ -53,3 +53,6 @@ querys/*
 !querys/backfill_producto_barril_pesable_pesaje_config_api.sql
 !querys/fix_esquema_legacy_app_producto_pesaje_config.sql
 !querys/verificar_pourcost_opcionales.sql
+
+# Artefactos del MCP de Playwright
+.playwright-mcp/
