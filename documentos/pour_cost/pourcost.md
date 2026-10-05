@@ -154,7 +154,22 @@ Una revisión de código del modal (agosto 2026) encontró varias inconsistencia
 | `POURCOST_OPCIONAL_CAT11` | CERVEZAS | 492 · AMSTEL LATA 473ML | *no se define* |
 | `POURCOST_OPCIONAL_CAT21` | GINVIP | 61 · AGUA TONICA 1LT | 43 · AGUA TONICA 1LT |
 
-Bloque listo para pegar (Beer Garden):
+Bloque listo para pegar (casa matriz, Web Service `erpapi`; mismos ids que el entorno `test`):
+
+```
+POURCOST_OPCIONAL_CAT1=64
+POURCOST_OPCIONAL_CAT2=62
+POURCOST_OPCIONAL_CAT3=479
+POURCOST_OPCIONAL_CAT4=62
+POURCOST_OPCIONAL_CAT5=60
+POURCOST_OPCIONAL_CAT7=63
+POURCOST_OPCIONAL_CAT9=61
+POURCOST_OPCIONAL_CAT10=63
+POURCOST_OPCIONAL_CAT11=492
+POURCOST_OPCIONAL_CAT21=61
+```
+
+Bloque listo para pegar (Beer Garden, Web Service `paloteo_garden`):
 
 ```
 POURCOST_OPCIONAL_CAT1=28

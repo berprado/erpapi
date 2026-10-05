@@ -11,6 +11,9 @@ separado con git tags semanticos (`vMAJOR.MINOR.PATCH`) — ver seccion
 version productiva en uso real), corresponde a este mismo punto de la
 historia, `## 12.2` de abajo.
 
+## 12.47
+- Docs POUR COST: bloque listo para pegar de la casa matriz (`POURCOST_OPCIONAL_CAT*`, 10 variables) en la seccion 6.4 de `pourcost.md`, junto al de Beer Garden.
+
 ## 12.46
 - Seguridad BD: script para revisar `querys/seguridad_usuario_api_tuneles.sql` (usuario `api_paloteo` con permisos minimos para la API via tunel; no aplicado en ningun entorno). Ver TODO.
 - README: DDL `id_barra` del registro crudo aplicado en `test_pos` (607 filas previas en NULL).
