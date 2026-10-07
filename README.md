@@ -342,8 +342,8 @@ aplicarlo antes es seguro). Un push redespliega ambas sucursales.
 |---|---|
 | `test` (BD local `adminerp`) | Aplicado 2026-10-04 (3.754 filas previas en NULL) |
 | `test_pos` | Aplicado 2026-10-04 (607 filas previas en NULL) |
-| `production` casa matriz | Pendiente |
-| `production` Beer Garden | Pendiente |
+| `production` casa matriz | Aplicado 2026-10-05 (3.754 filas previas en NULL) |
+| `production` Beer Garden | Aplicado 2026-10-07 (646 filas previas en NULL) |
 
 **Clasificacion de filas (desde v12.35):** `con_diferencia` y `cuadrado` (hubo
 captura fisica), `con_movimiento_sin_contar` (sin captura, pero con ventas o

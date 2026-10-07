@@ -11,6 +11,9 @@ separado con git tags semanticos (`vMAJOR.MINOR.PATCH`) — ver seccion
 version productiva en uso real), corresponde a este mismo punto de la
 historia, `## 12.2` de abajo.
 
+## 12.48
+- Despliegue de v12.45 (`id_barra` en el registro crudo): DDL aplicado en las cuatro bases (`test`, `test_pos`, casa matriz y Beer Garden); README y TODO actualizados. Validado antes en `test_pos` con el cierre real de dos barras de la operativa 168.
+
 ## 12.47
 - Docs POUR COST: bloque listo para pegar de la casa matriz (`POURCOST_OPCIONAL_CAT*`, 10 variables) en la seccion 6.4 de `pourcost.md`, junto al de Beer Garden.
 
