@@ -11,6 +11,11 @@ separado con git tags semanticos (`vMAJOR.MINOR.PATCH`) — ver seccion
 version productiva en uso real), corresponde a este mismo punto de la
 historia, `## 12.2` de abajo.
 
+## 12.49
+- TODO: `comandas_v9_detallada` calcula el consumo con la receta actual en vez de la copia de receta que el POS guarda en cada venta de combo (`bar_salida_combo_coctel` / `bar_detalle_sal_combo_coctel`); caso verificado en `test_pos` (comanda 17052: 0.75 oz descontados, la vista muestra 1.5). Afecta analisis historicos de consumo/costo, no la lista del paloteo. Actualizado el item de recetas mal configuradas (V BUHO NEGRO revisado en ambas sucursales).
+- TODO: pendientes de la sesion 2026-10-09: validar en el primer cierre real de dos barras de Beer Garden (operativa 169) lo desplegado en v12.40 a v12.48; operaciones del POS desde la PWA (en analisis); mejorar la herramienta de diff de la BD; completar perfiles de pesaje incompletos (16 en Beer Garden, 85 en casa matriz).
+- Docs: `documentos/operaciones_pos/00_contexto_y_plan.md`, contexto y plan para operar el POS desde la PWA (ingreso, traspaso, recepcion, devolucion, cortesia, anulacion): comportamiento verificado en vivo y fuentes del POS a leer.
+
 ## 12.48
 - Despliegue de v12.45 (`id_barra` en el registro crudo): DDL aplicado en las cuatro bases (`test`, `test_pos`, casa matriz y Beer Garden); README y TODO actualizados. Validado antes en `test_pos` con el cierre real de dos barras de la operativa 168.
 
