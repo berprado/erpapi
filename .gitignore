@@ -14,9 +14,10 @@
 # Archivos de texto temporales o de respaldo
 # (No usar *.txt genérico: excluiría requirements.txt y otros archivos de proyecto)
 
-# Directorios de entornos virtuales
+# Directorios de entornos virtuales e informacion del sistema POS
 venv/
 env/
+AnalisisPos/
 .virtualenv/
 
 # Caché de Python
