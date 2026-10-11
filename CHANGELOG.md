@@ -11,6 +11,9 @@ separado con git tags semanticos (`vMAJOR.MINOR.PATCH`) — ver seccion
 version productiva en uso real), corresponde a este mismo punto de la
 historia, `## 12.2` de abajo.
 
+## 12.51
+- Docs: `documentos/operaciones_pos/02_nota_equipo_motor_wac.md`, nota lista para enviar al equipo del motor WAC V9.44: doble conteo de las unidades compradas (4 casos medidos en `test_pos`, correccion SQL propuesta), respaldo de anulacion que toma la compra mas cara (`MAX(precio_costo)`) en vez de la ultima, y diferencias con su nota tecnica. Sin cambios de codigo.
+
 ## 12.50
 - Nuevo modulo **INGRESO** (solo administrador): ingreso de proveedor -> traspaso a barra -> recepcion en barra en una pantalla y **una sola transaccion**, con las mismas filas y estados que deja el POS en sus cinco pasos (confirmado en vivo en `test_pos`, 4 escenarios / 18 pasos). Endpoints `GET /api/operaciones/ingreso-barra/contexto`, `GET .../productos`, `POST .../preview` (ejecuta y deshace: muestra stock y WAC tal como quedaran) y `POST /api/operaciones/ingreso-barra`. Unidades cerradas, traspaso parcial por linea, una barra por operacion, clave contra doble envio.
 - Exige operativa unica en 22 (EN PROCESO) y el motor WAC V9.44 (`trg_wac_alm_ingreso_after_update`); si falta, rechaza en vez de dejar costos distintos al POS. Escribe en el mismo orden que el POS (stock antes que estado), asi que hoy reproduce el error del trigger del WAC (cuenta dos veces las unidades compradas, documentado para el equipo del motor) y queda correcta cuando se corrija.
