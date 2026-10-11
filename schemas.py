@@ -436,3 +436,123 @@ class PourCostInsumo(BaseModel):
     wac_unitario: Optional[float] = None
     sin_wac: bool
     fecha_actualizacion_wac: Optional[datetime] = None
+
+# --- OPERACIONES DEL POS DESDE LA PWA (documentos/operaciones_pos/) ---
+
+TIPOS_DOCUMENTO_INGRESO = {38: "FACTURA", 39: "RECIBO", 40: "OTRO"}
+
+
+class IngresoBarraLinea(BaseModel):
+    id_producto: int = Field(..., gt=0)
+    # Unidades cerradas: la v1 no maneja onzas (ind_paq_detalle = '1').
+    cantidad: int = Field(..., gt=0, le=100000)
+    # Precio unitario tal como lo carga el POS (con impuestos); 0 = bonificación.
+    precio_costo: float = Field(..., ge=0, lt=10000000)
+    # Unidades que pasan a la barra (0 = todo queda en el almacén).
+    cantidad_a_barra: int = Field(0, ge=0)
+
+    @field_validator('precio_costo')
+    def validar_dos_decimales(cls, valor):
+        if round(valor, 2) != valor:
+            raise ValueError("El precio admite como máximo 2 decimales.")
+        return valor
+
+    @field_validator('cantidad_a_barra')
+    def validar_cantidad_a_barra(cls, valor, info):
+        cantidad = info.data.get('cantidad')
+        if cantidad is not None and valor > cantidad:
+            raise ValueError("No se puede traspasar a la barra más de lo que ingresa.")
+        return valor
+
+
+class IngresoBarraRequest(BaseModel):
+    id_almacen: int = Field(..., gt=0)
+    id_proveedor: int = Field(..., gt=0)
+    ind_tipo_documento: int
+    numero_documento: Optional[str] = Field(None, max_length=255)
+    observaciones: Optional[str] = Field(None, max_length=255)
+    id_barra: Optional[int] = Field(None, gt=0)
+    observaciones_recepcion: Optional[str] = Field(None, max_length=255)
+    # Generada por la PWA al abrir el formulario: un reenvío con la misma clave no duplica el ingreso.
+    clave_idempotencia: str = Field(..., min_length=8, max_length=64, pattern=r'^[A-Za-z0-9_-]+$')
+    lineas: List[IngresoBarraLinea] = Field(..., min_length=1, max_length=60)
+
+    @field_validator('ind_tipo_documento')
+    def validar_tipo_documento(cls, valor):
+        if valor not in TIPOS_DOCUMENTO_INGRESO:
+            raise ValueError("Tipo de documento inválido (38 FACTURA, 39 RECIBO, 40 OTRO).")
+        return valor
+
+    @field_validator('lineas')
+    def validar_productos_unicos(cls, lineas):
+        # El trigger del WAC calcula cada línea con el mismo stock previo: dos
+        # líneas del mismo producto dejarían un WAC y un historial incorrectos.
+        ids = [linea.id_producto for linea in lineas]
+        if len(ids) != len(set(ids)):
+            raise ValueError("Cada producto puede aparecer una sola vez en el ingreso.")
+        return lineas
+
+
+class OperacionPosItem(BaseModel):
+    id: int
+    nombre: str
+
+
+class IngresoBarraOperativa(BaseModel):
+    id_operacion: int
+    nombre: Optional[str] = None
+    fecha: Optional[date] = None
+    estado_operacion: int
+
+
+class IngresoBarraContextoResponse(BaseModel):
+    operativa: Optional[IngresoBarraOperativa] = None
+    operativa_lista: bool
+    mensaje_operativa: Optional[str] = None
+    motor_wac_ok: bool
+    almacenes: List[OperacionPosItem]
+    barras: List[OperacionPosItem]
+    proveedores: List[OperacionPosItem]
+    tipos_documento: List[OperacionPosItem]
+    id_almacen_defecto: Optional[int] = None
+    id_barra_defecto: Optional[int] = None
+
+
+class IngresoBarraProducto(BaseModel):
+    id_producto: int
+    nombre: str
+    codigo: Optional[str] = None
+    categoria: Optional[str] = None
+    comandable: bool
+    traspasable: bool
+    stock_almacen: Optional[float] = None
+    stock_almacen_detalle: Optional[float] = None
+    stock_barra: Optional[float] = None
+    stock_barra_detalle: Optional[float] = None
+    wac_actual: Optional[float] = None
+    ultimo_precio: Optional[float] = None
+
+
+class IngresoBarraLineaResultado(BaseModel):
+    id_producto: int
+    nombre: str
+    cantidad: int
+    cantidad_a_barra: int
+    precio_costo: float
+    subtotal: float
+    almacen_antes: float
+    almacen_despues: float
+    barra_antes: Optional[float] = None
+    barra_despues: Optional[float] = None
+    wac_antes: Optional[float] = None
+    wac_despues: Optional[float] = None
+
+
+class IngresoBarraResponse(BaseModel):
+    status: Literal['preview', 'success']
+    id_operacion: int
+    id_ingreso: Optional[int] = None
+    id_salida_inventario: Optional[int] = None
+    total: float
+    lineas: List[IngresoBarraLineaResultado]
+    mensaje: str

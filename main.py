@@ -5,6 +5,7 @@ from fastapi import FastAPI, Depends, HTTPException, status, Request, Query
 from fastapi.responses import FileResponse, JSONResponse, Response
 import hashlib
 import json
+import struct
 from database import get_db
 import models
 import schemas
@@ -3812,6 +3813,645 @@ def listar_pourcost_insumos(
         )
         for row in rows
     ]
+
+
+# --- OPERACIONES DEL POS DESDE LA PWA: INGRESO -> TRASPASO -> RECEPCIÓN ---
+# Reproduce en una sola transacción lo que el POS hace en cinco pantallas
+# (registrar y procesar el ingreso de proveedor, registrar y procesar el
+# traspaso, aceptarlo en barra), dejando las mismas filas y estados. Lo que
+# escribe el POS en cada paso, confirmado en vivo en test_pos, y las decisiones
+# de esta implementación: documentos/operaciones_pos/01_ingreso_traspaso_recepcion.md
+
+ESTADO_OPERACION_EN_PROCESO = 22
+TIPO_INGRESO_PROVEEDOR = 80
+TIPO_DOCUMENTO_FACTURA = 38
+MOVIMIENTO_SALIDA_PRODUCTO = 83
+DESTINO_SALIDA_BARRA = 34
+ESTADO_SALIDA_EN_BARRA = 21
+IND_PERMITE_COMANDAR_SI = 70
+# Motor WAC V9.44: el costo se recalcula cuando alm_ingreso pasa de '0' a '1'.
+# Con el trigger anterior (al insertar la línea) el WAC se movería en otro
+# momento y con otra fórmula: el flujo se rechaza en vez de dejar costos distintos.
+TRIGGER_WAC_PROCESO_INGRESO = "trg_wac_alm_ingreso_after_update"
+CLAVE_UNICA_OPERACION_POS = "uk_operacion_pos_clave"
+
+
+def _float32(valor: float) -> float:
+    """Redondea a float de 32 bits, como los Float del POS (Java)."""
+    return struct.unpack('f', struct.pack('f', valor))[0]
+
+
+def _precio_costo_real_pos(precio_costo: Decimal, ind_tipo_documento: int) -> Decimal:
+    """precio_costo_real como lo calcula RecepcionProdBean: factura descuenta el
+    13% (Constantes.IVA), recibo u otro divide por 0.92 (IVA_ASUMIDO). El POS
+    opera en float de 32 bits y MySQL redondea a 5 decimales: se reproduce para
+    que la fila sea idéntica (135 / 0.92 queda 146.73912, no 146.73913)."""
+    p = _float32(float(precio_costo))
+    if ind_tipo_documento == TIPO_DOCUMENTO_FACTURA:
+        real = _float32(p - _float32(_float32(p * _float32(13.0)) / _float32(100.0)))
+    else:
+        real = _float32(p / _float32(0.92))
+    return Decimal(real).quantize(Decimal("0.00001"), rounding=ROUND_HALF_UP)
+
+
+def _evento_salida_almacen(nombre_almacen: str, id_salida: int, fecha_operativa) -> str:
+    """Texto de ope_novedades de SalidaProdInventarioBean.procesarSalida (con el
+    doble espacio después de NRO). La fecha es la de la operativa, no la de hoy.
+    El POS escribe 'Almacen: null' si la salida se procesa desde la misma
+    pantalla de registro; aquí va siempre el nombre real."""
+    fecha_txt = fecha_operativa.strftime("%d/%m/%Y") if fecha_operativa else ""
+    return (
+        f"Se registró una salida del Almacen: {nombre_almacen}, "
+        f"con el correlativo NRO  {id_salida} en fecha: {fecha_txt}"
+    )
+
+
+def _motor_wac_v944_instalado(db: Session) -> bool:
+    return db.execute(
+        text("""
+            SELECT 1 FROM information_schema.triggers
+            WHERE trigger_schema = DATABASE() AND trigger_name = :nombre
+        """),
+        {"nombre": TRIGGER_WAC_PROCESO_INGRESO}
+    ).scalar() is not None
+
+
+def _estado_operativa_en_proceso(db: Session) -> tuple[Optional[dict], Optional[str]]:
+    """(operativa, None) si hay exactamente una en 22; (None, motivo) si no.
+    El POS busca la operativa en proceso con getSingleResult: con ninguna o con
+    más de una tampoco deja ingresar, traspasar ni recibir."""
+    filas = db.execute(
+        text("""
+            SELECT id, fecha, nombre_operacion, estado_operacion
+            FROM ope_operacion
+            WHERE estado = 'HAB' AND estado_operacion = :en_proceso
+        """),
+        {"en_proceso": ESTADO_OPERACION_EN_PROCESO}
+    ).mappings().all()
+    if len(filas) == 1:
+        return dict(filas[0]), None
+    if len(filas) > 1:
+        return None, "Hay más de una operativa EN PROCESO; el POS tampoco puede registrar movimientos así."
+    en_cierre = db.execute(
+        text("SELECT 1 FROM ope_operacion WHERE estado = 'HAB' AND estado_operacion = 24 LIMIT 1")
+    ).scalar()
+    if en_cierre:
+        return None, "La operativa está en INICIO CIERRE: el POS no permite ingresos ni traspasos hasta abrir la siguiente."
+    return None, "No hay operativa EN PROCESO: el POS no permite ingresos ni traspasos."
+
+
+def _bloquear_operativa_en_proceso(db: Session) -> dict:
+    operativa, motivo = _estado_operativa_en_proceso(db)
+    if operativa is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=motivo)
+    # Bloqueo por PK (una sola fila) y re-chequeo del estado: si el cierre
+    # empezó entre la lectura y el bloqueo, no se escribe nada.
+    fila = db.execute(
+        text("""
+            SELECT id, fecha, usuario_reg, estado, estado_operacion
+            FROM ope_operacion WHERE id = :id FOR UPDATE
+        """),
+        {"id": operativa["id"]}
+    ).mappings().first()
+    if not fila or fila["estado_operacion"] != ESTADO_OPERACION_EN_PROCESO or fila["estado"] != 'HAB':
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="La operativa dejó de estar EN PROCESO.")
+    return dict(fila)
+
+
+def _nombre_habilitado(db: Session, tabla: str, id_registro: int, etiqueta: str) -> str:
+    if tabla not in ("alm_almacen", "alm_proveedor", "bar_barra"):
+        raise ValueError(f"Tabla no soportada: {tabla}")
+    nombre = db.execute(
+        text(f"SELECT nombre FROM {tabla} WHERE id = :id AND estado = 'HAB'"),
+        {"id": id_registro}
+    ).scalar()
+    if nombre is None:
+        raise HTTPException(status_code=400, detail=f"{etiqueta} {id_registro} no existe o está deshabilitado.")
+    return nombre
+
+
+def _fila_unica_para_actualizar(db: Session, sql: str, params: dict, descripcion: str) -> Optional[dict]:
+    """SELECT ... FOR UPDATE que espera 0 o 1 fila. Con más de una el POS
+    (getSingleResult) tampoco sabría cuál mover: se rechaza en vez de elegir."""
+    filas = db.execute(text(sql + " FOR UPDATE"), params).mappings().all()
+    if len(filas) > 1:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Hay {len(filas)} filas habilitadas de {descripcion}; corregirlas antes de operar."
+        )
+    return dict(filas[0]) if filas else None
+
+
+def _control_operacion_pos(db: Session, clave: str) -> Optional[dict]:
+    fila = db.execute(
+        text("""
+            SELECT id_ingreso, id_salida_inventario, usuario_reg, fecha_reg
+            FROM app_operacion_pos_control WHERE clave_idempotencia = :clave
+        """),
+        {"clave": clave}
+    ).mappings().first()
+    return dict(fila) if fila else None
+
+
+def _detalle_operacion_ya_registrada(control: dict) -> str:
+    salida = f" y traspaso {control['id_salida_inventario']}" if control.get("id_salida_inventario") else ""
+    return (
+        f"Esta operación ya fue registrada (ingreso {control['id_ingreso']}{salida}, "
+        f"por {control['usuario_reg']} el {control['fecha_reg']}). No se volvió a aplicar."
+    )
+
+
+def _ejecutar_ingreso_barra(db: Session, payload: schemas.IngresoBarraRequest, usuario: models.Usuario) -> dict:
+    """Escribe el flujo completo dentro de la transacción abierta de `db`, sin
+    commit ni rollback (los decide el endpoint: aplicar o vista previa).
+
+    El orden replica al POS porque el trigger del WAC depende de él: la suma en
+    alm_inventario va ANTES de pasar el ingreso a '1'. Hoy el trigger cuenta
+    dos veces las unidades compradas (error del motor, documentado); con este
+    orden la API deja el mismo WAC que el POS y queda correcta en cuanto el
+    trigger se corrija."""
+    control = _control_operacion_pos(db, payload.clave_idempotencia)
+    if control:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_detalle_operacion_ya_registrada(control))
+
+    if not _motor_wac_v944_instalado(db):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(f"Falta el trigger {TRIGGER_WAC_PROCESO_INGRESO} (motor WAC V9.44) en esta base: "
+                    "el costo promedio no se calcularía como en el POS actualizado.")
+        )
+
+    operativa = _bloquear_operativa_en_proceso(db)
+    fecha_operativa = operativa["fecha"]
+
+    lineas_a_barra = [linea for linea in payload.lineas if linea.cantidad_a_barra > 0]
+    nombre_almacen = _nombre_habilitado(db, "alm_almacen", payload.id_almacen, "El almacén")
+    _nombre_habilitado(db, "alm_proveedor", payload.id_proveedor, "El proveedor")
+    if lineas_a_barra and payload.id_barra is None:
+        raise HTTPException(status_code=400, detail="Indicar la barra de destino para las unidades a traspasar.")
+    if payload.id_barra is not None:
+        _nombre_habilitado(db, "bar_barra", payload.id_barra, "La barra")
+
+    ids_productos = sorted(linea.id_producto for linea in payload.lineas)
+    productos = {
+        fila["id"]: dict(fila)
+        for fila in db.execute(
+            text("""
+                SELECT id, nombre, medida, cantidad_detalle
+                FROM alm_producto WHERE id IN :ids AND estado = 'HAB'
+            """).bindparams(bindparam("ids", expanding=True)),
+            {"ids": ids_productos}
+        ).mappings().all()
+    }
+    faltantes = [i for i in ids_productos if i not in productos]
+    if faltantes:
+        raise HTTPException(status_code=400, detail=f"Productos inexistentes o deshabilitados: {faltantes}")
+    # Misma validación que SalidaProdInventarioBean.guardarProductoSalida.
+    incompletos = [
+        productos[linea.id_producto]["nombre"] for linea in lineas_a_barra
+        if not productos[linea.id_producto]["medida"] or not productos[linea.id_producto]["cantidad_detalle"]
+    ]
+    if incompletos:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Medida o contenido incompletos (el POS no permite traspasarlos a barra): {', '.join(incompletos)}"
+        )
+
+    ahora = db.execute(text("SELECT NOW()")).scalar()  # hora del servidor del POS, no UTC
+    hoy = ahora.date()
+    login = usuario.usuario
+    nombre_usuario = _formatear_nombre_usuario(usuario)
+    numero_documento = (payload.numero_documento or "").strip() or "0"
+    observaciones = (payload.observaciones or "").strip() or None
+    lineas = sorted(payload.lineas, key=lambda linea: linea.id_producto)
+
+    wac_antes = {
+        fila[0]: fila[1] for fila in db.execute(
+            text("""
+                SELECT id_producto, wac_actual FROM cache_wac_producto
+                WHERE id_almacen = :almacen AND id_producto IN :ids
+            """).bindparams(bindparam("ids", expanding=True)),
+            {"almacen": payload.id_almacen, "ids": ids_productos}
+        ).fetchall()
+    }
+
+    # 1. Ingreso registrado ('0'): con más de una línea el POS vuelve a guardar
+    #    la cabecera al agregar la segunda y le pone fecha_mod.
+    id_ingreso = db.execute(
+        text("""
+            INSERT INTO alm_ingreso
+                (fecha, numero_documento, observaciones, recepcionado_por, ind_estado_ingreso,
+                 ind_tipo_documento, ind_tipo_ingreso, id_proveedor, id_almacen,
+                 usuario_reg, fecha_reg, fecha_mod, estado)
+            VALUES (:hoy, :numero, :obs, :nombre, '0', :tipo_doc, :tipo_ingreso, :proveedor, :almacen,
+                    :login, :hoy, :fecha_mod, 'HAB')
+        """),
+        {"hoy": hoy, "numero": numero_documento, "obs": observaciones, "nombre": nombre_usuario,
+         "tipo_doc": payload.ind_tipo_documento, "tipo_ingreso": TIPO_INGRESO_PROVEEDOR,
+         "proveedor": payload.id_proveedor, "almacen": payload.id_almacen, "login": login,
+         "fecha_mod": hoy if len(lineas) > 1 else None}
+    ).lastrowid
+
+    for linea in lineas:
+        precio = _decimal2(linea.precio_costo)
+        db.execute(
+            text("""
+                INSERT INTO alm_detalle_ingreso
+                    (cantidad, precio_costo, precio_costo_real, ind_paq_detalle, id_ingreso, id_producto,
+                     usuario_reg, fecha_reg, estado)
+                VALUES (:cantidad, :precio, :precio_real, '1', :ingreso, :producto, :login, :hoy, 'HAB')
+            """),
+            {"cantidad": linea.cantidad, "precio": precio,
+             "precio_real": _precio_costo_real_pos(precio, payload.ind_tipo_documento),
+             "ingreso": id_ingreso, "producto": linea.id_producto, "login": login, "hoy": hoy}
+        )
+
+    # 2. Procesar el ingreso: primero el stock (como el POS), después el estado.
+    almacen_antes = {}
+    filas_almacen = {}
+    for linea in lineas:
+        fila = _fila_unica_para_actualizar(
+            db,
+            """SELECT id, cantidad_paq FROM alm_inventario
+               WHERE id_producto = :producto AND id_almacen = :almacen AND estado = 'HAB'""",
+            {"producto": linea.id_producto, "almacen": payload.id_almacen},
+            f"alm_inventario para {productos[linea.id_producto]['nombre']}"
+        )
+        almacen_antes[linea.id_producto] = Decimal(fila["cantidad_paq"] or 0) if fila else Decimal("0")
+        if fila:
+            db.execute(
+                text("""
+                    UPDATE alm_inventario
+                    SET cantidad_paq = COALESCE(cantidad_paq, 0) + :cantidad, usuario_reg = :login, fecha_mod = :hoy
+                    WHERE id = :id
+                """),
+                {"cantidad": linea.cantidad, "login": login, "hoy": hoy, "id": fila["id"]}
+            )
+            filas_almacen[linea.id_producto] = fila["id"]
+        else:
+            filas_almacen[linea.id_producto] = db.execute(
+                text("""
+                    INSERT INTO alm_inventario
+                        (cantidad_paq, cantidad_detalle, id_producto, id_almacen, usuario_reg, fecha_reg, estado)
+                    VALUES (:cantidad, 0, :producto, :almacen, :login, :hoy, 'HAB')
+                """),
+                {"cantidad": linea.cantidad, "producto": linea.id_producto,
+                 "almacen": payload.id_almacen, "login": login, "hoy": hoy}
+            ).lastrowid
+
+    db.execute(
+        text("UPDATE alm_ingreso SET ind_estado_ingreso = '1', id_operacion = :operativa WHERE id = :id"),
+        {"operativa": operativa["id"], "id": id_ingreso}
+    )
+
+    # 3. Traspaso procesado y aceptado en barra. La salida se inserta ya con los
+    #    valores finales del POS (21 + recepción): dentro de una transacción
+    #    nadie ve los estados intermedios 16 y 20.
+    id_salida = None
+    barra_antes = {}
+    if lineas_a_barra:
+        observaciones_recepcion = (payload.observaciones_recepcion or "").strip() or "OK"
+        id_salida = db.execute(
+            text("""
+                INSERT INTO alm_salida_inventario
+                    (fecha_salida, responsable, ind_estado_salida, observaciones_salida, fecha_recepcion,
+                     observaciones_recepcion, responsable_recepcion, ind_tipo_salida, id_almacen, id_barra,
+                     id_operacion, ind_tipo_movimiento, usuario_reg, fecha_reg, fecha_mod, estado)
+                VALUES (:hoy, :nombre, :estado, :obs, :hoy, :obs_recepcion, :nombre, :destino, :almacen, :barra,
+                        :operativa, :movimiento, :login, :hoy, :fecha_mod, 'HAB')
+            """),
+            {"hoy": hoy, "nombre": nombre_usuario, "estado": ESTADO_SALIDA_EN_BARRA, "obs": observaciones,
+             "obs_recepcion": observaciones_recepcion, "destino": DESTINO_SALIDA_BARRA,
+             "almacen": payload.id_almacen, "barra": payload.id_barra, "operativa": operativa["id"],
+             "movimiento": MOVIMIENTO_SALIDA_PRODUCTO, "login": login,
+             "fecha_mod": hoy if len(lineas_a_barra) > 1 else None}
+        ).lastrowid
+
+        for linea in lineas_a_barra:
+            db.execute(
+                text("""
+                    INSERT INTO alm_detalle_salida_inv
+                        (cantidad, ind_paq_detalle, id_salida_inventario, id_producto, usuario_reg, fecha_reg, estado)
+                    VALUES (:cantidad, '1', :salida, :producto, :login, :hoy, 'HAB')
+                """),
+                {"cantidad": linea.cantidad_a_barra, "salida": id_salida, "producto": linea.id_producto,
+                 "login": login, "hoy": hoy}
+            )
+            if almacen_antes[linea.id_producto] + linea.cantidad < linea.cantidad_a_barra:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Stock de almacén insuficiente para traspasar {productos[linea.id_producto]['nombre']}."
+                )
+            # Procesar la salida solo resta la cantidad (no toca usuario_reg ni fecha_mod).
+            db.execute(
+                text("UPDATE alm_inventario SET cantidad_paq = cantidad_paq - :cantidad WHERE id = :id"),
+                {"cantidad": linea.cantidad_a_barra, "id": filas_almacen[linea.id_producto]}
+            )
+
+        db.execute(
+            text("""
+                INSERT INTO ope_novedades (fecha, usuario, evento, id_operacion, usuario_reg, fecha_reg, estado)
+                VALUES (:ahora, :login, :evento, :operativa, :login, :ahora, 'HAB')
+            """),
+            {"ahora": ahora, "login": login, "operativa": operativa["id"],
+             "evento": _evento_salida_almacen(nombre_almacen, id_salida, fecha_operativa)}
+        )
+
+        for linea in lineas_a_barra:
+            nombre_producto = productos[linea.id_producto]["nombre"]
+            fila = _fila_unica_para_actualizar(
+                db,
+                """SELECT id, cantidad_paq FROM bar_inventario
+                   WHERE id_producto = :producto AND id_barra = :barra AND estado = 'HAB'""",
+                {"producto": linea.id_producto, "barra": payload.id_barra},
+                f"bar_inventario para {nombre_producto}"
+            )
+            barra_antes[linea.id_producto] = Decimal(fila["cantidad_paq"] or 0) if fila else Decimal("0")
+            if fila:
+                db.execute(
+                    text("""
+                        UPDATE bar_inventario
+                        SET cantidad_paq = COALESCE(cantidad_paq, 0) + :cantidad, usuario_reg = :login, fecha_mod = :ahora
+                        WHERE id = :id
+                    """),
+                    {"cantidad": linea.cantidad_a_barra, "login": login, "ahora": ahora, "id": fila["id"]}
+                )
+            else:
+                db.execute(
+                    text("""
+                        INSERT INTO bar_inventario
+                            (cantidad_paq, cantidad_detalle, id_producto, id_barra, usuario_reg, fecha_reg, estado)
+                        VALUES (:cantidad, 0, :producto, :barra, :login, :hoy, 'HAB')
+                    """),
+                    {"cantidad": linea.cantidad_a_barra, "producto": linea.id_producto,
+                     "barra": payload.id_barra, "login": login, "hoy": hoy}
+                )
+
+            # OperativaEjbBean.copyBarInventToInevetOperacion: suma en cantidad_*
+            # sin tocar inicial_*; la fila nueva lleva usuario y estado de la operativa.
+            fila_operacion = _fila_unica_para_actualizar(
+                db,
+                """SELECT id FROM bar_inventario_operacion
+                   WHERE estado = 'HAB' AND id_barra = :barra AND id_operacion = :operativa
+                     AND id_producto = :producto""",
+                {"barra": payload.id_barra, "operativa": operativa["id"], "producto": linea.id_producto},
+                f"bar_inventario_operacion para {nombre_producto}"
+            )
+            if fila_operacion:
+                db.execute(
+                    text("""
+                        UPDATE bar_inventario_operacion
+                        SET cantidad_paq = COALESCE(cantidad_paq, 0) + :cantidad, usuario_reg = :login, fecha_mod = :hoy
+                        WHERE id = :id
+                    """),
+                    {"cantidad": linea.cantidad_a_barra, "login": login, "hoy": hoy, "id": fila_operacion["id"]}
+                )
+            else:
+                db.execute(
+                    text("""
+                        INSERT INTO bar_inventario_operacion
+                            (cantidad_paq, id_barra, id_operacion, id_producto, usuario_reg, fecha_reg, estado)
+                        VALUES (:cantidad, :barra, :operativa, :producto, :usuario_operativa, :hoy, :estado_operativa)
+                    """),
+                    {"cantidad": linea.cantidad_a_barra, "barra": payload.id_barra, "operativa": operativa["id"],
+                     "producto": linea.id_producto, "usuario_operativa": operativa["usuario_reg"], "hoy": hoy,
+                     "estado_operativa": operativa["estado"]}
+                )
+
+    wac_despues = {
+        fila[0]: fila[1] for fila in db.execute(
+            text("""
+                SELECT id_producto, wac_actual FROM cache_wac_producto
+                WHERE id_almacen = :almacen AND id_producto IN :ids
+            """).bindparams(bindparam("ids", expanding=True)),
+            {"almacen": payload.id_almacen, "ids": ids_productos}
+        ).fetchall()
+    }
+
+    resultado_lineas = []
+    for linea in payload.lineas:
+        precio = _decimal2(linea.precio_costo)
+        antes_almacen = almacen_antes[linea.id_producto]
+        con_barra = linea.id_producto in barra_antes
+        resultado_lineas.append({
+            "id_producto": linea.id_producto,
+            "nombre": productos[linea.id_producto]["nombre"],
+            "cantidad": linea.cantidad,
+            "cantidad_a_barra": linea.cantidad_a_barra,
+            "precio_costo": float(precio),
+            "subtotal": float(precio * linea.cantidad),
+            "almacen_antes": float(antes_almacen),
+            "almacen_despues": float(antes_almacen + linea.cantidad - linea.cantidad_a_barra),
+            "barra_antes": float(barra_antes[linea.id_producto]) if con_barra else None,
+            "barra_despues": float(barra_antes[linea.id_producto] + linea.cantidad_a_barra) if con_barra else None,
+            "wac_antes": _float_o_none(wac_antes.get(linea.id_producto)),
+            "wac_despues": _float_o_none(wac_despues.get(linea.id_producto)),
+        })
+    total = float(sum(_decimal2(linea.precio_costo) * linea.cantidad for linea in payload.lineas))
+
+    db.execute(
+        text("""
+            INSERT INTO app_operacion_pos_control
+                (tipo, clave_idempotencia, id_operacion, id_ingreso, id_salida_inventario, id_almacen, id_barra,
+                 estado, payload_json, resultado_json, usuario_reg, fecha_reg)
+            VALUES ('INGRESO_BARRA', :clave, :operativa, :ingreso, :salida, :almacen, :barra,
+                    'APLICADO', :payload, :resultado, :login, :ahora)
+        """),
+        {"clave": payload.clave_idempotencia, "operativa": operativa["id"], "ingreso": id_ingreso,
+         "salida": id_salida, "almacen": payload.id_almacen, "barra": payload.id_barra,
+         "payload": payload.model_dump_json(), "resultado": json.dumps(resultado_lineas, default=str),
+         "login": login, "ahora": ahora}
+    )
+
+    return {
+        "id_operacion": operativa["id"],
+        "id_ingreso": id_ingreso,
+        "id_salida_inventario": id_salida,
+        "total": total,
+        "lineas": resultado_lineas,
+    }
+
+
+@app.get("/api/operaciones/ingreso-barra/contexto", response_model=schemas.IngresoBarraContextoResponse)
+def contexto_ingreso_barra(
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_usuario_administrador)
+):
+    """Datos para armar la pantalla INGRESO: operativa en proceso, estado del
+    motor WAC y catálogos (almacenes, barras, proveedores, tipos de documento)."""
+    operativa, motivo = _estado_operativa_en_proceso(db)
+
+    def _catalogo(tabla: str) -> list[dict]:
+        return [
+            {"id": fila[0], "nombre": fila[1]}
+            for fila in db.execute(text(f"SELECT id, nombre FROM {tabla} WHERE estado = 'HAB' ORDER BY id")).fetchall()
+        ]
+
+    almacenes = _catalogo("alm_almacen")
+    barras = _catalogo("bar_barra")
+    ids_almacenes = [a["id"] for a in almacenes]
+    ids_barras = [b["id"] for b in barras]
+    return {
+        "operativa": {
+            "id_operacion": operativa["id"],
+            "nombre": operativa["nombre_operacion"],
+            "fecha": operativa["fecha"],
+            "estado_operacion": operativa["estado_operacion"],
+        } if operativa else None,
+        "operativa_lista": operativa is not None,
+        "mensaje_operativa": motivo,
+        "motor_wac_ok": _motor_wac_v944_instalado(db),
+        "almacenes": almacenes,
+        "barras": barras,
+        "proveedores": [
+            {"id": fila[0], "nombre": fila[1]}
+            for fila in db.execute(text("SELECT id, nombre FROM alm_proveedor WHERE estado = 'HAB' ORDER BY nombre")).fetchall()
+        ],
+        "tipos_documento": [{"id": k, "nombre": v} for k, v in schemas.TIPOS_DOCUMENTO_INGRESO.items()],
+        "id_almacen_defecto": ALMACEN_COSTOS_ID if ALMACEN_COSTOS_ID in ids_almacenes else (ids_almacenes[0] if ids_almacenes else None),
+        "id_barra_defecto": (
+            settings.PALOTEO_DEFAULT_BARRA_ID if settings.PALOTEO_DEFAULT_BARRA_ID in ids_barras
+            else (ids_barras[0] if ids_barras else None)
+        ),
+    }
+
+
+@app.get("/api/operaciones/ingreso-barra/productos", response_model=List[schemas.IngresoBarraProducto])
+def buscar_productos_ingreso_barra(
+    q: Optional[str] = Query(None, min_length=2, max_length=60),
+    ids: Optional[str] = Query(None, max_length=600, pattern=r'^[0-9]+(,[0-9]+)*$',
+                               description="ids separados por coma: refresca el stock de productos ya elegidos"),
+    id_almacen: int = Query(..., gt=0),
+    id_barra: Optional[int] = Query(None, gt=0),
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_usuario_administrador)
+):
+    """Buscador de productos del catálogo (HAB) con stock de almacén y barra
+    (unidades y detalle), WAC vigente y último precio de compra a proveedor.
+    Con `ids` devuelve esos productos: la PWA refresca el stock de las tarjetas
+    al cambiar de almacén o de barra."""
+    if not q and not ids:
+        raise HTTPException(status_code=422, detail="Indicar q (texto a buscar) o ids.")
+    lista_ids = [int(i) for i in ids.split(",")][:60] if ids else []
+    filtro = "p.id IN :ids" if lista_ids else "(p.nombre LIKE :patron OR p.codigo = :codigo)"
+    consulta = text(f"""
+            SELECT p.id, p.nombre, p.codigo, c.nombre AS categoria, p.ind_permite_comandar,
+                   p.medida, p.cantidad_detalle,
+                   (SELECT SUM(ai.cantidad_paq) FROM alm_inventario ai
+                     WHERE ai.id_producto = p.id AND ai.id_almacen = :almacen AND ai.estado = 'HAB') AS stock_almacen,
+                   (SELECT SUM(ai.cantidad_detalle) FROM alm_inventario ai
+                     WHERE ai.id_producto = p.id AND ai.id_almacen = :almacen AND ai.estado = 'HAB') AS stock_almacen_detalle,
+                   (SELECT SUM(bi.cantidad_paq) FROM bar_inventario bi
+                     WHERE bi.id_producto = p.id AND bi.id_barra = :barra AND bi.estado = 'HAB') AS stock_barra,
+                   (SELECT SUM(bi.cantidad_detalle) FROM bar_inventario bi
+                     WHERE bi.id_producto = p.id AND bi.id_barra = :barra AND bi.estado = 'HAB') AS stock_barra_detalle,
+                   (SELECT w.wac_actual FROM cache_wac_producto w
+                     WHERE w.id_producto = p.id AND w.id_almacen = :almacen) AS wac_actual,
+                   (SELECT di.precio_costo FROM alm_detalle_ingreso di
+                      JOIN alm_ingreso ai2 ON ai2.id = di.id_ingreso
+                     WHERE di.id_producto = p.id AND di.estado = 'HAB' AND di.ind_paq_detalle = '1'
+                       AND di.precio_costo > 0 AND ai2.ind_tipo_ingreso = :tipo_ingreso
+                       AND ai2.ind_estado_ingreso = '1' AND ai2.estado = 'HAB'
+                     ORDER BY di.id DESC LIMIT 1) AS ultimo_precio
+            FROM alm_producto p
+            LEFT JOIN alm_categoria c ON c.id = p.id_categoria
+            WHERE p.estado = 'HAB' AND {filtro}
+            ORDER BY p.nombre
+            LIMIT 60
+        """)
+    params = {"almacen": id_almacen, "barra": id_barra or 0, "tipo_ingreso": TIPO_INGRESO_PROVEEDOR}
+    if lista_ids:
+        consulta = consulta.bindparams(bindparam("ids", expanding=True))
+        params["ids"] = lista_ids
+    else:
+        params.update({"patron": f"%{q.strip()}%", "codigo": q.strip()})
+    filas = db.execute(consulta, params).mappings().all()
+    return [
+        {
+            "id_producto": fila["id"],
+            "nombre": fila["nombre"],
+            "codigo": fila["codigo"],
+            "categoria": fila["categoria"],
+            "comandable": fila["ind_permite_comandar"] == IND_PERMITE_COMANDAR_SI,
+            "traspasable": bool(fila["medida"]) and bool(fila["cantidad_detalle"]),
+            "stock_almacen": _float_o_none(fila["stock_almacen"]),
+            "stock_almacen_detalle": _float_o_none(fila["stock_almacen_detalle"]),
+            "stock_barra": _float_o_none(fila["stock_barra"]) if id_barra else None,
+            "stock_barra_detalle": _float_o_none(fila["stock_barra_detalle"]) if id_barra else None,
+            "wac_actual": _float_o_none(fila["wac_actual"]),
+            "ultimo_precio": _float_o_none(fila["ultimo_precio"]),
+        }
+        for fila in filas
+    ]
+
+
+def _correr_ingreso_barra(db: Session, payload: schemas.IngresoBarraRequest,
+                          usuario: models.Usuario, aplicar: bool) -> dict:
+    try:
+        resultado = _ejecutar_ingreso_barra(db, payload, usuario)
+        if aplicar:
+            db.commit()
+        else:
+            # Vista previa: todo (incluido lo que escribió el trigger del WAC,
+            # tablas InnoDB) se deshace. Solo quedan huecos en los AUTO_INCREMENT.
+            db.rollback()
+    except HTTPException:
+        db.rollback()
+        raise
+    except IntegrityError as exc:
+        db.rollback()
+        if CLAVE_UNICA_OPERACION_POS in str(exc.orig):
+            # Dos envíos simultáneos con la misma clave: el segundo choca aquí.
+            control = _control_operacion_pos(db, payload.clave_idempotencia)
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=_detalle_operacion_ya_registrada(control) if control else "Esta operación ya fue registrada."
+            ) from exc
+        logger.exception("Error de integridad en ingreso a barra (clave %s)", payload.clave_idempotencia)
+        raise HTTPException(status_code=500, detail="No se pudo registrar el ingreso.") from exc
+    except Exception as exc:
+        db.rollback()
+        logger.exception("Error en ingreso a barra (clave %s)", payload.clave_idempotencia)
+        raise HTTPException(status_code=500, detail="No se pudo registrar el ingreso.") from exc
+
+    n_barra = sum(1 for linea in resultado["lineas"] if linea["cantidad_a_barra"] > 0)
+    if aplicar:
+        traspaso = f" y traspaso {resultado['id_salida_inventario']} recibido en barra" if resultado["id_salida_inventario"] else ""
+        mensaje = f"Ingreso {resultado['id_ingreso']} procesado{traspaso}."
+    else:
+        mensaje = (f"Vista previa: {len(resultado['lineas'])} producto(s), {n_barra} con traspaso a barra. "
+                   "No se guardó nada.")
+    return {
+        "status": "success" if aplicar else "preview",
+        "id_operacion": resultado["id_operacion"],
+        "id_ingreso": resultado["id_ingreso"] if aplicar else None,
+        "id_salida_inventario": resultado["id_salida_inventario"] if aplicar else None,
+        "total": resultado["total"],
+        "lineas": resultado["lineas"],
+        "mensaje": mensaje,
+    }
+
+
+@app.post("/api/operaciones/ingreso-barra/preview", response_model=schemas.IngresoBarraResponse)
+def previsualizar_ingreso_barra(
+    payload: schemas.IngresoBarraRequest,
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_usuario_administrador)
+):
+    """Ejecuta el flujo completo y lo deshace: devuelve stock y WAC antes y
+    después exactamente como los dejaría el trigger del WAC."""
+    return _correr_ingreso_barra(db, payload, current_user, aplicar=False)
+
+
+@app.post("/api/operaciones/ingreso-barra", response_model=schemas.IngresoBarraResponse)
+def registrar_ingreso_barra(
+    payload: schemas.IngresoBarraRequest,
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_usuario_administrador)
+):
+    """Ingreso de proveedor -> traspaso -> recepción en barra en una sola
+    transacción, con las mismas filas y estados que deja el POS."""
+    return _correr_ingreso_barra(db, payload, current_user, aplicar=True)
 
 
 # --- SERVIDOR DE ARCHIVOS ESTÁTICOS (FRONTEND) ---

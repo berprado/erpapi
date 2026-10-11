@@ -54,14 +54,25 @@
 
 ## 🟡 Media Prioridad
 
-- [ ] **Operaciones del POS desde la PWA (solo administrador)** — en análisis (2026-10-09)
-  - Ingreso de proveedor → traspaso → recepción en barra en un paso, aceptar/rechazar traspasos, cortesía, devolución barra → almacén, anular comanda. Contexto, comportamiento del POS verificado en vivo, clases a leer y método de trabajo: `documentos/operaciones_pos/00_contexto_y_plan.md`.
-  - Fuentes del POS en `AnalisisPos/` (en `.gitignore` a propósito: código propietario descompilado, uso interno). Próximo paso: exportar los `.java` con JD-GUI (*File → Save All Sources*) de `multi-ejb.jar` y `multi-web.war` a `AnalisisPos/fuentes/` y leer el flujo de ingreso → traspaso → recepción.
-  - Depende de: aplicar antes el usuario `api_paloteo` con permisos mínimos (item de alta prioridad de usuarios y contraseñas) y ampliarlo tabla por tabla con cada operación. Descubrimiento y pruebas solo en `test_pos`, nunca en producción (un ingreso con costo cambia el WAC para siempre).
+- [ ] **Operaciones del POS desde la PWA (solo administrador)** — primera operación implementada en v12.50 (2026-10-11)
+  - **Hecho:** ingreso de proveedor → traspaso → recepción en barra en una pantalla y una transacción (módulo INGRESO). Comportamiento del POS confirmado en vivo en `test_pos` (4 escenarios, 18 pasos) y documentado en `documentos/operaciones_pos/01_ingreso_traspaso_recepcion.md`.
+  - **Prueba diferencial hecha en `test_pos` (2026-10-11):** la misma compra por el POS (ingreso 840) y por la PWA (ingreso 842) dejó las mismas filas salvo ids y horas; diferencias solo las esperadas (`ope_novedades` con el nombre real del almacén, `alm_producto` sin tocar, fila de control, huecos de numeración por la vista previa). Detalle en la sección 5 de `01_ingreso_traspaso_recepcion.md`. DDL de la tabla de control aplicado en `test` y `test_pos`.
+  - **Antes de usarlo en producción:** (1) aplicar `querys/ddl_app_operacion_pos_control.sql` en casa matriz y Beer Garden antes del deploy; (2) confirmar que ambas producciones tienen el motor WAC V9.44 (`trg_wac_alm_ingreso_after_update`): sin él el endpoint responde 409.
+  - Pendientes: aceptar o rechazar un traspaso pendiente (comportamiento ya observado), cortesía, devolución barra → almacén, anular comanda. Contexto y método: `documentos/operaciones_pos/00_contexto_y_plan.md`.
+  - Depende de: aplicar el usuario `api_paloteo` con permisos mínimos (permisos del módulo INGRESO ya agregados en `querys/seguridad_usuario_api_tuneles.sql`). Descubrimiento y pruebas solo en `test_pos`, nunca en producción (un ingreso con costo cambia el WAC).
 
-- [ ] **Mejorar la herramienta de diff de la BD y pasarla al repo**
-  - Hoy son scripts sueltos en `AnalisisPos/herramientas_sesion_20261009/` (`diff_tablas.py`, `stock_snapshot.py`, `ajustes_163.py`, `verif_163.py`, `fuera_grilla.py`), usados para descubrir en vivo cómo mueve stock el POS. Límites: el checksum solo cubre las últimas 500 filas por tabla y no dice qué fila ni qué columnas cambió un UPDATE.
-  - Mejorar: checksum de todas las filas, detalle por columna de cada UPDATE, incluir `alm_producto`, `alm_valoracion*`, `bar_valoracion`, `*_inventario_operacion`. Pasarla a una carpeta versionada (sin credenciales; lee `config.py` y exige `APP_ENV=test_pos`). Es la base del método de "prueba diferencial" POS vs API.
+- [ ] **Avisar al equipo del motor WAC (V9.44): el trigger cuenta dos veces las unidades compradas** (detectado 2026-10-10 en `test_pos`)
+  - `trg_wac_alm_ingreso_after_update` lee el stock de `alm_inventario` al pasar el ingreso a `'1'`, pero el POS ya sumó la compra antes: COCA COLA 3LT quedó en 17.4671 (correcto 18.1004), HAVANA 7A en 152.1427 (correcto 135), RED BULL LATA en 16.6079 (correcto 16). Corrección sugerida: restar del stock las cantidades de las líneas cerradas del mismo ingreso. Tabla completa en `documentos/operaciones_pos/01_ingreso_traspaso_recepcion.md` sección 3.
+  - Además, la nota técnica V9.44 (`documentos/mejoras_y_correcciones_wac.md`) dice que el stock previo es "almacén y barra" (solo lee el almacén) y que anular descuenta stock (no lo hace).
+  - La API escribe en el mismo orden que el POS: hoy deja el mismo WAC y queda correcta en cuanto se corrija el trigger. Al corregirlo, actualizar el valor esperado de `test_wac_igual_al_pos` (152.1427 → 135.0000).
+
+- [ ] **Fechas y horas en hora de Bolivia al escribir tablas del POS** (detectado 2026-10-11 en la prueba diferencial)
+  - La API escribe con `datetime.now(timezone.utc)` (y en Seenode el reloj del sistema también es UTC): `seg_acceso.fecha` al hacer login (vimos 04:47 en la PWA contra 00:40 del POS), las fechas de la captura del paloteo (`bar_inventario_fisico`, `bar_detalle_fisico`, alta y corrección) y las de aplicar ajustes (`bar_ajuste`, `bar_salida_inventario` y detalles, `bar_inventario.fecha_mod`). Entre las 20:00 y las 24:00 de Bolivia la fecha sale del día siguiente.
+  - Propuesta: un helper con `SELECT NOW()` (reloj del servidor MySQL del POS, hora boliviana; el módulo INGRESO ya lo usa) para todo lo que se escribe en tablas del POS. Las tablas propias (`app_login_auditoria_api`) siguen en UTC porque el rate limit compara en UTC. Las filas viejas de `seg_acceso` no se corrigen (no se distingue cuáles escribió la API). Con tests.
+
+- [ ] **Pasar la herramienta de diff de la BD al repo**
+  - Mejorada el 2026-10-10: `AnalisisPos/herramientas_sesion_20261009/diff_bd.py` (reemplaza a `diff_tablas.py`) cubre todas las filas de todas las tablas con checksums por bloque calculados en MySQL, informa INSERT / UPDATE columna por columna / DELETE y deja una bitácora por paso. Usada para confirmar el flujo de ingreso.
+  - Falta pasarla a una carpeta versionada (sin credenciales; lee `config.py` y exige `APP_ENV=test_pos`). Es la base del método de "prueba diferencial" POS vs API.
 
 - [ ] **Completar perfiles de pesaje incompletos en producción** (relevado 2026-10-08, solo lectura)
   - Pesables (sin vinos) con `peso_bruto`, `tara` o `gramos_por_oz` faltantes: **16 en Beer Garden** (entre ellos MARTINI BIANCO 750ML, MARTINI DRY 750ML, RUJERO COL. PRIVADA 1LT/750ML, RUJERO GUARDA, RUJERO MARACUYA, OLD PARR 750ML, BOLS MELON/MENTA, GANESHA LONDON DRY, HAVANA CLUB RESERVA 1LT, INSURGENTE PINK/FRUTOS DEL BOSQUE 700ML, CASA REAL ROJA 750ML, ABSOLUT BLUE 700ML) y **85 en casa matriz**.

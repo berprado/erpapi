@@ -70,6 +70,22 @@ GRANT        UPDATE  ON adminerp.bar_inventario             TO 'api_paloteo'@'lo
 GRANT INSERT, UPDATE ON adminerp.app_paloteo_ajuste_control TO 'api_paloteo'@'localhost', 'api_paloteo'@'127.0.0.1';
 GRANT INSERT         ON adminerp.analytics_varianza_inventario TO 'api_paloteo'@'localhost', 'api_paloteo'@'127.0.0.1';
 
+-- INGRESO (v12.50: ingreso de proveedor -> traspaso -> recepcion en barra,
+-- documentos/operaciones_pos/01_ingreso_traspaso_recepcion.md). bar_inventario
+-- necesita ademas INSERT: si el producto nunca estuvo en la barra, la
+-- recepcion crea su fila. Los triggers del WAC (cache_wac_producto,
+-- cache_wac_historial) corren con el DEFINER (root@localhost): no requieren
+-- permisos para este usuario.
+GRANT INSERT, UPDATE ON adminerp.alm_ingreso                TO 'api_paloteo'@'localhost', 'api_paloteo'@'127.0.0.1';
+GRANT INSERT         ON adminerp.alm_detalle_ingreso        TO 'api_paloteo'@'localhost', 'api_paloteo'@'127.0.0.1';
+GRANT INSERT, UPDATE ON adminerp.alm_inventario             TO 'api_paloteo'@'localhost', 'api_paloteo'@'127.0.0.1';
+GRANT INSERT         ON adminerp.alm_salida_inventario      TO 'api_paloteo'@'localhost', 'api_paloteo'@'127.0.0.1';
+GRANT INSERT         ON adminerp.alm_detalle_salida_inv     TO 'api_paloteo'@'localhost', 'api_paloteo'@'127.0.0.1';
+GRANT INSERT         ON adminerp.ope_novedades              TO 'api_paloteo'@'localhost', 'api_paloteo'@'127.0.0.1';
+GRANT INSERT         ON adminerp.bar_inventario             TO 'api_paloteo'@'localhost', 'api_paloteo'@'127.0.0.1';
+GRANT INSERT, UPDATE ON adminerp.bar_inventario_operacion   TO 'api_paloteo'@'localhost', 'api_paloteo'@'127.0.0.1';
+GRANT INSERT         ON adminerp.app_operacion_pos_control  TO 'api_paloteo'@'localhost', 'api_paloteo'@'127.0.0.1';
+
 -- PESAJE (perfiles: alta, edicion, baja logica)
 GRANT INSERT, UPDATE ON adminerp.app_producto_pesaje_config_api TO 'api_paloteo'@'localhost', 'api_paloteo'@'127.0.0.1';
 

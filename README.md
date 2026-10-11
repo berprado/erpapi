@@ -447,6 +447,30 @@ Reglas:
 3. Las vistas fuente (`v9_menubackstage`, `vw_pourcost_receta`, `vw_alm_producto_con_nombres`, `v9_cache_wac_producto`) viven en MySQL, no en el ORM de este repo — mismo patron que los triggers de `alm_producto`. DDL versionado en `querys/create_views_pourcost.sql`; ya existen en `test_pos`, que es el entorno de desarrollo/validacion de este modulo (ver `documentos/pour_cost/pourcost.md`, seccion 2).
 4. `POURCOST_DIAS_PRECIO_ACTIVOS` (`config.py`, default `"1"`, lista separada por coma, mismo patron que `PALOTEO_ALLOWED_BARRAS`) determina que `id_dia` de `ope_dia` expone `GET /api/pourcost/dias` y, por lo tanto, si el frontend muestra el selector "Precios A/B" con sus 2 botones (nombres reales de `ope_dia`) o lo oculta y muestra un solo grupo como texto plano (caso de hoy: solo el grupo 1 esta realmente en uso).
 5. Sin `Aplicar Precio` (escritura en `ope_precio_venta`) todavia — explicitamente fuera de alcance de esta fase.
+
+---
+
+### INGRESO: ingreso de proveedor -> traspaso -> recepcion en barra (requiere JWT + rol administrador)
+
+Reemplaza los cinco pasos del POS (registrar y procesar el ingreso, registrar y procesar el traspaso, aceptarlo en barra) por una pantalla y **una sola transaccion**, dejando las mismas filas y estados que el POS. Lo que escribe el POS en cada paso (confirmado en vivo en `test_pos`) y las decisiones de diseño: `documentos/operaciones_pos/01_ingreso_traspaso_recepcion.md`.
+
+| Metodo | Ruta | Descripcion |
+|---|---|---|
+| `GET` | `/api/operaciones/ingreso-barra/contexto` | Operativa en proceso (o el motivo por el que no se puede operar), si el motor WAC V9.44 esta instalado, almacenes, barras, proveedores y tipos de documento (38 FACTURA, 39 RECIBO, 40 OTRO) |
+| `GET` | `/api/operaciones/ingreso-barra/productos?q=&id_almacen=&id_barra=` | Buscador del catalogo (HAB) con stock de almacen y barra (unidades y detalle), WAC vigente y ultimo precio de compra. Con `ids=1,2,3` en vez de `q` devuelve esos productos (la PWA refresca el stock al cambiar almacen o barra) |
+| `POST` | `/api/operaciones/ingreso-barra/preview` | Ejecuta el flujo completo y hace ROLLBACK: devuelve stock y WAC antes/despues tal como los dejaria el trigger. Solo deja huecos en los AUTO_INCREMENT |
+| `POST` | `/api/operaciones/ingreso-barra` | Registra todo y hace COMMIT |
+
+Reglas:
+
+1. Exige **una sola** operativa HAB en 22 (EN PROCESO), igual que el POS (no la 24 del paloteo); se bloquea por PK y se re-chequea dentro de la transaccion.
+2. Exige el trigger `trg_wac_alm_ingreso_after_update` (motor WAC V9.44). Sin el, responde 409: con el trigger anterior el WAC se moveria en otro momento y con otra formula.
+3. Orden de escritura igual al POS: `alm_ingreso` en `'0'` + `alm_detalle_ingreso` -> suma en `alm_inventario` -> `alm_ingreso` a `'1'` con la operativa (corre el trigger del WAC) -> `alm_salida_inventario` ya en 21 con los campos de recepcion + `alm_detalle_salida_inv` -> resta en `alm_inventario` -> `ope_novedades` -> suma en `bar_inventario` y `bar_inventario_operacion` (crea las filas que falten como el POS) -> `app_operacion_pos_control`. El trigger hoy cuenta dos veces las unidades compradas (error del motor, documentado); la API deja el mismo WAC que el POS.
+4. v1: solo unidades cerradas (`ind_paq_detalle = '1'`), cada producto una vez, traspaso parcial por linea (`cantidad_a_barra` de 0 a `cantidad`; lo demas queda en el almacen), una barra por operacion. No toca `alm_producto` (el POS solo actualiza `usuario_reg`/`fecha_mod`). En `ope_novedades` escribe el nombre real del almacen (el POS a veces escribe "null").
+5. `clave_idempotencia` (la genera la PWA): un segundo envio con la misma clave responde 409 con los documentos ya creados y no repite el ingreso.
+6. Fechas y horas: `NOW()` del servidor MySQL (hora local del POS), no UTC.
+
+DDL `querys/ddl_app_operacion_pos_control.sql`, **aplicar en cada base antes de desplegar v12.50**. Estado por entorno: `test` y `test_pos` aplicados (2026-10-11); casa matriz y Beer Garden pendientes. El motor WAC V9.44 esta en `test_pos`; en `test` local falta (los tests del flujo lo simulan y el del WAC se omite).
 6. **Opcional por defecto (v12.41):** el costo de un combo (tarjeta) suma los `PRINCIPAL` mas un unico `OPCIONAL` segun la categoria del combo, configurado en el `.env` con `POURCOST_OPCIONAL_CAT<id alm_categoria>=<id alm_producto>` (`config.py`, `pourcost_opcional_por_categoria`; ver el bloque de variables de arriba). Los ids de producto cambian por entorno: cada entorno (`.env` local, `test_pos`, variables de entorno de cada Web Service de Seenode) debe definir los suyos. Categoria sin variable, o combo que no trae ese opcional, cuenta solo el principal. El modal parte de la misma seleccion (`incluido_por_defecto`) y el usuario puede cambiarla. Detalle y valores del entorno `test` en `documentos/pour_cost/pourcost.md` seccion 6.
 
 ---
@@ -706,6 +730,12 @@ sincronizada entre ambos modulos porque comparten el mismo origen de datos.
 - El campo del WAC editable (productos sueltos) tiene una nota inline ("Solo en esta simulación") junto al input, ademas del disclaimer general del header del modal. Cuando el precio base es nulo para el horario elegido, se muestra un aviso explicando que el campo "Bs precio" parte vacio, en vez de dejarlo sin contexto.
 - Mientras el usuario edita "% objetivo" o "Bs precio", el campo activo (el que esta "conduciendo" el calculo) se resalta con borde y el otro se atenua; si se editaron ambos a mano, dejan de sincronizarse entre si y ninguno queda resaltado. Un boton de copiar (icono junto al precio sugerido) copia ese valor al portapapeles.
 - Buscador "BUSCAR" visible en el encabezado del panel, mismo mecanismo que en PESAJE (segundo punto de entrada al buscador compartido del topbar).
+
+### Modulo INGRESO: detalles de UI
+
+- Solo visible para `ROLE_ADMIN` (menu flotante, "Ingreso"). Al entrar consulta `/contexto` y muestra la operativa en proceso; si no hay operativa en 22 o falta el motor WAC V9.44, el aviso lo explica y "Revisar" queda deshabilitado.
+- Cabecera (almacen, proveedor, tipo y numero de documento, barra destino, observaciones; el proveedor parte vacio y es obligatorio, para no registrar compras con el primero de la lista), buscador de productos y una tarjeta por producto con `{id} NOMBRE {cod} · CATEGORIA`, `STOCK {almacen} unidad/detalle · STOCK {barra} unidad/detalle`, `WAC: Bs x · ULT. COSTO: Bs y` (montos en formato es-BO) y los campos CANT. INGRESO, COSTO UNIT. y CANT. TRASPASO (acompaña a la cantidad hasta que se edita a mano; deshabilitado si el producto no tiene medida o contenido, que el POS exige para traspasar). Si el costo unitario se aleja mas de 30% del ultimo costo, la tarjeta avisa (no bloquea): atrapa errores de tipeo que moverian el WAC. Al cambiar almacen o barra se vuelve a pedir el stock de las tarjetas.
+- **Revisar** llama a `/preview` y muestra almacen, barra y WAC antes -> despues; **Confirmar** registra con la misma `clave_idempotencia` (generada con `crypto.getRandomValues`, porque `randomUUID` exige contexto seguro y la PWA corre en http en el local). Si la respuesta se pierde, volver a pulsar Confirmar no duplica: el backend responde "ya fue registrada".
 
 ### FAB "volver al inicio"
 

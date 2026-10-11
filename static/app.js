@@ -2915,6 +2915,8 @@ async function mostrarPantallaApp() {
     if (menuItemPourCost) menuItemPourCost.classList.toggle('hidden', !esUsuarioAdministrador());
     const menuItemHistorico = document.getElementById('menu-item-historico');
     if (menuItemHistorico) menuItemHistorico.classList.toggle('hidden', !esUsuarioAdministrador());
+    const menuItemIngreso = document.getElementById('menu-item-ingreso');
+    if (menuItemIngreso) menuItemIngreso.classList.toggle('hidden', !esUsuarioAdministrador());
     await cargarConfiguracionPublica();
     // Asegurar que el panel de inventario sea el visible al entrar a la app
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
@@ -4533,6 +4535,480 @@ if (historicoToggleDiferencias) {
     });
 }
 
+// ==========================================
+// INGRESO (admin-only): ingreso de proveedor -> traspaso -> recepción en barra
+// El backend hace todo en una transacción con las mismas filas que el POS
+// (documentos/operaciones_pos/01_ingreso_traspaso_recepcion.md). "Revisar"
+// llama a /preview, que ejecuta y deshace: muestra stock y WAC tal como quedarán.
+// ==========================================
+const ingresoAviso              = document.getElementById('ingreso-aviso');
+const ingresoFormulario         = document.getElementById('ingreso-formulario');
+const ingresoSelectAlmacen      = document.getElementById('ingreso-almacen');
+const ingresoSelectProveedor    = document.getElementById('ingreso-proveedor');
+const ingresoSelectTipoDoc      = document.getElementById('ingreso-tipo-documento');
+const ingresoInputNumeroDoc     = document.getElementById('ingreso-numero-documento');
+const ingresoSelectBarra        = document.getElementById('ingreso-barra');
+const ingresoInputObservaciones = document.getElementById('ingreso-observaciones');
+const ingresoInputBuscar        = document.getElementById('ingreso-buscar');
+const ingresoResultados         = document.getElementById('ingreso-resultados');
+const ingresoLineasLista        = document.getElementById('ingreso-lineas');
+const ingresoLineasVacio        = document.getElementById('ingreso-lineas-vacio');
+const ingresoTotal              = document.getElementById('ingreso-total');
+const ingresoBtnRevisar         = document.getElementById('ingreso-btn-revisar');
+const ingresoRevision           = document.getElementById('ingreso-revision');
+const ingresoRevisionLineas     = document.getElementById('ingreso-revision-lineas');
+const ingresoRevisionTotal      = document.getElementById('ingreso-revision-total');
+const ingresoInputObsRecepcion  = document.getElementById('ingreso-observaciones-recepcion');
+const ingresoBtnVolver          = document.getElementById('ingreso-btn-volver');
+const ingresoBtnConfirmar       = document.getElementById('ingreso-btn-confirmar');
+
+const ingresoEstado = {
+    contexto: null,
+    lineas: [],          // { producto, cantidad, precio, aBarra, aBarraManual }
+    clave: null,         // clave_idempotencia: se renueva solo tras registrar o descartar
+    busquedaTimer: null,
+    busquedaSeq: 0,
+};
+
+/** crypto.randomUUID exige contexto seguro y la PWA corre en http dentro del local:
+ * getRandomValues sí está disponible. */
+function generarClaveIngreso() {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+function formatearBsIngreso(valor) {
+    return `Bs ${Number(valor || 0).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function formatearCantidadIngreso(valor) {
+    if (valor === null || valor === undefined) return '-';
+    return Number(valor).toLocaleString('es-BO', { maximumFractionDigits: 4 });
+}
+
+/** Desvío del costo cargado respecto del último costo de compra que dispara el
+ * aviso: atrapa errores de tipeo (1600 en vez de 16) antes de mover el WAC. */
+const INGRESO_UMBRAL_AVISO_COSTO = 0.3;
+
+function nombreSeleccionadoIngreso(select) {
+    return select?.selectedOptions?.[0]?.textContent || '';
+}
+
+/** Bloque de identificación, stock y costos de un producto (tarjeta y resultados):
+ *   {id} NOMBRE {cod} · CATEGORIA
+ *   STOCK {almacén} unidad/detalle · STOCK {barra} unidad/detalle
+ *   WAC: Bs x · ÚLT. COSTO: Bs y */
+function infoProductoIngresoHtml(p, sufijoNombre = '') {
+    const stock = (paq, det) => `${formatearCantidadIngreso(paq ?? 0)}/${formatearCantidadIngreso(det ?? 0)}`;
+    const barra = ingresoSelectBarra.value
+        ? ` · STOCK ${escapeHtml(nombreSeleccionadoIngreso(ingresoSelectBarra))} ${stock(p.stock_barra, p.stock_barra_detalle)}`
+        : '';
+    return `
+        <p class="text-[12px] text-on-surface leading-tight">
+            <span class="text-[10px] font-label-mono text-on-surface-variant">${p.id_producto}</span>
+            ${escapeHtml(p.nombre)}
+            <span class="text-[10px] font-label-mono text-on-surface-variant">${escapeHtml(p.codigo || '')}</span>
+            <span class="text-[10px] font-label-mono text-on-surface-variant">· ${escapeHtml(p.categoria || 'SIN CATEGORÍA')}</span>${sufijoNombre}
+        </p>
+        <p class="text-[10px] font-label-mono uppercase text-on-surface-variant">
+            STOCK ${escapeHtml(nombreSeleccionadoIngreso(ingresoSelectAlmacen))} ${stock(p.stock_almacen, p.stock_almacen_detalle)}${barra}
+        </p>
+        <p class="text-[10px] font-label-mono uppercase text-on-surface-variant">
+            WAC: ${p.wac_actual !== null ? formatearBsIngreso(p.wac_actual) : '-'}
+            · ÚLT. COSTO: ${p.ultimo_precio !== null ? formatearBsIngreso(p.ultimo_precio) : '-'}
+        </p>`;
+}
+
+function detalleErrorApi(data, porDefecto) {
+    if (typeof data?.detail === 'string') return data.detail;
+    if (Array.isArray(data?.detail)) return data.detail.map((e) => e.msg).join(' · ');
+    return porDefecto;
+}
+
+function llenarSelectIngreso(select, items, valorDefecto, placeholder = null) {
+    if (!select || select.options.length) return; // conservar la elección al volver al panel
+    if (placeholder) {
+        const vacia = document.createElement('option');
+        vacia.value = '';
+        vacia.textContent = placeholder;
+        select.appendChild(vacia);
+    }
+    items.forEach((item) => {
+        const option = document.createElement('option');
+        option.value = String(item.id);
+        option.textContent = item.nombre;
+        select.appendChild(option);
+    });
+    if (valorDefecto !== null && valorDefecto !== undefined) select.value = String(valorDefecto);
+}
+
+function ingresoBloqueado() {
+    const ctx = ingresoEstado.contexto;
+    return !ctx || !ctx.operativa_lista || !ctx.motor_wac_ok;
+}
+
+function actualizarAvisoIngreso() {
+    const ctx = ingresoEstado.contexto;
+    let texto = '';
+    if (!ctx) {
+        texto = 'No se pudo cargar la configuración del ingreso.';
+    } else if (!ctx.operativa_lista) {
+        texto = ctx.mensaje_operativa || 'No hay operativa EN PROCESO.';
+    } else if (!ctx.motor_wac_ok) {
+        texto = 'Esta base no tiene el motor WAC V9.44 (trigger trg_wac_alm_ingreso_after_update): no se pueden registrar ingresos desde aquí.';
+    } else {
+        const op = ctx.operativa;
+        texto = `Operativa #${op.id_operacion} ${op.nombre || ''} (${op.fecha || ''}) en proceso.`;
+    }
+    ingresoAviso.textContent = texto;
+    ingresoAviso.classList.remove('hidden');
+    ingresoAviso.classList.toggle('text-error', ingresoBloqueado());
+    actualizarTotalesIngreso();
+}
+
+async function cargarIngreso() {
+    if (!ingresoEstado.clave) ingresoEstado.clave = generarClaveIngreso();
+    try {
+        const resp = await fetchAutenticado(`${API_BASE}/operaciones/ingreso-barra/contexto`);
+        const data = await resp.json();
+        if (!resp.ok) {
+            ingresoEstado.contexto = null;
+            actualizarAvisoIngreso();
+            ingresoAviso.textContent = detalleErrorApi(data, 'No se pudo cargar la configuración del ingreso.');
+            return;
+        }
+        ingresoEstado.contexto = data;
+        llenarSelectIngreso(ingresoSelectAlmacen, data.almacenes, data.id_almacen_defecto);
+        // Sin proveedor por defecto: preseleccionar el primero de la lista invita a
+        // registrar compras con el proveedor equivocado.
+        llenarSelectIngreso(ingresoSelectProveedor, data.proveedores, null, 'Selecciona...');
+        llenarSelectIngreso(ingresoSelectTipoDoc, data.tipos_documento, 40);
+        llenarSelectIngreso(ingresoSelectBarra, data.barras, data.id_barra_defecto);
+    } catch (error) {
+        if (error instanceof SesionExpiradaError) return;
+        ingresoEstado.contexto = null;
+    }
+    actualizarAvisoIngreso();
+}
+
+async function buscarProductosIngreso(texto) {
+    const consulta = texto.trim();
+    const secuencia = ++ingresoEstado.busquedaSeq;
+    if (consulta.length < 2) {
+        ingresoResultados.classList.add('hidden');
+        return;
+    }
+    const params = new URLSearchParams({ q: consulta, id_almacen: ingresoSelectAlmacen.value });
+    if (ingresoSelectBarra.value) params.set('id_barra', ingresoSelectBarra.value);
+    try {
+        const resp = await fetchAutenticado(`${API_BASE}/operaciones/ingreso-barra/productos?${params}`);
+        const productos = resp.ok ? await resp.json() : [];
+        if (secuencia !== ingresoEstado.busquedaSeq) return; // llegó una búsqueda más nueva
+        renderizarResultadosIngreso(productos);
+    } catch (error) {
+        if (error instanceof SesionExpiradaError) return;
+    }
+}
+
+function renderizarResultadosIngreso(productos) {
+    ingresoResultados.innerHTML = '';
+    if (!productos.length) {
+        ingresoResultados.innerHTML = '<p class="px-sm py-xs text-[11px] text-on-surface-variant">Sin resultados.</p>';
+    }
+    productos.forEach((producto) => {
+        const yaAgregado = ingresoEstado.lineas.some((l) => l.producto.id_producto === producto.id_producto);
+        const boton = document.createElement('button');
+        boton.type = 'button';
+        boton.disabled = yaAgregado;
+        boton.className = 'w-full text-left px-sm py-xs border-b border-outline-variant hover:bg-surface-container-high disabled:opacity-50';
+        boton.innerHTML = infoProductoIngresoHtml(
+            producto, yaAgregado ? ' <span class="text-[10px] font-label-mono text-primary-fixed">· AGREGADO</span>' : '');
+        boton.addEventListener('click', () => agregarLineaIngreso(producto));
+        ingresoResultados.appendChild(boton);
+    });
+    ingresoResultados.classList.remove('hidden');
+}
+
+function agregarLineaIngreso(producto) {
+    if (ingresoEstado.lineas.some((l) => l.producto.id_producto === producto.id_producto)) return;
+    ingresoEstado.lineas.push({
+        producto,
+        cantidad: 1,
+        precio: producto.ultimo_precio !== null ? String(producto.ultimo_precio) : '',
+        aBarra: producto.traspasable ? 1 : 0,
+        aBarraManual: false,
+    });
+    ingresoInputBuscar.value = '';
+    ingresoResultados.classList.add('hidden');
+    renderizarLineasIngreso();
+}
+
+function crearTarjetaLineaIngreso(linea, indice) {
+    const p = linea.producto;
+    const tarjeta = document.createElement('div');
+    tarjeta.className = 'border border-outline-variant bg-surface-container px-sm py-xs rounded-sm';
+    const claseInput = 'mt-[2px] w-full h-8 bg-surface border border-outline-variant rounded-sm px-xs text-[12px] text-on-surface font-data-tabular focus:border-primary-fixed-dim focus:outline-none disabled:opacity-50';
+    tarjeta.innerHTML = `
+        <div class="flex items-start justify-between gap-xs">
+            <div class="min-w-0">
+                ${infoProductoIngresoHtml(p)}
+                ${p.traspasable ? '' : '<p class="text-[10px] text-error">Sin medida o contenido: el POS no permite traspasarlo a barra.</p>'}
+            </div>
+            <button type="button" data-accion="quitar" class="topbar-icon-btn shrink-0" aria-label="Quitar producto">
+                <span class="material-symbols-outlined text-base">close</span>
+            </button>
+        </div>
+        <div class="grid grid-cols-3 gap-xs mt-xs">
+            <label class="text-[9px] font-label-mono uppercase tracking-wide text-on-surface-variant">Cant. ingreso
+                <input data-campo="cantidad" type="number" inputmode="numeric" min="1" step="1" value="${linea.cantidad}" class="${claseInput}">
+            </label>
+            <label class="text-[9px] font-label-mono uppercase tracking-wide text-on-surface-variant">Costo unit.
+                <input data-campo="precio" type="number" inputmode="decimal" min="0" step="0.01" value="${escapeHtml(linea.precio)}" class="${claseInput}">
+            </label>
+            <label class="text-[9px] font-label-mono uppercase tracking-wide text-on-surface-variant">Cant. traspaso
+                <input data-campo="aBarra" type="number" inputmode="numeric" min="0" step="1" value="${linea.aBarra}" ${p.traspasable ? '' : 'disabled'} class="${claseInput}">
+            </label>
+        </div>
+        <p data-aviso-costo class="hidden mt-[2px] text-[10px] font-label-mono" style="color: var(--semantic-warning, #facc15);"></p>
+        <p data-subtotal class="mt-[2px] text-right text-[10px] font-label-mono text-on-surface-variant"></p>`;
+
+    tarjeta.querySelector('[data-accion="quitar"]').addEventListener('click', () => {
+        ingresoEstado.lineas.splice(indice, 1);
+        renderizarLineasIngreso();
+    });
+    const inputCantidad = tarjeta.querySelector('[data-campo="cantidad"]');
+    const inputPrecio = tarjeta.querySelector('[data-campo="precio"]');
+    const inputABarra = tarjeta.querySelector('[data-campo="aBarra"]');
+    inputCantidad.addEventListener('input', () => {
+        linea.cantidad = inputCantidad.value;
+        // Mientras no se edite a mano, "a barra" acompaña a la cantidad (todo a la barra).
+        if (p.traspasable && !linea.aBarraManual) {
+            linea.aBarra = inputCantidad.value;
+            inputABarra.value = inputCantidad.value;
+        }
+        actualizarTotalesIngreso();
+    });
+    inputPrecio.addEventListener('input', () => { linea.precio = inputPrecio.value; actualizarTotalesIngreso(); });
+    inputABarra.addEventListener('input', () => {
+        linea.aBarra = inputABarra.value;
+        linea.aBarraManual = true;
+        actualizarTotalesIngreso();
+    });
+    return tarjeta;
+}
+
+function renderizarLineasIngreso() {
+    ingresoLineasLista.innerHTML = '';
+    ingresoEstado.lineas.forEach((linea, indice) => {
+        ingresoLineasLista.appendChild(crearTarjetaLineaIngreso(linea, indice));
+    });
+    ingresoLineasVacio.classList.toggle('hidden', ingresoEstado.lineas.length > 0);
+    actualizarTotalesIngreso();
+}
+
+/** Valida una línea y devuelve el objeto para la API, o { error } con el motivo. */
+function lineaIngresoParaApi(linea) {
+    const nombre = linea.producto.nombre;
+    const cantidad = Number(linea.cantidad);
+    const precio = Number(linea.precio);
+    const aBarra = linea.producto.traspasable ? Number(linea.aBarra || 0) : 0;
+    if (!Number.isInteger(cantidad) || cantidad <= 0) return { error: `${nombre}: la cantidad de ingreso debe ser un entero mayor a 0.` };
+    if (linea.precio === '' || Number.isNaN(precio) || precio < 0) return { error: `${nombre}: falta el costo unitario.` };
+    if (Math.round(precio * 100) / 100 !== precio) return { error: `${nombre}: el costo unitario admite 2 decimales.` };
+    if (!Number.isInteger(aBarra) || aBarra < 0 || aBarra > cantidad) return { error: `${nombre}: la cantidad de traspaso debe estar entre 0 y la de ingreso.` };
+    return { id_producto: linea.producto.id_producto, cantidad, precio_costo: precio, cantidad_a_barra: aBarra };
+}
+
+function actualizarTotalesIngreso() {
+    let total = 0;
+    let primerError = null;
+    const tarjetas = ingresoLineasLista.children;
+    ingresoEstado.lineas.forEach((linea, indice) => {
+        const resultado = lineaIngresoParaApi(linea);
+        const subtotal = resultado.error ? null : resultado.cantidad * resultado.precio_costo;
+        if (subtotal !== null) total += subtotal;
+        if (resultado.error && !primerError) primerError = resultado.error;
+        const etiqueta = tarjetas[indice]?.querySelector('[data-subtotal]');
+        if (etiqueta) {
+            etiqueta.textContent = resultado.error ? resultado.error : `Subtotal ${formatearBsIngreso(subtotal)}`;
+            etiqueta.classList.toggle('text-error', Boolean(resultado.error));
+        }
+        const avisoCosto = tarjetas[indice]?.querySelector('[data-aviso-costo]');
+        if (avisoCosto) {
+            const ultimo = linea.producto.ultimo_precio;
+            const desvio = !resultado.error && ultimo > 0 ? (resultado.precio_costo - ultimo) / ultimo : 0;
+            const avisar = Math.abs(desvio) > INGRESO_UMBRAL_AVISO_COSTO;
+            avisoCosto.textContent = avisar
+                ? `Costo ${Math.round(Math.abs(desvio) * 100)}% ${desvio > 0 ? 'mayor' : 'menor'} que el último (${formatearBsIngreso(ultimo)}). Revisa antes de confirmar.`
+                : '';
+            avisoCosto.classList.toggle('hidden', !avisar);
+        }
+    });
+    ingresoTotal.textContent = formatearBsIngreso(total);
+    ingresoBtnRevisar.disabled = ingresoBloqueado() || !ingresoEstado.lineas.length || Boolean(primerError)
+        || !ingresoSelectProveedor.value;
+}
+
+function payloadIngreso() {
+    const lineas = ingresoEstado.lineas.map(lineaIngresoParaApi);
+    const error = lineas.find((l) => l.error);
+    if (error) throw new Error(error.error);
+    if (!ingresoSelectProveedor.value) throw new Error('Selecciona el proveedor.');
+    const hayTraspaso = lineas.some((l) => l.cantidad_a_barra > 0);
+    return {
+        id_almacen: Number(ingresoSelectAlmacen.value),
+        id_proveedor: Number(ingresoSelectProveedor.value),
+        ind_tipo_documento: Number(ingresoSelectTipoDoc.value),
+        numero_documento: ingresoInputNumeroDoc.value.trim() || null,
+        observaciones: ingresoInputObservaciones.value.trim() || null,
+        id_barra: hayTraspaso ? Number(ingresoSelectBarra.value) : null,
+        observaciones_recepcion: ingresoInputObsRecepcion.value.trim() || null,
+        clave_idempotencia: ingresoEstado.clave,
+        lineas,
+    };
+}
+
+function textoAntesDespues(antes, despues) {
+    if (antes === null || antes === undefined) return '-';
+    return `${formatearCantidadIngreso(antes)} → ${formatearCantidadIngreso(despues)}`;
+}
+
+function renderizarRevisionIngreso(data) {
+    ingresoRevisionLineas.innerHTML = '';
+    data.lineas.forEach((l) => {
+        const cambiaWac = l.wac_antes !== l.wac_despues;
+        const fila = document.createElement('div');
+        fila.className = 'border border-outline-variant bg-surface-container px-sm py-xs rounded-sm';
+        fila.innerHTML = `
+            <p class="text-[12px] text-on-surface">${escapeHtml(l.nombre)}</p>
+            <p class="text-[10px] font-label-mono text-on-surface-variant">
+                ${l.cantidad} × ${formatearBsIngreso(l.precio_costo)} = ${formatearBsIngreso(l.subtotal)} · a barra ${l.cantidad_a_barra}
+            </p>
+            <div class="grid grid-cols-3 gap-xs mt-[2px] text-[10px] font-label-mono">
+                <span>Almacén<br><span class="text-on-surface font-data-tabular">${textoAntesDespues(l.almacen_antes, l.almacen_despues)}</span></span>
+                <span>Barra<br><span class="text-on-surface font-data-tabular">${textoAntesDespues(l.barra_antes, l.barra_despues)}</span></span>
+                <span>WAC<br><span class="${cambiaWac ? 'text-primary-fixed' : 'text-on-surface'} font-data-tabular">${l.wac_antes === null && l.wac_despues !== null ? `sin WAC → ${formatearCantidadIngreso(l.wac_despues)}` : textoAntesDespues(l.wac_antes, l.wac_despues)}</span></span>
+            </div>`;
+        ingresoRevisionLineas.appendChild(fila);
+    });
+    ingresoRevisionTotal.textContent = formatearBsIngreso(data.total);
+    ingresoFormulario.classList.add('hidden');
+    ingresoRevision.classList.remove('hidden');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function volverAEditarIngreso() {
+    ingresoRevision.classList.add('hidden');
+    ingresoFormulario.classList.remove('hidden');
+}
+
+function reiniciarIngreso() {
+    ingresoEstado.lineas = [];
+    ingresoEstado.clave = generarClaveIngreso();
+    ingresoInputNumeroDoc.value = '';
+    ingresoInputObservaciones.value = '';
+    ingresoInputObsRecepcion.value = '';
+    renderizarLineasIngreso();
+    volverAEditarIngreso();
+}
+
+async function enviarIngreso(esPreview) {
+    let payload;
+    try {
+        payload = payloadIngreso();
+    } catch (error) {
+        await mostrarDialogoResultado({ tipo: 'error', titulo: 'Revisa el ingreso', mensaje: error.message });
+        return;
+    }
+    const boton = esPreview ? ingresoBtnRevisar : ingresoBtnConfirmar;
+    const textoOriginal = boton.innerHTML;
+    boton.disabled = true;
+    boton.setAttribute('aria-busy', 'true');
+    boton.innerHTML = `${renderCriticalIcon('refresh', 'ui-icon animate-spin-ccw')} ${esPreview ? 'Revisando...' : 'Registrando...'}`;
+    try {
+        const url = `${API_BASE}/operaciones/ingreso-barra${esPreview ? '/preview' : ''}`;
+        const resp = await fetchAutenticado(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const data = await resp.json();
+        if (resp.ok && esPreview) {
+            renderizarRevisionIngreso(data);
+        } else if (resp.ok) {
+            await mostrarDialogoResultado({ tipo: 'success', titulo: 'Ingreso registrado', mensaje: data.mensaje });
+            reiniciarIngreso();
+            cargarIngreso();
+        } else if (resp.status === 409 && String(data.detail || '').includes('ya fue registrada')) {
+            // Reintento de algo que ya se guardó (doble toque o corte de red): no se repitió.
+            await mostrarDialogoResultado({ tipo: 'success', titulo: 'Ya estaba registrado', mensaje: data.detail });
+            reiniciarIngreso();
+        } else {
+            await mostrarDialogoResultado({
+                tipo: 'error',
+                titulo: esPreview ? 'No se puede registrar' : 'No se registró',
+                mensaje: detalleErrorApi(data, 'Error inesperado del servidor.'),
+            });
+        }
+    } catch (error) {
+        if (error instanceof SesionExpiradaError) return;
+        await mostrarDialogoResultado({
+            tipo: 'error',
+            titulo: 'Error de red',
+            mensaje: esPreview
+                ? 'No se pudo conectar con el servidor.'
+                : 'No se pudo confirmar la respuesta del servidor. Vuelve a pulsar Confirmar: si ya se había guardado, no se duplica.',
+        });
+    } finally {
+        boton.removeAttribute('aria-busy');
+        boton.innerHTML = textoOriginal;
+        boton.disabled = false;
+        actualizarTotalesIngreso();
+    }
+}
+
+if (ingresoInputBuscar) {
+    ingresoInputBuscar.addEventListener('input', () => {
+        clearTimeout(ingresoEstado.busquedaTimer);
+        ingresoEstado.busquedaTimer = setTimeout(() => buscarProductosIngreso(ingresoInputBuscar.value), 300);
+    });
+    document.addEventListener('click', (evento) => {
+        if (!ingresoResultados.contains(evento.target) && evento.target !== ingresoInputBuscar) {
+            ingresoResultados.classList.add('hidden');
+        }
+    });
+}
+/** Las tarjetas muestran el stock del almacén y de la barra elegidos: al cambiar
+ * cualquiera de los dos se vuelve a pedir (sin tocar lo ya cargado en cada línea). */
+async function refrescarStocksIngreso() {
+    ingresoResultados.classList.add('hidden');
+    if (!ingresoEstado.lineas.length) return;
+    const params = new URLSearchParams({
+        ids: ingresoEstado.lineas.map((l) => l.producto.id_producto).join(','),
+        id_almacen: ingresoSelectAlmacen.value,
+    });
+    if (ingresoSelectBarra.value) params.set('id_barra', ingresoSelectBarra.value);
+    try {
+        const resp = await fetchAutenticado(`${API_BASE}/operaciones/ingreso-barra/productos?${params}`);
+        if (!resp.ok) return;
+        const porId = new Map((await resp.json()).map((p) => [p.id_producto, p]));
+        ingresoEstado.lineas.forEach((linea) => {
+            if (porId.has(linea.producto.id_producto)) linea.producto = porId.get(linea.producto.id_producto);
+        });
+        renderizarLineasIngreso();
+    } catch (error) {
+        if (error instanceof SesionExpiradaError) return;
+    }
+}
+
+if (ingresoSelectProveedor) ingresoSelectProveedor.addEventListener('change', actualizarTotalesIngreso);
+if (ingresoSelectAlmacen) ingresoSelectAlmacen.addEventListener('change', refrescarStocksIngreso);
+if (ingresoSelectBarra) ingresoSelectBarra.addEventListener('change', refrescarStocksIngreso);
+if (ingresoBtnRevisar) ingresoBtnRevisar.addEventListener('click', () => enviarIngreso(true));
+if (ingresoBtnConfirmar) ingresoBtnConfirmar.addEventListener('click', () => enviarIngreso(false));
+if (ingresoBtnVolver) ingresoBtnVolver.addEventListener('click', volverAEditarIngreso);
+
 function syncFilaPaloteo3ConInventario(row) {
     if (!row) return;
 
@@ -4953,6 +5429,7 @@ const TAB_PANEL_MAP = {
     pesaje:     'panel-pesaje',
     pourcost:   'panel-pourcost',
     historico:  'panel-historico',
+    ingreso:    'panel-ingreso',
 };
 
 // ==========================================
@@ -5443,6 +5920,10 @@ function navegarATab(tabName) {
 
     if (tabName === 'historico') {
         prepararPanelHistorico();
+    }
+
+    if (tabName === 'ingreso') {
+        cargarIngreso();
     }
 
     // Actualizar estado visual de tabs (excepto btn-guardar que tiene su propio estado)

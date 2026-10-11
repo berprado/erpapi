@@ -790,6 +790,10 @@
                             <span class="material-symbols-outlined">history</span>
                             Histórico
                         </button>
+                        <button id="menu-item-ingreso" type="button" class="floating-menu-item hidden" data-tab="ingreso" role="menuitem">
+                            <span class="material-symbols-outlined">local_shipping</span>
+                            Ingreso
+                        </button>
                         <div class="floating-menu-separator" role="presentation"></div>
                         <button type="button" class="floating-menu-item" data-dummy-link="guia" role="menuitem">
                             <span class="material-symbols-outlined">article</span>
@@ -1263,6 +1267,84 @@
             </button>
         </div><!-- /panel-historico -->
 
+        <!-- ========== PANEL INGRESO (admin-only): ingreso de proveedor -> traspaso -> recepción en barra ==========
+             Una sola transacción en el backend (POST /api/operaciones/ingreso-barra), con las mismas
+             filas que deja el POS. Ver documentos/operaciones_pos/01_ingreso_traspaso_recepcion.md -->
+        <div id="panel-ingreso" class="tab-panel hidden p-md max-w-3xl mx-auto w-full">
+            <div class="mb-sm">
+                <h2 class="text-label-mono font-label-mono text-on-surface tracking-widest uppercase flex items-center gap-xs leading-none">
+                    <span class="material-symbols-outlined text-primary-fixed" style="font-size:1rem;">local_shipping</span>
+                    Ingreso
+                </h2>
+                <p class="text-[11px] text-on-surface-variant mt-[2px] leading-tight">Compra a proveedor, traspaso y recepción en barra en un solo paso</p>
+            </div>
+
+            <p id="ingreso-aviso" class="hidden mb-sm border border-outline-variant bg-surface-container-low px-sm py-xs text-[11px] text-on-surface"></p>
+
+            <div id="ingreso-formulario">
+                <div class="mb-sm grid grid-cols-2 gap-xs sm:grid-cols-3">
+                    <label class="text-[9px] font-label-mono uppercase tracking-wide text-on-surface-variant">Almacén
+                        <select id="ingreso-almacen" class="mt-[2px] w-full h-8 bg-surface border border-outline-variant rounded-sm px-xs text-[11px] text-on-surface focus:border-primary-fixed-dim focus:outline-none"></select>
+                    </label>
+                    <label class="text-[9px] font-label-mono uppercase tracking-wide text-on-surface-variant">Proveedor
+                        <select id="ingreso-proveedor" class="mt-[2px] w-full h-8 bg-surface border border-outline-variant rounded-sm px-xs text-[11px] text-on-surface focus:border-primary-fixed-dim focus:outline-none"></select>
+                    </label>
+                    <label class="text-[9px] font-label-mono uppercase tracking-wide text-on-surface-variant">Documento
+                        <select id="ingreso-tipo-documento" class="mt-[2px] w-full h-8 bg-surface border border-outline-variant rounded-sm px-xs text-[11px] text-on-surface focus:border-primary-fixed-dim focus:outline-none"></select>
+                    </label>
+                    <label class="text-[9px] font-label-mono uppercase tracking-wide text-on-surface-variant">Nro. documento
+                        <input id="ingreso-numero-documento" type="text" maxlength="60" placeholder="0" class="mt-[2px] w-full h-8 bg-surface border border-outline-variant rounded-sm px-xs text-[11px] text-on-surface font-data-tabular focus:border-primary-fixed-dim focus:outline-none">
+                    </label>
+                    <label class="text-[9px] font-label-mono uppercase tracking-wide text-on-surface-variant">Barra destino
+                        <select id="ingreso-barra" class="mt-[2px] w-full h-8 bg-surface border border-outline-variant rounded-sm px-xs text-[11px] text-on-surface focus:border-primary-fixed-dim focus:outline-none"></select>
+                    </label>
+                    <label class="text-[9px] font-label-mono uppercase tracking-wide text-on-surface-variant">Observaciones
+                        <input id="ingreso-observaciones" type="text" maxlength="255" class="mt-[2px] w-full h-8 bg-surface border border-outline-variant rounded-sm px-xs text-[11px] text-on-surface focus:border-primary-fixed-dim focus:outline-none">
+                    </label>
+                </div>
+
+                <!-- Buscador de productos del catálogo -->
+                <div class="relative mb-sm">
+                    <input id="ingreso-buscar" type="search" autocomplete="off" placeholder="Buscar producto por nombre o código..." class="w-full bg-surface-container border border-outline-variant rounded-md px-md py-sm text-sm text-on-surface focus:border-primary-fixed-dim focus:outline-none focus:shadow-cyan-glow-focus transition-colors font-body-base">
+                    <div id="ingreso-resultados" class="hidden absolute z-20 left-0 right-0 mt-[2px] max-h-72 overflow-y-auto bg-surface-container border border-outline-variant rounded-md shadow-lg"></div>
+                </div>
+
+                <div id="ingreso-lineas" class="space-y-xs mb-sm"></div>
+                <p id="ingreso-lineas-vacio" class="text-center text-on-surface-variant py-md font-body-base text-sm">Agrega productos con el buscador.</p>
+
+                <div class="flex items-center justify-between border-t border-outline-variant pt-sm mb-sm">
+                    <span class="text-[10px] font-label-mono uppercase tracking-widest text-on-surface-variant">Total compra</span>
+                    <span id="ingreso-total" class="text-sm font-semibold text-on-surface font-data-tabular">Bs 0.00</span>
+                </div>
+
+                <button id="ingreso-btn-revisar" type="button" disabled class="w-full bg-primary-container text-black h-10 px-sm rounded-sharp flex items-center justify-center gap-xs hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest text-[11px] font-label-mono font-semibold disabled:opacity-50 disabled:cursor-not-allowed">
+                    <span class="material-symbols-outlined text-base">fact_check</span>
+                    Revisar
+                </button>
+            </div>
+
+            <!-- Vista previa (resultado de /preview) y confirmación -->
+            <div id="ingreso-revision" class="hidden">
+                <p class="mb-xs text-[10px] font-label-mono uppercase tracking-widest text-on-surface-variant">Así quedará después de confirmar</p>
+                <div id="ingreso-revision-lineas" class="space-y-xs mb-sm"></div>
+                <div class="flex items-center justify-between border-t border-outline-variant pt-sm mb-sm">
+                    <span class="text-[10px] font-label-mono uppercase tracking-widest text-on-surface-variant">Total compra</span>
+                    <span id="ingreso-revision-total" class="text-sm font-semibold text-on-surface font-data-tabular">-</span>
+                </div>
+                <label class="block mb-sm text-[9px] font-label-mono uppercase tracking-wide text-on-surface-variant">Observación de recepción en barra
+                    <input id="ingreso-observaciones-recepcion" type="text" maxlength="255" placeholder="OK" class="mt-[2px] w-full h-8 bg-surface border border-outline-variant rounded-sm px-xs text-[11px] text-on-surface focus:border-primary-fixed-dim focus:outline-none">
+                </label>
+                <p class="mb-sm text-[10px] text-on-surface-variant">El costo promedio (WAC) cambia al confirmar. Anular el ingreso después en el POS restaura el WAC anterior, pero no devuelve el stock.</p>
+                <div class="grid grid-cols-2 gap-xs">
+                    <button id="ingreso-btn-volver" type="button" class="h-10 bg-surface border border-outline-variant text-on-surface rounded-sharp text-[11px] font-label-mono uppercase tracking-widest hover:border-primary-fixed-dim hover:text-primary-fixed transition-colors">Volver a editar</button>
+                    <button id="ingreso-btn-confirmar" type="button" class="bg-primary-container text-black h-10 px-sm rounded-sharp flex items-center justify-center gap-xs hover:brightness-110 shadow-cyan-glow transition-all active:scale-95 uppercase tracking-widest text-[11px] font-label-mono font-semibold disabled:opacity-50 disabled:cursor-not-allowed">
+                        <span class="material-symbols-outlined text-base">check</span>
+                        Confirmar
+                    </button>
+                </div>
+            </div>
+        </div><!-- /panel-ingreso -->
+
 
         </main>
 
@@ -1608,7 +1690,7 @@
         </div>
     </div>
 
-    <script src="/assets/app.js?v=12.49"></script>
+    <script src="/assets/app.js?v=12.50"></script>
 
     <script>
         (function () {
@@ -1657,7 +1739,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/assets/sw.js?v=12.49')
+                navigator.serviceWorker.register('/assets/sw.js?v=12.50')
                     .then(reg => console.log('[PWA] Service Worker registrado:', reg.scope))
                     .catch(err => console.error('[PWA] Error al registrar SW:', err));
             });

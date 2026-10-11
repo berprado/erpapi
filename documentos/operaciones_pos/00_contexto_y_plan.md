@@ -1,6 +1,8 @@
 # Operaciones del POS desde la PWA: contexto y plan
 
-Estado: **en análisis** (2026-10-09). Nada implementado todavía.
+Estado: **ingreso → traspaso → recepción implementado** en v12.50 (2026-10-11,
+detalle en `01_ingreso_traspaso_recepcion.md`); el resto de las operaciones,
+en análisis.
 
 ## Objetivo
 
@@ -65,7 +67,9 @@ Resumen también en la memoria del proyecto ("Como mueve stock el POS").
 `AnalisisPos/` (ignorada por git: código propietario descompilado, uso interno).
 `estructura_pos_20260724_190906/` tiene el `.ear`, `03_multi-ejb` (EJB +
 56 entidades JPA + `persistence.xml`) y `02_multi-web` (beans JSF + `.xhtml`).
-Hoy solo `.class`; hace falta exportar los `.java` (ver abajo).
+Fuentes exportadas con JD-GUI (2026-10-09): zips en `AnalisisPos/funtes/`,
+descomprimidos en `AnalisisPos/fuentes/{ejb,web}` y copias compactas (sin el
+relleno de líneas de JD-GUI) en `AnalisisPos/limpio/`.
 
 Clases a leer primero (implementaciones, no las interfaces `*Local`):
 
@@ -73,7 +77,7 @@ Clases a leer primero (implementaciones, no las interfaces `*Local`):
 |---|---|---|
 | Ingreso de proveedor | `proceso/RecepcionProdEjbBean` | `almacen/RecepcionProdBean`, `almacen/AdmRecepProdBean` |
 | Salida / traspaso a barra | `almacen/AdmSalidaProductosEJBBean` | `almacen/SalidaProdInventarioBean`, `almacen/AdmSalidaInventarioBean` |
-| Recepción en barra | `barra/SolicitudProdBarraEjbBean` (a confirmar) | `barra/AdmSolicitudProdBean`, `barra/SolicitudProdBarraBean` |
+| Recepción en barra | `almacen/AdmSalidaProductosEJBBean` (`procesarEntradaABarra`, `procesarRechazoEnvio`) + `admin/OperativaEjbBean.copyBarInventToInevetOperacion` | `barra/AdmListIngresoBean` |
 | Devolución barra → almacén | `barra/SalidaInvetarioBarraEjbBean` | `barra/SalidaInventarioBarraBean`, `barra/SalidaProdInvBarraBean` |
 | Comandas (procesar, anular, cortesía) | `mobile/ComandaEjbBean` | `barra/AdminComandaBean`, `mobile/ComandasBean` |
 | Operativa / cierre | `admin/OperativaEjbBean`, `proceso/InventarioEjbBean` | `barra/OperativaBarraBean` |
@@ -100,13 +104,16 @@ Reglas:
 - **Permisos**: aplicar antes el usuario `api_paloteo`
   (`querys/seguridad_usuario_api_tuneles.sql`) y ampliarlo tabla por tabla con
   cada operación nueva, en lugar de escribir como `root`.
-- Mejorar antes la herramienta de diff (ver sus límites en la cabecera de
-  `diff_tablas.py`): checksum de todas las filas, detalle por columna de cada
-  UPDATE, incluir `alm_producto`, `alm_valoracion*`, `bar_valoracion`,
-  `*_inventario_operacion`. Pasarla al repo cuando esté estable.
+- Herramienta de diff: `AnalisisPos/herramientas_sesion_20261009/diff_bd.py`
+  (reemplaza a `diff_tablas.py`). Cubre todas las filas de todas las tablas con
+  checksums por bloque calculados en MySQL (el túnel de `test_pos` baja ~1.300
+  filas/s), informa INSERT / UPDATE columna por columna / DELETE y deja una
+  bitácora por paso. Pendiente pasarla al repo.
 
 ## Próximo paso
 
-Exportar los `.java` de `multi-ejb.jar` y `multi-web.war` con JD-GUI
-(*File → Save All Sources*) a `AnalisisPos/fuentes/`, y empezar por el flujo
-**ingreso de proveedor → traspaso → recepción en barra**.
+1. Aplicar `querys/ddl_app_operacion_pos_control.sql` en `test_pos` y hacer la
+   **prueba diferencial** (misma compra por el POS y por la PWA; las filas deben
+   coincidir salvo ids y horas) con `diff_bd.py`.
+2. Siguiente operación: aceptar o rechazar un traspaso pendiente (ya observado
+   en vivo: secciones 1.5 y 1.6 de `01_ingreso_traspaso_recepcion.md`).
