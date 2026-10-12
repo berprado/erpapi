@@ -11,6 +11,9 @@ separado con git tags semanticos (`vMAJOR.MINOR.PATCH`) — ver seccion
 version productiva en uso real), corresponde a este mismo punto de la
 historia, `## 12.2` de abajo.
 
+## 12.56
+- DDL `querys/ddl_app_operacion_pos_control.sql` aplicado en produccion Beer Garden y casa matriz (2026-10-12): la tabla de control del modulo INGRESO ya existe en los cuatro entornos. Junto con el motor WAC v9.45 ya instalado, el modulo queda listo para el push y el primer uso en cada sucursal.
+
 ## 12.55
 - Motor WAC **v9.45** (equipo del motor, 2026-10-12): resuelve las lineas repetidas del mismo producto, el `NOT FOUND` que cortaba el cursor, la anulacion (`DISTINCT`) y el instalador que pisaba el WAC vivo. Verificado en la BD local y en `test_pos` con casos propios en transacciones revertidas, y por huella de los triggers en produccion Beer Garden y casa matriz: los cuatro entornos tienen los mismos triggers.
 - Docs: respuesta del equipo del motor (`documentos/operaciones_pos/04_respuesta_seguimiento_motor_wac.md`); seccion 3 de `01_ingreso_traspaso_recepcion.md` con los casos verificados y las huellas; nota 03 marcada como resuelta; README con la consulta de huellas para verificar una base; TODO: pendiente del motor cerrado.
