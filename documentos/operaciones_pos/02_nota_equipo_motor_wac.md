@@ -1,8 +1,14 @@
 # Nota para el equipo del motor WAC (V9.44)
 
 Redactada 2026-10-11 a partir de las pruebas en vivo en `test_pos` (ver
-`01_ingreso_traspaso_recepcion.md`, secciones 3 y 5). Pendiente de enviar; ver
-TODO "Avisar al equipo del motor WAC".
+`01_ingreso_traspaso_recepcion.md`, secciones 3 y 5). **Enviada.** Respuesta
+del equipo (2026-10-12): aplicaron la resta de la compra en
+`trg_wac_alm_ingreso_after_update` y el respaldo cronológico de la anulación,
+corrigieron su documentación y publicaron el instalador en su `master`
+(`install_v9_full.php` / `installer_v9_master_full.sql`); ya estaba instalado en
+`test_pos`. Verificación y casos borde pendientes en
+`03_nota_equipo_motor_wac_seguimiento.md`. Nota: la afirmación del punto 1
+sobre "dos líneas del mismo producto" resultó incorrecta (ver nota 03, punto 2).
 
 ---
 

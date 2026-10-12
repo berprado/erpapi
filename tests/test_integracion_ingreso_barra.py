@@ -334,10 +334,11 @@ def test_contexto_y_buscador(client, escenario, admin):
 
 
 def test_wac_igual_al_pos(client, db_session, crear_usuario):
-    """Con el motor V9.44 real. El POS suma el stock antes de pasar el ingreso a
-    '1' y el trigger cuenta dos veces las unidades compradas (HAVANA 7A en
-    test_pos: 169.2853 -> 152.1427 en vez de 135). La API escribe en el mismo
-    orden: si el trigger se corrige, este valor pasa a 135.0000."""
+    """Con el motor V9.44 real (corregido 2026-10-12). El POS y la API suman el
+    stock antes de pasar el ingreso a '1'; el trigger descuenta lo que el mismo
+    ingreso ya sumó, así que sin stock previo el WAC toma el costo nuevo
+    (HAVANA 7A: 169.2853 -> 135.0000). Con el trigger anterior a la corrección
+    quedaba en 152.1427 (las unidades compradas contadas dos veces)."""
     import main
     if not main._motor_wac_v944_instalado(db_session):
         pytest.skip("La BD local no tiene trg_wac_alm_ingreso_after_update (motor WAC V9.44).")
@@ -348,6 +349,6 @@ def test_wac_igual_al_pos(client, db_session, crear_usuario):
         [{"id_producto": b, "cantidad": 2, "precio_costo": 135, "cantidad_a_barra": 2}]))
     assert respuesta.status_code == 200, respuesta.text
     linea = respuesta.json()["lineas"][0]
-    assert (linea["wac_antes"], linea["wac_despues"]) == (169.2853, 152.1427)
+    assert (linea["wac_antes"], linea["wac_despues"]) == (169.2853, 135.0)
     historial = escenario.fila("SELECT * FROM cache_wac_historial WHERE id_ingreso = :i", i=respuesta.json()["id_ingreso"])
     assert float(historial["wac_anterior"]) == 169.2853

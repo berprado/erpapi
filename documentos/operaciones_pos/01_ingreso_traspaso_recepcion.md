@@ -128,9 +128,15 @@ redondear a 2 decimales. **La v1 de la API no maneja onzas.**
   técnica V9.44 dice "almacén y barra": no es así).
 - Escribe `cache_wac_producto` y `cache_wac_historial` (InnoDB: una vista previa
   con ROLLBACK no deja rastro).
-- **Error del trigger (confirmado 2 de 2 casos medibles):** el POS actualiza
-  `alm_inventario` antes que el estado del ingreso, así que el trigger cuenta
-  dos veces las unidades compradas:
+- **Contrato (desde la corrección del 2026-10-12):** cuando el ingreso pasa a
+  `'1'`, `alm_inventario` **ya incluye la compra** (el POS y la API suman el
+  stock antes de cambiar el estado) y el trigger descuenta lo que el mismo
+  ingreso sumó para el producto. Verificado en `test_pos` con la vista previa
+  de la API: BEEFEATER 1LT, stock 4, WAC 217.0588, compra 2 a Bs 210 →
+  **214.7059** (con el error anterior habría dado 215.2941).
+- **Error original (detectado 2026-10-10, corregido por el equipo del motor el
+  2026-10-12 en `test_pos`):** el POS actualiza `alm_inventario` antes que el
+  estado del ingreso y el trigger contaba dos veces las unidades compradas:
 
   | Producto | WAC antes | Compra | Stock previo real | WAC correcto | WAC que quedó |
   |---|---|---|---|---|---|
@@ -138,15 +144,27 @@ redondear a 2 decimales. **La v1 de la API no maneja onzas.**
   | HAVANA 7A 700ML | 169.2853 | 2 a 135 | 0 | 135.0000 | 152.1427 |
   | RED BULL LATA | 17.2157 | 4 a 16 | 0 | 16.0000 | 16.6079 |
 
-  Corrección sugerida al equipo del motor: restar del stock las cantidades de
-  las líneas cerradas del mismo ingreso para ese producto. **La API escribe en
-  el mismo orden que el POS** (stock primero, estado después): hoy reproduce el
-  mismo WAC que el POS y queda correcta en cuanto se corrija el trigger.
-- Dos líneas del mismo producto en un ingreso se calculan con el mismo stock
-  previo: la API no las admite.
+  **La API escribe en el mismo orden que el POS** (stock primero, estado
+  después), así que deja siempre el mismo WAC que el POS; con el trigger
+  corregido, el correcto. Notas al equipo del motor:
+  `02_nota_equipo_motor_wac.md` y `03_nota_equipo_motor_wac_seguimiento.md`.
+- **Pendientes del trigger corregido** (confirmados en `test_pos` el 2026-10-12,
+  dentro de una transacción revertida; ver nota 03):
+  1. Dos líneas del mismo producto en un ingreso: la segunda se calcula con el
+     WAC ya actualizado por la primera pero con un stock previo que no incluye
+     sus unidades (BEEFEATER, 2 a 200 + 2 a 230: 217.5817 en vez de 216.0294).
+     La API no admite productos repetidos; el POS sí.
+  2. Si un producto del ingreso no tiene fila en `alm_inventario`, el `NOT
+     FOUND` de esa consulta termina el cursor y las líneas siguientes no
+     recalculan el WAC. Con el contrato no pasa (el POS y la API crean la fila
+     antes de pasar a `'1'`).
 - Anular un ingreso (`'2'` o `DES`) restaura `wac_anterior` desde el historial
-  pero **no descuenta stock** (ni el trigger ni `cancelarRecepcion`), a
-  diferencia de lo que dice la nota técnica.
+  (o, sin historial, el precio de la última compra anterior) pero **no
+  descuenta stock** (ni el trigger ni `cancelarRecepcion`).
+- El 2026-10-11 07:35 el WAC de COCA COLA 3LT, HAVANA 7A 700ML y RED BULL LATA
+  (los productos de las pruebas) fue reescrito en `test_pos` sin rastro en
+  `cache_wac_historial`, con valores cercanos pero no iguales a los previos a
+  las pruebas (p. ej. RED BULL 17.2080 contra 17.2157). Consultado en la nota 03.
 
 ## 4. Implementación en la API (v12.50)
 
@@ -183,7 +201,8 @@ las columnas, incluidos estado `'1'`, operativa, `recepcionado_por` y
 `alm_salida_inventario` (21, recepción, `fecha_mod`, sin correlativo),
 `alm_detalle_salida_inv`, los movimientos de `alm_inventario`, `bar_inventario` y
 `bar_inventario_operacion`, y el WAC: RED BULL 16.304 → 16.152, el mismo valor
-que había anunciado la vista previa (con el doble conteo del trigger, sección 3).
+que había anunciado la vista previa (con el doble conteo del trigger de ese
+momento, corregido después; sección 3).
 
 Diferencias, todas esperadas:
 
