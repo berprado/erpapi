@@ -12,6 +12,16 @@ Fuentes leídas (descompiladas, `AnalisisPos/`, no versionado):
 | Traspaso | `almacen/SalidaProdInventarioBean` | `almacen/AdmSalidaProductosEJBBean` (`guardarSalidaDetalle`, `verificarExistenciasProducto`, `procesarSalidaInventario`) |
 | Recepción | `barra/AdmListIngresoBean` (no `SolicitudProdBarraEjbBean`, como se suponía) | `AdmSalidaProductosEJBBean.procesarEntradaABarra` / `procesarRechazoEnvio` + `admin/OperativaEjbBean.copyBarInventToInevetOperacion` |
 
+**Alcance:** casa matriz, Beer Garden, `test_pos` y el entorno local corren
+exactamente el mismo `.ear` del POS (confirmado 2026-10-12), así que lo
+confirmado en `test_pos` (réplica de Beer Garden) vale también para casa
+matriz. Comparación de datos de las dos réplicas (últimos 90 días, 2026-10-12):
+sin filas duplicadas en `alm_inventario`, `bar_inventario` ni
+`bar_inventario_operacion`; ninguna compra con un producto repetido; ningún
+producto comprado sin fila en `alm_inventario`; un solo producto sin medidas en
+casa matriz, sin compras recientes. Casa matriz traspasa solo a BARRA 1 y usa
+FACTURA y OTRO; su almacén principal es el 1 (ALMACEN BACK, TRASPASOS es el 4).
+
 Confirmación: 4 escenarios, 18 pasos con `diff_bd.py` (foto de la BD antes y
 después de cada acción en el POS; bitácora en
 `AnalisisPos/herramientas_sesion_20261009/diff_bd_bitacora.md`):

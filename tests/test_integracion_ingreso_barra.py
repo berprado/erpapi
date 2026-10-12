@@ -5,9 +5,10 @@ local (ver conftest.py: todo se revierte al terminar cada test).
 Las filas esperadas son las que dejo el POS en las pruebas en vivo de test_pos
 (documentos/operaciones_pos/01_ingreso_traspaso_recepcion.md).
 
-La BD local tiene hoy el trigger del WAC anterior a V9.44: los tests del flujo
-simulan la verificacion del motor y solo test_wac_igual_al_pos (que se omite
-si falta trg_wac_alm_ingreso_after_update) mira el costo promedio.
+Los tests del flujo simulan la verificacion del motor WAC (corren aunque la
+base no tenga V9.44) y no miran el costo promedio. test_wac_igual_al_pos usa
+el trigger real: corre si la base tiene trg_wac_alm_ingreso_after_update
+(la BD local lo tiene desde el 2026-10-12) y se omite si no.
 """
 import uuid
 from datetime import date

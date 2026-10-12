@@ -470,7 +470,7 @@ Reglas:
 5. `clave_idempotencia` (la genera la PWA): un segundo envio con la misma clave responde 409 con los documentos ya creados y no repite el ingreso.
 6. Fechas y horas: `NOW()` del servidor MySQL (hora local del POS), no UTC.
 
-DDL `querys/ddl_app_operacion_pos_control.sql`, **aplicar en cada base antes de desplegar v12.50**. Estado por entorno: `test` y `test_pos` aplicados (2026-10-11); casa matriz y Beer Garden pendientes. El motor WAC V9.44 esta en `test_pos`; en `test` local falta (los tests del flujo lo simulan y el del WAC se omite).
+DDL `querys/ddl_app_operacion_pos_control.sql`, **aplicar en cada base antes de desplegar v12.50**. Estado por entorno: `test` y `test_pos` aplicados (2026-10-11); casa matriz y Beer Garden pendientes. El motor WAC V9.44 corregido (2026-10-12) esta en `test_pos` y en `test` local (instalado en local el 2026-10-12 a las 16:22, triggers identicos a `test_pos`); falta en casa matriz y Beer Garden. Casa matriz probablemente tiene todavia el trigger anterior a V9.44: es el que traia la BD local tras la recarga del 2026-10-12 00:04. En ese estado el modulo responde 409 y no escribe nada.
 6. **Opcional por defecto (v12.41):** el costo de un combo (tarjeta) suma los `PRINCIPAL` mas un unico `OPCIONAL` segun la categoria del combo, configurado en el `.env` con `POURCOST_OPCIONAL_CAT<id alm_categoria>=<id alm_producto>` (`config.py`, `pourcost_opcional_por_categoria`; ver el bloque de variables de arriba). Los ids de producto cambian por entorno: cada entorno (`.env` local, `test_pos`, variables de entorno de cada Web Service de Seenode) debe definir los suyos. Categoria sin variable, o combo que no trae ese opcional, cuenta solo el principal. El modal parte de la misma seleccion (`incluido_por_defecto`) y el usuario puede cambiarla. Detalle y valores del entorno `test` en `documentos/pour_cost/pourcost.md` seccion 6.
 
 ---
@@ -764,10 +764,15 @@ Service Worker:
 
 ## Entornos
 
-| APP_ENV | Base de datos |
-|---|---|
-| `test` | WAMP local (`TEST_DB_*`) |
-| `production` | Servidor remoto (`PROD_DB_*`) |
+| APP_ENV | Base de datos | Replica de | POS conectado |
+|---|---|---|---|
+| `test` | WAMP local `adminerp` (`TEST_DB_*`) | Casa matriz (tablas del POS recargadas por sincronizacion; la del 2026-10-12 00:04 recreo `alm_*`, `bar_*` y `ope_*`) | No |
+| `test_pos` | Tunel LocalToNet (`TEST_POS_DB_*`) | Beer Garden | Si: aqui se descubre y se prueba en vivo |
+| `production` | Tunel LocalToNet (`PROD_DB_*`), una por sucursal | Casa matriz y Beer Garden (un Web Service de Seenode cada una) | Si |
+
+Todas corren **exactamente el mismo `.ear` del POS** (confirmado 2026-10-12): lo confirmado en vivo en `test_pos` vale para casa matriz; lo que cambia entre sucursales son los datos (ids de productos, almacenes, barras en uso).
+
+La sincronizacion de la BD local reemplaza las tablas del POS: las tablas propias de la API (`app_*`, `analytics_*`) sobreviven, pero los triggers de las tablas recreadas pueden quedar como los de produccion. Despues de cada recarga, revisar los triggers (`alm_producto`, motor WAC) antes de confiar en los tests que dependen de ellos.
 
 ---
 

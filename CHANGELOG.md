@@ -11,6 +11,10 @@ separado con git tags semanticos (`vMAJOR.MINOR.PATCH`) — ver seccion
 version productiva en uso real), corresponde a este mismo punto de la
 historia, `## 12.2` de abajo.
 
+## 12.54
+- Motor WAC V9.44 corregido instalado en la BD `test` local (2026-10-12; triggers y `cache_wac_historial` identicos a `test_pos`). `test_wac_igual_al_pos` ya no se omite: corre contra el trigger real y pasa (HAVANA 169.2853 -> 135.0000). Suite: 173 tests, ninguno omitido. README, CLAUDE.md y cabecera del test actualizados.
+- Docs: README "Entornos" con la replica de cada entorno (`test` = casa matriz, recargada por sincronizacion; `test_pos` = Beer Garden con POS) y el mismo `.ear` del POS en todas las instalaciones; aviso de que la recarga local puede reemplazar los triggers. Comparacion de datos casa matriz vs Beer Garden en `01_ingreso_traspaso_recepcion.md` (sin bloqueos para el flujo) y pasos para produccion en el TODO.
+
 ## 12.53
 - Motor WAC V9.44 corregido por su equipo (2026-10-12) y verificado en `test_pos`: el trigger descuenta lo que el mismo ingreso ya sumo (vista previa de la API: BEEFEATER 214.7059, el valor correcto). `test_wac_igual_al_pos` pasa a esperar 135.0000 (antes 152.1427, con el doble conteo).
 - Docs: `documentos/operaciones_pos/03_nota_equipo_motor_wac_seguimiento.md`, nota de seguimiento por enviar: dos lineas del mismo producto en un ingreso siguen mal calculadas (corrige una afirmacion de la nota 02), un producto sin fila en `alm_inventario` corta el cursor, consulta por el WAC reescrito en `test_pos` el 11/10 y pedido de aviso al instalar en produccion. Seccion 3 de `01_ingreso_traspaso_recepcion.md`, README, TODO y nota 02 actualizados.
