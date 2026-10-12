@@ -11,6 +11,9 @@ separado con git tags semanticos (`vMAJOR.MINOR.PATCH`) — ver seccion
 version productiva en uso real), corresponde a este mismo punto de la
 historia, `## 12.2` de abajo.
 
+## 12.52
+- TODO: cerrados la validación del primer cierre de dos barras de Beer Garden en producción (operativas 169 y 170: lista por barra de v12.40, incluida una devolución barra -> almacén; `id_barra` en el registro crudo de v12.45; ajustes por barra) y el item de `id_barra` en `app_paloteo_registro_crudo`.
+
 ## 12.51
 - Docs: `documentos/operaciones_pos/02_nota_equipo_motor_wac.md`, nota lista para enviar al equipo del motor WAC V9.44: doble conteo de las unidades compradas (4 casos medidos en `test_pos`, correccion SQL propuesta), respaldo de anulacion que toma la compra mas cara (`MAX(precio_costo)`) en vez de la ultima, y diferencias con su nota tecnica. Sin cambios de codigo.
 
