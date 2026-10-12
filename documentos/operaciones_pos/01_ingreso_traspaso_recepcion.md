@@ -158,23 +158,34 @@ redondear a 2 decimales. **La v1 de la API no maneja onzas.**
   después), así que deja siempre el mismo WAC que el POS; con el trigger
   corregido, el correcto. Notas al equipo del motor:
   `02_nota_equipo_motor_wac.md` y `03_nota_equipo_motor_wac_seguimiento.md`.
-- **Pendientes del trigger corregido** (confirmados en `test_pos` el 2026-10-12,
-  dentro de una transacción revertida; ver nota 03):
-  1. Dos líneas del mismo producto en un ingreso: la segunda se calcula con el
-     WAC ya actualizado por la primera pero con un stock previo que no incluye
-     sus unidades (BEEFEATER, 2 a 200 + 2 a 230: 217.5817 en vez de 216.0294).
-     La API no admite productos repetidos; el POS sí.
-  2. Si un producto del ingreso no tiene fila en `alm_inventario`, el `NOT
-     FOUND` de esa consulta termina el cursor y las líneas siguientes no
-     recalculan el WAC. Con el contrato no pasa (el POS y la API crean la fila
-     antes de pasar a `'1'`).
-- Anular un ingreso (`'2'` o `DES`) restaura `wac_anterior` desde el historial
-  (o, sin historial, el precio de la última compra anterior) pero **no
-  descuenta stock** (ni el trigger ni `cancelarRecepcion`).
+- **Motor v9.45 (2026-10-12), casos borde resueltos** (respuesta del equipo del
+  motor en `04_respuesta_seguimiento_motor_wac.md`). Verificado en la BD local y
+  en `test_pos` con productos propios, dentro de transacciones revertidas:
+  1. Dos líneas del mismo producto en un ingreso: el cursor recorre las líneas
+     por `di.id` y cada una descuenta solo las líneas pendientes
+     (`d2.id >= v_det_id`): BEEFEATER 2 a 200 + 2 a 230 → **216.0294** (con
+     v9.44 daba 217.5817). La API igual no admite productos repetidos.
+  2. Producto sin fila en `alm_inventario`: la lectura del stock es una
+     subconsulta escalar (`COALESCE((SELECT …), 0)`) en los dos triggers, así
+     que el `NOT FOUND` ya no corta el cursor y las líneas siguientes se calculan.
+  3. Anulación: el cursor usa `DISTINCT di.id_producto` y restaura
+     `wac_anterior` una vez por producto; sin historial, el precio de la última
+     compra anterior.
+  4. COCA COLA 3LT (stock 3 + 34 oz, botella de 101.5 oz, WAC 16.4818, 6 a
+     Bs 19): el trigger v9.45 da **18.1004**, el valor exacto. El 18.0995 de la
+     tabla del equipo del motor viene de su banco de pruebas, no del trigger.
+- **Instalada en los cuatro entornos** (verificado 2026-10-12 por huella de los
+  triggers): local (casa matriz), `test_pos`, producción Beer Garden y producción
+  casa matriz. Huellas `MD5(REPLACE(action_statement, CHAR(13), ''))`:
+  `trg_wac_after_insert_detalle` = `3426aabe81f95690264f021e409e10eb`,
+  `trg_wac_alm_ingreso_after_update` = `90e67235efa3c4948f4f7a6450a8c28a`.
+- Anular un ingreso (`'2'` o `DES`) restaura el WAC pero **no descuenta stock**
+  (ni el trigger ni `cancelarRecepcion`).
 - El 2026-10-11 07:35 el WAC de COCA COLA 3LT, HAVANA 7A 700ML y RED BULL LATA
-  (los productos de las pruebas) fue reescrito en `test_pos` sin rastro en
-  `cache_wac_historial`, con valores cercanos pero no iguales a los previos a
-  las pruebas (p. ej. RED BULL 17.2080 contra 17.2157). Consultado en la nota 03.
+  se reescribió en `test_pos`: lo causó el Paso 2 del instalador del motor
+  (`ON DUPLICATE KEY UPDATE wac_actual = VALUES(wac_actual)`, promedio plano del
+  historial). En la v9.45 solo inicializa productos sin WAC
+  (`IF(wac_actual > 0, wac_actual, VALUES(wac_actual))`).
 
 ## 4. Implementación en la API (v12.50)
 

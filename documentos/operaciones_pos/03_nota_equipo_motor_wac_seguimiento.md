@@ -3,7 +3,10 @@
 Redactada 2026-10-12, en respuesta a "Re: Motor WAC V9.44 — correcciones
 aplicadas y verificadas" (respuesta a `02_nota_equipo_motor_wac.md`).
 Verificaciones hechas en `test_pos` el mismo día (ver
-`01_ingreso_traspaso_recepcion.md`, sección 3). Pendiente de enviar.
+`01_ingreso_traspaso_recepcion.md`, sección 3). **Enviada y resuelta:** el
+equipo del motor respondió el mismo día con la v9.45
+(`04_respuesta_seguimiento_motor_wac.md`), que corrige los puntos 2 y 3, explica el 4 (el instalador, también
+corregido) y responde el 5. Verificado en los cuatro entornos.
 
 ---
 

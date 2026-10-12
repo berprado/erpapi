@@ -11,6 +11,10 @@ separado con git tags semanticos (`vMAJOR.MINOR.PATCH`) — ver seccion
 version productiva en uso real), corresponde a este mismo punto de la
 historia, `## 12.2` de abajo.
 
+## 12.55
+- Motor WAC **v9.45** (equipo del motor, 2026-10-12): resuelve las lineas repetidas del mismo producto, el `NOT FOUND` que cortaba el cursor, la anulacion (`DISTINCT`) y el instalador que pisaba el WAC vivo. Verificado en la BD local y en `test_pos` con casos propios en transacciones revertidas, y por huella de los triggers en produccion Beer Garden y casa matriz: los cuatro entornos tienen los mismos triggers.
+- Docs: respuesta del equipo del motor (`documentos/operaciones_pos/04_respuesta_seguimiento_motor_wac.md`); seccion 3 de `01_ingreso_traspaso_recepcion.md` con los casos verificados y las huellas; nota 03 marcada como resuelta; README con la consulta de huellas para verificar una base; TODO: pendiente del motor cerrado.
+
 ## 12.54
 - Motor WAC V9.44 corregido instalado en la BD `test` local (2026-10-12; triggers y `cache_wac_historial` identicos a `test_pos`). `test_wac_igual_al_pos` ya no se omite: corre contra el trigger real y pasa (HAVANA 169.2853 -> 135.0000). Suite: 173 tests, ninguno omitido. README, CLAUDE.md y cabecera del test actualizados.
 - Docs: README "Entornos" con la replica de cada entorno (`test` = casa matriz, recargada por sincronizacion; `test_pos` = Beer Garden con POS) y el mismo `.ear` del POS en todas las instalaciones; aviso de que la recarga local puede reemplazar los triggers. Comparacion de datos casa matriz vs Beer Garden en `01_ingreso_traspaso_recepcion.md` (sin bloqueos para el flujo) y pasos para produccion en el TODO.
